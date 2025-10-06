@@ -1,6 +1,6 @@
 #' @import stringr
-#' @import e1071
 #' @import Biobase
+#' @importFrom e1071 naiveBayes
 #' @importFrom SummarizedExperiment SummarizedExperiment
 #' @importFrom SummarizedExperiment colData
 #' @importFrom SummarizedExperiment rowData
@@ -12,9 +12,9 @@
 #' @importFrom utils data installed.packages read.delim write.table
 #' @importFrom graphics barplot mtext par
 #' @importFrom grDevices dev.off pdf
-#' @importFrom stats prcomp cor cor.test dist quantile median
+#' @importFrom stats prcomp cor cor.test dist quantile median na.omit
 #' @importFrom methods is
-#'
+#' 
 NULL
 
 #' BreastSubtypeR: A Unified R/Bioconductor Package for Intrinsic Molecular Subtyping in Breast Cancer Research
@@ -124,29 +124,20 @@ NULL
 #'
 #' @examples
 #' \donttest{
-#' library(BreastSubtypeR)
+#' if (requireNamespace("SummarizedExperiment", quietly = TRUE)) {
 #'
-#' # Using raw RNA-seq counts (with gene lengths)
-#' se_obj <- SummarizedExperiment(
-#'     assays = list(counts = raw_counts_mat),
-#'     rowData = DataFrame(
-#'         probe = rownames(raw_counts_mat),
-#'         ENTREZID = entrez_ids,
-#'         Length = gene_lengths
-#'     )
-#' )
-#' res <- Mapping(se_obj, RawCounts = TRUE)
+#' # Using example raw RNA-seq counts (with gene lengths)
+#' data("TCGABRCAobj")
+#' se_obj_counts <- TCGABRCAobj$se_obj
+#' res <- Mapping(se_obj_counts, RawCounts = TRUE)
 #'
-#' # Using pre-normalized log2(FPKM+1)
-#' se_obj_fpkm <- SummarizedExperiment(
-#'     assays = list(expr = log2_fpkm_mat),
-#'     rowData = DataFrame(
-#'         probe = rownames(log2_fpkm_mat),
-#'         ENTREZID = entrez_ids
-#'     )
-#' )
+#' # Using example pre-normalized log2(FPKM+0.1)
+#' data("OSLO2EMIT0obj")
+#' se_obj_fpkm <- OSLO2EMIT0obj$se_obj
 #' res <- Mapping(se_obj_fpkm, RawCounts = FALSE)
 #' }
+#' }
+#' 
 #' @export
 
 Mapping <- function(
@@ -231,8 +222,8 @@ Mapping <- function(
 #'
 #' @param hasClinical Logical. If `TRUE`, incorporates clinical variables from
 #'   `colData(se_obj)`. Required columns:
-#'   - `"TSIZE"`: Tumor size (`0` = &le;2 cm; `1` = >2 cm).
-#'   - `"NODE"`: Lymph node status (`0` = negative; &ge;1 = positive). Must be numeric.
+#' - "TSIZE": Tumor size (0 = \eqn{\le 2}{<= 2} cm; 1 = \eqn{> 2}{> 2} cm).
+#' - "NODE": Lymph node status (0 = negative; \eqn{\ge 1}{>= 1} = positive). Must be numeric.
 #'
 #' @return A list containing PAM50 intrinsic subtype calls using the Parker
 #'   classifier and selected calibration strategy.
@@ -359,8 +350,8 @@ BS_parker <- function(
 #'
 #' @param hasClinical Logical. If `TRUE`, incorporates additional clinical
 #'   variables from `colData(se_obj)`. Required columns:
-#'   - `"TSIZE"`: Tumor size (`0` = &le;2 cm; `1` = >2 cm).
-#'   - `"NODE"`: Lymph node status (`0` = negative; &ge;1 = positive). Must be numeric.
+#' - "TSIZE": Tumor size (0 = \eqn{\le 2}{<= 2} cm; 1 = \eqn{> 2}{> 2} cm).
+#' - "NODE": Lymph node status (0 = negative; \eqn{\ge 1}{>= 1} = positive). Must be numeric.
 #'
 #' @param seed Integer. Random seed for reproducibility of ER-balancing.
 #'
@@ -444,7 +435,7 @@ BS_cIHC <- function(se_obj,
 #'     - `"ER"`: Estrogen receptor status, coded as `"ER+"` or `"ER-"`.
 #'
 #' @param iteration Integer. Number of iterations for the ER-balancing procedure.
-#'   Default: `100`.
+#'   Default: 100.
 #'
 #' @param ratio Numeric. Target ER+/ER– ratio for balancing. Options:
 #'   - `1:1`: Equal balancing.
@@ -455,8 +446,8 @@ BS_cIHC <- function(se_obj,
 #'
 #' @param hasClinical Logical. If `TRUE`, incorporates additional clinical
 #'   variables from `colData(se_obj)`. Required columns:
-#'   - `"TSIZE"`: Tumor size (`0` = &le;2 cm; `1` = >2 cm).
-#'   - `"NODE"`: Lymph node status (`0` = negative; &ge;1 = positive). Must be numeric.
+#' - "TSIZE": Tumor size (0 = \eqn{\le 2}{<= 2} cm; 1 = \eqn{> 2}{> 2} cm).
+#' - "NODE": Lymph node status (0 = negative; \eqn{\ge 1}{>= 1} = positive). Must be numeric.
 #'
 #' @param seed Integer. Random seed for reproducibility.
 #'
@@ -549,8 +540,8 @@ BS_cIHC.itr <- function(se_obj,
 #'
 #' @param hasClinical Logical. If `TRUE`, incorporates additional clinical
 #'   variables from `colData(se_obj)`. Required columns:
-#'   - `"TSIZE"`: Tumor size (`0` = &le;2 cm; `1` = >2 cm).
-#'   - `"NODE"`: Lymph node status (`0` = negative; &ge;1 = positive). Must be numeric.
+#' - "TSIZE": Tumor size (0 = \eqn{\le 2}{<= 2} cm; 1 = \eqn{> 2}{> 2} cm).
+#' - "NODE": Lymph node status (0 = negative; \eqn{\ge 1}{>= 1} = positive). Must be numeric.
 #'
 #' @param seed Integer. Random seed for reproducibility.
 #'
@@ -696,8 +687,8 @@ BS_PCAPAM50 <- function(se_obj,
 #'
 #' @param hasClinical Logical. If `TRUE`, incorporates additional clinical
 #'   variables from `colData(se_obj)`. Required columns:
-#'   - `"TSIZE"`: Tumor size (`0` = &le;2 cm; `1` = >2 cm).
-#'   - `"NODE"`: Lymph node status (`0` = negative; &ge;1 = positive). Must be numeric.
+#' - "TSIZE": Tumor size (0 = \eqn{\le 2}{<= 2} cm; 1 = \eqn{> 2}{> 2} cm).
+#' - "NODE": Lymph node status (0 = negative; \eqn{\ge 1}{>= 1} = positive). Must be numeric.
 #'
 #' @return A character vector of intrinsic subtype predictions assigned to each
 #'   sample using the ssBC method.
@@ -958,8 +949,8 @@ BS_sspbc <- function(se_obj, ssp.name = "ssp.pam50") {
 #'
 #' @param hasClinical Logical. If `TRUE`, incorporates clinical data from
 #'   `colData(se_obj)`. Required columns:
-#'   - `"TSIZE"`: Tumor size (`0` = &le;2 cm; `1` = >2 cm).
-#'   - `"NODE"`: Lymph node status (`0` = negative; &ge;1 = positive; must be numeric).
+#' - "TSIZE": Tumor size (0 = \eqn{\le 2}{<= 2} cm; 1 = \eqn{> 2}{> 2} cm).
+#' - "NODE": Lymph node status (0 = negative; \eqn{\ge 1}{>= 1} = positive).
 #'
 #' @return A list containing per-method subtype assignments for each sample.
 #'
@@ -1183,7 +1174,7 @@ BS_Multi <- function(
                 length(samples_ER.icd) < nrow(pheno)) {
                 unprocessed_patients <- base::setdiff(pheno$PatientID, samples_ER.icd)
 
-                # Create NA-filled dataframe for unprocessed patients with matching structure
+                # Create NA-filled data frame for unprocessed patients with matching structure
                 na_df <- data.frame(
                     PatientID = unprocessed_patients,
                     matrix(
@@ -1235,7 +1226,7 @@ BS_Multi <- function(
                 unprocessed_patients <- base::setdiff(pheno$PatientID, samples_ERHER2.icd)
 
 
-                # Create NA-filled dataframe for unprocessed patients with matching structure
+                # Create NA-filled data frame for unprocessed patients with matching structure
                 na_df <- data.frame(
                     PatientID = unprocessed_patients,
                     matrix(

@@ -12,14 +12,11 @@
 #' @return Opens the app; returns the value of `shiny::runApp()`.
 #'
 #' @examples
-#' \donttest{
-#' # Basic
-#' iBreastSubtypeR()
-#'
-#' # Skip attaching packages (if UI/server fully qualify all calls)
-#' iBreastSubtypeR(attach = character(0))
+#' if (interactive()) {
+#'   iBreastSubtypeR()
+#'   iBreastSubtypeR(attach = character(0))
 #' }
-#'
+#' 
 #' @export
 iBreastSubtypeR <- function(attach = c("shiny", "bslib"),
     attach_tidyverse = FALSE,
@@ -63,7 +60,7 @@ iBreastSubtypeR <- function(attach = c("shiny", "bslib"),
     if (identical(appDir, "") || !dir.exists(appDir)) {
         stop("Shiny app directory 'inst/ShinyBreastSubtypeR' not found in the package.", call. = FALSE)
     }
-
+    
     # Increase upload limit (MB -> bytes)
     options(shiny.maxRequestSize = max_upload_mb * 1024^2)
 

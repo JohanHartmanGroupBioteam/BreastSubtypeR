@@ -1,10 +1,11 @@
 ## adapted from original sspbc codes (Staaf et al., 2022)
 
 #' Function sspbc
-#' @import e1071
 #' @import methods
 #' @import stats
 #' @import grid
+#' @importFrom e1071 naiveBayes
+#' 
 #' @description
 #' This function assign classes to breast cancer samples using a selection of provided models. It works on raw gene expression data.
 #' Provided models were developed using gene expression data from mRNAseq generated using HiSat/StringTie.

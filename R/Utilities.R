@@ -1,16 +1,17 @@
 #'
 #' Functions for BreastSubtypeR package
-#' @import ggplot2
+#' @keywords internal
 #' @import ComplexHeatmap
 #' @import RColorBrewer
 #' @import circlize
 #' @import ggrepel
 #' @import magrittr
 #' @import impute
-#' @importFrom SummarizedExperiment SummarizedExperiment
-#' @importFrom SummarizedExperiment colData
-#' @importFrom SummarizedExperiment rowData
-#' @importFrom SummarizedExperiment assay
+#' @importFrom dplyr mutate across everything
+#' @importFrom ggplot2 ggplot aes geom_point geom_bar geom_text geom_line geom_vline geom_hline
+#' @importFrom ggplot2 geom_boxplot scale_x_continuous scale_color_manual scale_fill_manual
+#' @importFrom ggplot2 coord_polar labs theme theme_classic theme_minimal theme_void element_text
+#' @importFrom SummarizedExperiment SummarizedExperiment colData rowData assay
 #'
 #' @noRd
 NULL
@@ -515,12 +516,15 @@ get_average_subtype <- function(res_ihc_iterative, consensus_subtypes) {
 
             ## if FALSE, make the cell as NULL
             keep <- res_ihc$predictions == consensus_subtypes
-            res_ihc$distances[!keep, ] <- as.list(rep(NA, 5))
-
-            res <- dplyr::mutate_at(
-                res_ihc$distances,
-                vars(everything()),
-                ~ ifelse(!is.na(.), as.numeric(as.character(.)), NA)
+            res_ihc$distances[!keep, ] <- as.list(rep(NA, ncol(res_ihc$distances)))
+            
+            ## convert every column to numeric (preserving NA), same as before
+            res <- dplyr::mutate(
+              res_ihc$distances,
+              dplyr::across(
+                dplyr::everything(),
+                ~ ifelse(!is.na(.x), as.numeric(as.character(.x)), NA_real_)
+              )
             )
 
             return(res)
@@ -577,12 +581,14 @@ get_average_subtype <- function(res_ihc_iterative, consensus_subtypes) {
 
             ## if FALSE, make the cell as NULL
             keep <- res_ihc$predictions == consensus_subtypes
-            res_ihc$distances.Subtype[!keep, ] <- as.list(rep(NA, 4))
-
-            res <- dplyr::mutate_at(
-                res_ihc$distances.Subtype,
-                vars(everything()),
-                ~ ifelse(!is.na(.), as.numeric(as.character(.)), NA)
+            res_ihc$distances.Subtype[!keep, ] <- as.list(rep(NA, ncol(res_ihc$distances.Subtype)))
+            
+            res <- dplyr::mutate(
+              res_ihc$distances.Subtype,
+              dplyr::across(
+                dplyr::everything(),
+                ~ ifelse(!is.na(.x), as.numeric(as.character(.x)), NA_real_)
+              )
             )
 
             return(res)

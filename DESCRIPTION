@@ -59,4 +59,4 @@ License: GPL-3
 VignetteBuilder: knitr
 Roxygen: list(markdown = TRUE, roclets = c("rd", "namespace", "collate"))
 LazyData: FALSE
-RoxygenNote: 7.3.2
+RoxygenNote: 7.3.3

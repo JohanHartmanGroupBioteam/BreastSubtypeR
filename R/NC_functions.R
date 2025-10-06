@@ -327,7 +327,7 @@ sspPredict <- function(x, y, std = FALSE, distm = "spearman", Subtype = TRUE) {
 #' @param Subtype Logic.
 #' @param hasClinical Logic. Specify whether clinical information is included.
 #'   For example, tumor size should be in the "T" column, and lymph node status
-#'   should be in the "NODE" column.
+#' - "NODE": Lymph node status (0 = negative; \eqn{\ge 1}{>= 1} = positive).
 #' @return ROR, ROR risk group and other indications
 #' @noRd
 
@@ -828,7 +828,7 @@ makeCalls.parker <- function(mat,
 #' @param Subtype Logic.
 #' @param hasClinical Logic. Specify whether clinical information is included.
 #'   For example, tumor size should be in the "T" column, and lymph node status
-#'   should be in the "NODE" column.
+#' - "NODE": Lymph node status (0 = negative; \eqn{\ge 1}{>= 1} = positive).
 #' @param seed An integer value is used to set the random seed.
 #' @noRd
 
@@ -1163,7 +1163,7 @@ makeCalls_ihc.iterative <- function(mat,
 #' @param Subtype Logic
 #' @param hasClinical Logic. Specify whether clinical information is included.
 #'   For example, tumor size should be in the "T" column, and lymph node status
-#'   should be in the "NODE" column.
+#' - "NODE": Lymph node status (0 = negative; \eqn{\ge 1}{>= 1} = positive).
 #' @param seed An integer value is used to set the random seed.
 #' @noRd
 
@@ -1356,7 +1356,7 @@ makeCalls.PC1ihc <- function(
 #' @param Subtype Logic.
 #' @param hasClinical Logic. Specify whether clinical information is included.
 #'   For example, tumor size should be in the "T" column, and lymph node status
-#'   should be in the "NODE" column.
+#' - "NODE": Lymph node status (0 = negative; \eqn{\ge 1}{>= 1} = positive).
 #' @param seed An integer value is used to set the random seed.
 #' @noRd
 
@@ -1484,7 +1484,7 @@ makeCalls.v1PAM <- function(
 #' @param Subtype Logic. Specify whether to predict Subtype-like subtyping.
 #' @param hasClinical Logic. Specify whether clinical information is included.
 #'   For example, tumor size should be in the "T" column, and lymph node status
-#'   should be in the "NODE" column.
+#' - "NODE": Lymph node status (0 = negative; \eqn{\ge 1}{>= 1} = positive).
 #' @noRd
 
 makeCalls.ssBC <- function(
