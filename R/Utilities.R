@@ -168,6 +168,50 @@ prepare_ssp_matrix <- function(x, genes.s, RawCounts, samplenames, verbose) {
     return(x_SSP)
 }
 
+#' Helper to normalize ER/HER2/TN columns in Column metadata 
+#'
+#' @keywords internal
+#' @noRd
+.normalize_er_her2_tn <- function(df, quiet = TRUE) {
+  canon <- function(x) trimws(toupper(as.character(x)))
+  map_bin <- function(x, pos_label, neg_label) {
+    x0  <- canon(x)
+    pos <- c("POSITIVE","POS","1","TRUE","T","YES","Y",
+             gsub("\\+","POSITIVE", pos_label), pos_label)
+    neg <- c("NEGATIVE","NEG","0","FALSE","F","NO","N",
+             gsub("-","NEGATIVE", neg_label), neg_label)
+    out <- ifelse(x0 %in% pos, pos_label,
+                  ifelse(x0 %in% neg, neg_label, x))
+    out
+  }
+  
+  if ("ER" %in% names(df)) {
+    old <- df$ER
+    df$ER <- map_bin(df$ER, "ER+", "ER-")
+    if (!identical(old, df$ER))
+      warning("Phenodata: coerced ER values to {ER+, ER-}.", call. = FALSE)
+  }
+  if ("HER2" %in% names(df)) {
+    old <- df$HER2
+    has2p <- grepl("\\b2\\+\\b", old, ignore.case = TRUE)
+    df$HER2 <- ifelse(has2p, old, map_bin(old, "HER2+", "HER2-"))
+    if (!identical(old, df$HER2))
+      warning("Phenodata: coerced HER2 values to {HER2+, HER2-} (skipped '2+').", call. = FALSE)
+  }
+  if ("TN" %in% names(df)) {
+    old <- df$TN
+    x0  <- canon(df$TN)
+    pos <- c("TRUE","T","YES","Y","1","TN","TNBC")
+    neg <- c("FALSE","F","NO","N","0","NON-TN","NONTN","NON_TN")
+    df$TN <- ifelse(x0 %in% pos, "TN",
+                    ifelse(x0 %in% neg, "nonTN", df$TN))
+    if (!identical(old, df$TN))
+      warning("Phenodata: coerced TN values to {TN, nonTN}.", call. = FALSE)
+  }
+  note <- function(msg) if (!quiet) .msg(msg)
+  df
+}
+
 
 #' Map Gene IDs and Handle missing data
 #'

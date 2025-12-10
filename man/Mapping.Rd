@@ -28,7 +28,32 @@ Mapping(
 \item If row names are gene symbols, provide an additional \code{SYMBOL} column,
 renamed as \code{probe}.
 }
-\item \strong{Column metadata} (optional): sample-level metadata in \code{colData()}.
+\item \strong{Column metadata}: sample-level metadata in \code{colData()}. Specifically:
+\itemize{
+\item \code{PatientID} (\strong{required}).
+\item \strong{Receptor fields required by specific methods} (and by \code{BS_Multi()} / AUTO):
+\itemize{
+\item \code{ER} — required for \code{ssBC}, \code{cIHC} / \code{cIHC.itr}, \code{PCAPAM50}, and AUTO.
+\item \code{HER2} — required for \code{ssBC} with \code{s="ER.v2"} and for AUTO.
+\item \code{TN} — required for \code{ssBC} with \code{s="TN"} / \code{"TN.v2"} and for AUTO when TN logic is used.
+}
+\item \strong{Clinical covariates for ROR (NC-based methods only)}:
+\itemize{
+\item \code{TSIZE}: Tumor size (0 = \eqn{\le 2}{<= 2} cm; 1 = \eqn{> 2}{> 2} cm). Must be numeric (0/1).
+\item \code{NODE}: Lymph node status (0 = negative; \eqn{\ge 1}{>= 1} = positive). Must be numeric (0/1).
+}
+\item \strong{Preferred canonical receptor coding}:
+\itemize{
+\item \code{ER}: \verb{ER+}, \verb{ER-}
+\item \code{HER2}: \verb{HER2+}, \verb{HER2-}  (note: \strong{HER2 "2+" is not coerced})
+\item \code{TN}: \code{TN}, \code{nonTN}
+}
+\item \strong{Automatic normalization}: \code{Mapping()} maps common variants to canonical forms
+(e.g., \code{Pos}/\code{Neg}, \code{Positive}/\code{Negative}, \code{1}/\code{0}, \code{True}/\code{False}).
+Ambiguous \code{HER2="2+"} is \strong{not} remapped.
+\item These receptor fields are \strong{not required} for purely SSP methods (\code{AIMS}, \code{sspbc}) or for
+PAM50 when used without AUTO/ROR; they are recommended so AUTO can select suitable methods.
+}
 }}
 
 \item{RawCounts}{Logical. If \code{TRUE}, indicates that \code{assay()} holds raw RNA-seq counts.
@@ -75,6 +100,11 @@ intrinsic subtyping workflows (NC- and SSP-based).
 
 This design allows users to supply a single expression format, while
 BreastSubtypeR automatically applies method-specific preprocessing.
+
+\strong{Phenodata normalization.} #' If receptor fields are present, they are coerced to canonical encodings
+(\code{ER -> \{ER+, ER-\}}, \code{HER2 -> \{HER2+, HER2-\}},
+\code{TN -> \{TN, nonTN\}}). Ambiguous values (e.g., \code{HER2 == "2+"})
+are left unchanged and emit a warning.
 }
 \examples{
 if (requireNamespace("SummarizedExperiment", quietly = TRUE)) {
