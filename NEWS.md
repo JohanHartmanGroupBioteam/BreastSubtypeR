@@ -25,13 +25,18 @@
     -   Readiness uses the same minimums used by AUTO (sourced programmatically; no duplicated thresholds).
 -   **Shorter notifications.**\
     -Routine toasts (e.g., "Step 1 complete. Proceed to Step 2.") now auto-dismiss sooner to reduce UI clutter.
--   **Phenodata normalization (Mapping):** Accepts flexible ER/HER2/TN encodings and normalizes to canonical forms (`ER+/ER-`, `HER2+/HER2-`, `TN/nonTN`). Ambiguous `HER2="2+"` remains as-is and raises a warning.
+-   **Phenodata normalization (Mapping):** Accepts flexible ER/HER2/TN encodings and
+normalizes to canonical forms (`ER+/ER-`, `HER2+/HER2-`, `TN/nonTN`). 
+Ambiguous `HER2="2+"` remains as-is and raises a warning.
 
 ### Bug fixes
 
--   **TN cohorts + ssBC**: `BS_Multi()` now respects TN cohorts when methods are specified manually; `ssBC`/`ssBC.v2` switch to `s = "TN"` / `"TN.v2"` when a `TN` column indicates a TN cohort. Falls back to `s = "ER"` / `"ER.v2"` otherwise.
+-   **TN cohorts + ssBC**: `BS_Multi()` now respects TN cohorts when methods are specified manually;
+`ssBC`/`ssBC.v2` switch to `s = "TN"` / `"TN.v2"` when a `TN` column indicates a TN cohort.
+Falls back to `s = "ER"` / `"ER.v2"` otherwise.
 -   **AUTO internals**: fixed variable name typo (`samples_ERHER2.icd`).
 -   **Mapping():** Robust ENTREZID coercion (from `as.character()` to `as.integer()` with suppressed warnings).
+-   **cIHC.itr**: `outList$distances` now returned as numeric matrix.
 
 ### Shiny
 
