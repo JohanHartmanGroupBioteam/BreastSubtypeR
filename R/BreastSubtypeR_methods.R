@@ -86,7 +86,27 @@ NULL
 #'     - `"ENTREZID"`: corresponding Entrez Gene IDs.
 #'     - If row names are gene symbols, provide an additional `SYMBOL` column,
 #'       renamed as `probe`.
-#'   - **Column metadata** (optional): sample-level metadata in `colData()`.
+#'   - **Column metadata**: sample-level metadata in `colData()`. Specifically:
+#'     - `PatientID` (**required**).
+#'     - **Receptor fields required by specific methods** (and by `BS_Multi()` / AUTO):
+#'       * `ER` — required for `ssBC`, `cIHC` / `cIHC.itr`, `PCAPAM50`, and AUTO.
+#'       * `HER2` — required for `ssBC` with `s="ER.v2"` and for AUTO.
+#'       * `TN` — required for `ssBC` with `s="TN"` / `"TN.v2"` and for AUTO when TN logic is used.
+#'     - **Clinical covariates for ROR (NC-based methods only)**:
+#'       * `TSIZE`: Tumor size (0 = \eqn{\le 2}{<= 2} cm; 1 = \eqn{> 2}{> 2} cm). Must be numeric (0/1).
+#'       * `NODE`: Lymph node status (0 = negative; \eqn{\ge 1}{>= 1} = positive). Must be numeric (0/1).
+#'
+#'     - **Preferred canonical receptor coding**:
+#'       * `ER`: `ER+`, `ER-`
+#'       * `HER2`: `HER2+`, `HER2-`  (note: **HER2 "2+" is not coerced**)
+#'       * `TN`: `TN`, `nonTN`
+#'
+#'     - **Automatic normalization**: `Mapping()` maps common variants to canonical forms
+#'       (e.g., `Pos`/`Neg`, `Positive`/`Negative`, `1`/`0`, `True`/`False`).
+#'       Ambiguous `HER2="2+"` is **not** remapped.
+#'
+#'     - These receptor fields are **not required** for purely SSP methods (`AIMS`, `sspbc`) or for
+#'       PAM50 when used without AUTO/ROR; they are recommended so AUTO can select suitable methods.
 #'
 #' @param RawCounts Logical. If `TRUE`, indicates that `assay()` holds raw RNA-seq counts.
 #'   In this case, `rowData()` must also provide gene lengths
@@ -126,6 +146,11 @@ NULL
 #'
 #' This design allows users to supply a single expression format, while
 #' BreastSubtypeR automatically applies method-specific preprocessing.
+#' 
+#' **Phenodata normalization.** #' If receptor fields are present, they are coerced to canonical encodings
+#' (\code{ER -> \{ER+, ER-\}}, \code{HER2 -> \{HER2+, HER2-\}},
+#' \code{TN -> \{TN, nonTN\}}). Ambiguous values (e.g., \code{HER2 == "2+"})
+#' are left unchanged and emit a warning.
 #'
 #' @examples
 #' if (requireNamespace("SummarizedExperiment", quietly = TRUE)) {
@@ -149,6 +174,20 @@ Mapping <- function(se_obj,
     verbose = TRUE) {
     method <- match.arg(method)
 
+    ## --- Normalize ER/HER2/TN in colData ---
+    cd0 <- SummarizedExperiment::colData(se_obj)
+    if (!is.null(cd0) && ncol(cd0) > 0) {
+      cd <- methods::as(cd0, "data.frame")
+      chrify <- function(x) if (is.factor(x)) as.character(x) else x
+      cd[] <- lapply(cd, chrify)
+      
+      cd2 <- .normalize_er_her2_tn(cd, quiet = FALSE)
+      
+      for (nm in intersect(c("ER","HER2","TN"), names(cd2))) {
+        SummarizedExperiment::colData(se_obj)[[nm]] <- cd2[[nm]]
+      }
+    }
+    
     arguments <- rlang::dots_list(
         se_obj = se_obj,
         RawCounts = RawCounts,
@@ -281,7 +320,7 @@ BS_parker <- function(se_obj,
         }
     }
 
-    # Default Parker behavior: internal = NA → median centering
+    # Default Parker behavior: internal = NA -> median centering
     if (identical(calibration, "Internal") &&
         (length(internal) == 0L || all(is.na(internal)))) {
         internal <- "medianCtr"
