@@ -1080,7 +1080,7 @@ makeCalls_ihc.iterative <- function(
 
                 mbal.ihc <- mat[, c(ERP.ihc$PatientID[i], ERN.ihc$PatientID)]
 
-                suffix <- getsuffix(calibration = calibration, internal)
+                suffix <- getsuffix(calibration = calibration, internal = internal)
 
                 # Calculate median
                 mdns <- apply(mbal.ihc, 1, median, na.rm = TRUE)
@@ -1156,23 +1156,41 @@ makeCalls_ihc.iterative <- function(
 
     mean_eve <- get_average_subtype(res_ihc_iterative, consensus_subtypes)
 
+    TD <- as.matrix(mean_eve$testdata)
+    storage.mode(TD) <- "double"
+    
+    D <- mean_eve$mean_distance
+    D <- as.matrix(data.matrix(D))
+
+    if (is.null(rownames(D))) rownames(D) <- names(consensus_subtypes)
+    if (is.null(colnames(D))) colnames(D) <- colnames(centroids)
+    storage.mode(D) <- "double"
+    D <- -1 * D
+    
+    D4 <- mean_eve$mean_distance.Subtype
+    D4 <- as.matrix(data.matrix(D4))
+    if (is.null(rownames(D4))) rownames(D4) <- rownames(D)
+    if (is.null(colnames(D4))) colnames(D4) <- colnames(centroids)[seq_len(4)]
+    storage.mode(D4) <- "double"
+    D4 <- -1 * D4
+    
     if (Subtype) {
-        out <- list(
-            predictions = consensus_subtypes,
-            predictions.FourSubtype = cs_FourSubtype,
-            testData = mean_eve$testdata,
-            distances = -1 * mean_eve$mean_distance,
-            dist.RORSubtype = -1 * mean_eve$mean_distance.Subtype,
-            centroids = centroids
-        )
+      out <- list(
+        predictions           = consensus_subtypes,
+        predictions.FourSubtype = cs_FourSubtype,
+        testData              = TD,
+        distances             = D,
+        dist.RORSubtype       = D4,
+        centroids             = centroids
+      )
     } else {
-        out <- list(
-            predictions = consensus_subtypes,
-            testData = mean_eve$testdata,
-            distances = -1 * mean_eve$mean_distance,
-            dist.RORSubtype = -1 * mean_eve$mean_distance.Subtype,
-            centroids = centroids
-        )
+      out <- list(
+        predictions       = consensus_subtypes,
+        testData          = TD,
+        distances         = D,
+        dist.RORSubtype   = D4,
+        centroids         = centroids
+      )
     }
 
     ## calculate and grouping
