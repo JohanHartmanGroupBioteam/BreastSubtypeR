@@ -342,16 +342,27 @@ get_methods <- function(pheno) {
     } else if (!all(c("ER", "HER2") %in% colnames(pheno))) {
         stop("The 'AUTO' mode requires both 'ER' and 'HER2' columns in the 'pheno' dataframe.")
     } else {
+      
+        pheno <- .normalize_er_her2_tn(pheno)
+        
+        # Detect missing receptor annotations (optional)
+        n_na_ER   <- sum(is.na(pheno$ER))
+        n_na_HER2 <- sum(is.na(pheno$HER2))
+        if (n_na_ER > 0L || n_na_HER2 > 0L) {
+          .msg("AUTO: missing ER/HER2 values detected (ER NA=%d, HER2 NA=%d). These samples are excluded from subgroup counts.",
+               n_na_ER, n_na_HER2, origin = "AUTO")
+        }
+      
         # Calculate sample sizes
         sample_counts <- with(pheno, table(ER, HER2)) # (kept for future debugging)
-        n_ERpos <- sum(pheno$ER == "ER+")
-        n_ERneg <- sum(pheno$ER == "ER-")
-
-        n_ERnegHER2pos <- sum(pheno$ER == "ER-" & pheno$HER2 == "HER2+")
-        n_ERnegHER2neg <- sum(pheno$ER == "ER-" & pheno$HER2 == "HER2-")
-        n_ERposHER2pos <- sum(pheno$ER == "ER+" & pheno$HER2 == "HER2+")
-        n_ERposHER2neg <- sum(pheno$ER == "ER+" & pheno$HER2 == "HER2-")
-
+        n_ERpos <- sum(pheno$ER == "ER+", na.rm = TRUE)
+        n_ERneg <- sum(pheno$ER == "ER-", na.rm = TRUE)
+        
+        n_ERnegHER2pos <- sum(pheno$ER == "ER-" & pheno$HER2 == "HER2+", na.rm = TRUE)
+        n_ERnegHER2neg <- sum(pheno$ER == "ER-" & pheno$HER2 == "HER2-", na.rm = TRUE)
+        n_ERposHER2pos <- sum(pheno$ER == "ER+" & pheno$HER2 == "HER2+", na.rm = TRUE)
+        n_ERposHER2neg <- sum(pheno$ER == "ER+" & pheno$HER2 == "HER2-", na.rm = TRUE)
+        
         # Set thresholds
         n_ERpos_threshold <- 15 # simulation-based cut-off
         n_ERneg_threshold <- 18 # simulation-based cut-off
