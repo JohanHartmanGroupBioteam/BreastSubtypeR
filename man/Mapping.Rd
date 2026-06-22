@@ -33,9 +33,10 @@ renamed as \code{probe}.
 \item \code{PatientID} (\strong{required}).
 \item \strong{Receptor fields required by specific methods} (and by \code{BS_Multi()} / AUTO):
 \itemize{
-\item \code{ER} — required for \code{ssBC}, \code{cIHC} / \code{cIHC.itr}, \code{PCAPAM50}, and AUTO.
-\item \code{HER2} — required for \code{ssBC} with \code{s="ER.v2"} and for AUTO.
-\item \code{TN} — required for \code{ssBC} with \code{s="TN"} / \code{"TN.v2"} and for AUTO when TN logic is used.
+\item \code{ER} - required for \code{ssBC}, \code{cIHC} / \code{cIHC.itr}, \code{PCAPAM50}, and AUTO.
+\item \code{HER2} - required for \code{ssBC} with \code{s="ER.v2"} and for AUTO.
+\item \code{TN} - per-sample annotation required for \code{ssBC} with \code{s="TN"} / \code{"TN.v2"};
+AUTO uses TNBC-specific cohort handling only when all evaluable TN annotations indicate TN.
 }
 \item \strong{Clinical covariates for ROR (NC-based methods only)}:
 \itemize{
