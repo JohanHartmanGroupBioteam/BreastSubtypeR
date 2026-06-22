@@ -1,4 +1,4 @@
-# BreastSubtypeR 1.3.2
+# BreastSubtypeR 1.5.1
 
 ## Highlights (from v1.1.3 onward)
 
@@ -29,6 +29,7 @@
 
 ### Bug fixes
 
+-   **AUTO TNBC detection (#133):** Fixed cohort-specific method selection so cohorts are classified as TNBC only when all evaluable non-missing `TN` annotations indicate TN. Mixed cohorts containing a subset of TN samples now remain mixed.
 -   **TN cohorts + ssBC**: `BS_Multi()` now respects TN cohorts when methods are specified manually;
 `ssBC`/`ssBC.v2` switch to `s = "TN"` / `"TN.v2"` when a `TN` column indicates a TN cohort.
 Falls back to `s = "ER"` / `"ER.v2"` otherwise.
