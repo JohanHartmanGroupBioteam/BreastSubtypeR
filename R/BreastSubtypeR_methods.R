@@ -89,9 +89,10 @@ NULL
 #'   - **Column metadata**: sample-level metadata in `colData()`. Specifically:
 #'     - `PatientID` (**required**).
 #'     - **Receptor fields required by specific methods** (and by `BS_Multi()` / AUTO):
-#'       * `ER` — required for `ssBC`, `cIHC` / `cIHC.itr`, `PCAPAM50`, and AUTO.
-#'       * `HER2` — required for `ssBC` with `s="ER.v2"` and for AUTO.
-#'       * `TN` — required for `ssBC` with `s="TN"` / `"TN.v2"` and for AUTO when TN logic is used.
+#'       * `ER` - required for `ssBC`, `cIHC` / `cIHC.itr`, `PCAPAM50`, and AUTO.
+#'       * `HER2` - required for `ssBC` with `s="ER.v2"` and for AUTO.
+#'       * `TN` - per-sample annotation required for `ssBC` with `s="TN"` / `"TN.v2"`;
+#'         AUTO uses TNBC-specific cohort handling only when all evaluable TN annotations indicate TN.
 #'     - **Clinical covariates for ROR (NC-based methods only)**:
 #'       * `TSIZE`: Tumor size (0 = \eqn{\le 2}{<= 2} cm; 1 = \eqn{> 2}{> 2} cm). Must be numeric (0/1).
 #'       * `NODE`: Lymph node status (0 = negative; \eqn{\ge 1}{>= 1} = positive). Must be numeric (0/1).
@@ -1109,14 +1110,15 @@ BS_Multi <- function(data_input,
 
     # Detect true TN cohort
     has_TN_col <- "TN" %in% colnames(pheno)
-    is_TN_cohort <- has_TN_col && all(na.omit(pheno$TN) == "TN") && nrow(pheno) > 0
+    tn_summary <- if (has_TN_col) .tn_only_summary(pheno$TN) else NULL
+    is_TN_cohort <- has_TN_col && isTRUE(tn_summary$is_tn_only)
 
     # manual vs AUTO
     is_manual <- !(length(methods) == 1 && methods[1] == "AUTO")
 
     # Only tell users in MANUAL mode that ssBC routing will use TN/TN.v2
     if (is_manual && is_TN_cohort && any(methods %in% c("ssBC", "ssBC.v2"))) {
-        n_tn <- sum(na.omit(pheno$TN) == "TN")
+        n_tn <- tn_summary$n_tn
         .msg("Detected pure TN cohort (TN=100%%, n=%d). Routing ssBC with s='TN' and ssBC.v2 with s='TN.v2'.",
             n_tn,
             origin = "MANUAL"

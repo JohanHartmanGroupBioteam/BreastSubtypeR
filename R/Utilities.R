@@ -212,6 +212,25 @@ prepare_ssp_matrix <- function(x, genes.s, RawCounts, samplenames, verbose) {
   df
 }
 
+#' Summarize TN annotations for cohort-level TN-only detection
+#'
+#' @keywords internal
+#' @noRd
+.tn_only_summary <- function(tn_flag) {
+    tn_chr <- toupper(trimws(as.character(tn_flag)))
+    tn_evaluable <- !is.na(tn_chr) & nzchar(tn_chr)
+    tn_truthy <- tn_chr %in% c("TN", "TRUE", "T", "YES", "Y", "1")
+
+    n_tn <- sum(tn_truthy & tn_evaluable)
+    n_evaluable_tn <- sum(tn_evaluable)
+
+    list(
+        n_tn = n_tn,
+        n_evaluable_tn = n_evaluable_tn,
+        is_tn_only = n_evaluable_tn > 0L && n_tn == n_evaluable_tn
+    )
+}
+
 
 #' Map Gene IDs and Handle missing data
 #'
@@ -376,11 +395,11 @@ get_methods <- function(pheno) {
 
         ## ---- TNBC handling ------------------------------------------------
         if ("TN" %in% colnames(pheno)) {
-            # Accept common truthy markers in TN (case-insensitive)
-            tn_flag <- toupper(trimws(as.character(pheno$TN)))
-            n_TN <- sum(tn_flag %in% c("TN", "TRUE", "T", "YES", "Y", "1"), na.rm = TRUE)
+            # Use TNBC cohort handling only when all evaluable TN annotations are TN.
+            tn_summary <- .tn_only_summary(pheno$TN)
+            n_TN <- tn_summary$n_tn
 
-            if (n_TN > 0) {
+            if (tn_summary$is_tn_only) {
                 cohort.select <- "TNBC"
 
                 if (n_TN >= n_TN_threshold) {
@@ -392,8 +411,11 @@ get_methods <- function(pheno) {
                     .msg("Running methods: AIMS, sspbc", origin = "AUTO")
                     methods <- c("AIMS", "sspbc")
                 }
+            } else if (tn_summary$n_evaluable_tn > 0L) {
+                .msg("TN column detected but not all evaluable samples are TN;
+              proceeding with non-TNBC logic.", origin = "AUTO")
             } else {
-                .msg("TN column detected but no samples flagged as TN;
+                .msg("TN column detected but no evaluable samples flagged as TN;
               proceeding with non-TNBC logic.", origin = "AUTO")
             }
         }
