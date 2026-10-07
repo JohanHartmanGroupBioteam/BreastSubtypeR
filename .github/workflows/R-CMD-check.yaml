@@ -1,0 +1,79 @@
+# R CMD check of the package source on Linux (R 4.6.x, Bioconductor 3.24).
+#
+# Fails on ERROR or WARNING; NOTEs are reported in the log and kept in the
+# uploaded .Rcheck directory. No secrets are used and nothing is published.
+#
+# Third-party actions are pinned to full commit SHAs; the comment after each
+# SHA gives the release tag it corresponds to.
+
+name: R-CMD-check
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  R-CMD-check:
+    name: ubuntu-latest (R 4.6, Bioc 3.24)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      R_BIOC_VERSION: "3.24"
+      R_KEEP_PKG_SOURCE: "yes"
+      _R_CHECK_FORCE_SUGGESTS_: "true"
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-pandoc@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
+
+      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
+        with:
+          r-version: "4.6"
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
+        with:
+          dependencies: '"all"'
+          extra-packages: |
+            any::rcmdcheck
+            bioc::BiocVersion
+          needs: check
+
+      - name: Confirm R 4.6.x and Bioconductor 3.24
+        shell: Rscript {0}
+        run: |
+          r <- getRversion()
+          bioc <- packageVersion("BiocVersion")
+          message("R ", r, "; BiocVersion ", bioc)
+          if (r < "4.6.0" || r >= "4.7.0") stop("expected R 4.6.x, found R ", r)
+          if (bioc < "3.24" || bioc >= "3.25") stop("expected Bioconductor 3.24, found ", bioc)
+
+      - uses: r-lib/actions/check-r-package@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
+        with:
+          args: 'c("--no-manual")'
+          build_args: 'c("--no-manual")'
+          error-on: '"warning"'
+          check-dir: '"check"'
+          upload-results: never
+
+      - name: Upload check results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: R-CMD-check-results-attempt-${{ github.run_attempt }}
+          path: check/*.Rcheck
+          retention-days: 14
+          if-no-files-found: warn
