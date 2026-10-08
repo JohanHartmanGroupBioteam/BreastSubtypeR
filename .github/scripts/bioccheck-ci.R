@@ -453,7 +453,12 @@ stage_status <- function(outcome, result) {
         return(if (identical(outcome, "success")) "INCOMPLETE (no result)" else "FAIL (no result recorded)")
     if (!isTRUE(result$completed))
         return("INCOMPLETE (did not finish)")
-    if (identical(outcome, "success")) "PASS" else "FAIL"
+    # The recorded counts decide FAIL even if the step outcome says success;
+    # a clean result never turns a failed step into PASS.
+    if (!is.null(result$counts) &&
+        as.integer(result$counts$error) + as.integer(result$counts$warning) > 0L)
+        return("FAIL")
+    if (identical(outcome, "success")) "PASS" else "FAIL (step exited non-zero)"
 }
 
 counts_text <- function(result) {
@@ -674,7 +679,7 @@ synthetic_result <- function(kind) {
     raise <- function(condition, msg) get(paste0("handle", condition), envir = ns)(msg)
     get("handleCheck", envir = ns)("Synthetic control check...")
     switch(kind,
-        clean = NULL,
+        clean = , `clean-then-fail` = NULL,
         notes = {
             raise("Note", "synthetic note 1")
             raise("Note", "synthetic note 2")
@@ -697,6 +702,10 @@ run_fixture <- function(kind, out_dir) {
     found <- bioccheck_findings(synthetic_result(kind))
     write_result(c(list(stage = paste("fixture", kind), completed = TRUE), found), out)
     print_counts(paste("fixture", kind), found$counts)
+    # A producer that fails after writing a clean result: the exit status,
+    # not the file, must decide.
+    if (identical(kind, "clean-then-fail"))
+        return(3L)
     gate_status(found$counts)
 }
 
@@ -769,6 +778,9 @@ run_selftest <- function(out_dir) {
         st <- child(name, "fixture", fx[[1L]], "{dir}")
         expect(name, fx[[2L]], st, do.call(counts_are, c(list(result_of(name)), as.list(fx[[3L]]))))
     }
+    st <- child("bioccheck-clean-then-fail", "fixture", "clean-then-fail", "{dir}")
+    expect("bioccheck-clean-then-fail", 3L, st,
+        counts_are(result_of("bioccheck-clean-then-fail"), 0, 0, 0))
     for (fx in c("malformed", "fatal")) {
         name <- paste0("bioccheck-", fx)
         st <- child(name, "fixture", fx, "{dir}")
@@ -814,6 +826,27 @@ run_selftest <- function(out_dir) {
     st <- child("summary-after-failure", "summary", sum_dir)
     md <- file.path(sum_dir, "summary.md")
     expect("summary-after-failure", 0L, st, file.exists(md) &&
+        any(grepl("BiocCheck (existing package) | FAIL", readLines(md), fixed = TRUE)))
+    # A clean result file next to a failed step is displayed as FAIL.
+    sum_dir <- file.path(out_dir, "summary-clean-result-failed-step")
+    dir.create(file.path(sum_dir, "bioccheck"), recursive = TRUE, showWarnings = FALSE)
+    file.copy(file.path(out_dir, "bioccheck-clean-then-fail", "fixture-result.json"),
+        file.path(sum_dir, "bioccheck", "bioccheck-result.json"))
+    Sys.setenv(OUTCOME_BIOCCHECK = "failure")
+    st <- child("summary-clean-result-failed-step", "summary", sum_dir)
+    md <- file.path(sum_dir, "summary.md")
+    expect("summary-clean-result-failed-step", 0L, st, file.exists(md) &&
+        any(grepl("BiocCheck (existing package) | FAIL", readLines(md), fixed = TRUE)))
+    # A WARNING in the result is displayed as FAIL even if the step outcome
+    # claims success, and the inconsistency fails the summary step.
+    sum_dir <- file.path(out_dir, "summary-masked-warning")
+    dir.create(file.path(sum_dir, "bioccheck"), recursive = TRUE, showWarnings = FALSE)
+    file.copy(file.path(out_dir, "bioccheck-warning", "fixture-result.json"),
+        file.path(sum_dir, "bioccheck", "bioccheck-result.json"))
+    Sys.setenv(OUTCOME_BIOCCHECK = "success")
+    st <- child("summary-masked-warning", "summary", sum_dir)
+    md <- file.path(sum_dir, "summary.md")
+    expect("summary-masked-warning", 2L, st, file.exists(md) &&
         any(grepl("BiocCheck (existing package) | FAIL", readLines(md), fixed = TRUE)))
     sum_dir <- file.path(out_dir, "summary-missing-result")
     dir.create(sum_dir, showWarnings = FALSE)

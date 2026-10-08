@@ -41,6 +41,11 @@ jobs:
     name: BiocCheck (R 4.6, Bioc 3.24)
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    # Explicit bash runs steps with -eo pipefail, so a failing command piped
+    # through tee fails its step. GitHub's unspecified shell is only bash -e.
+    defaults:
+      run:
+        shell: bash
     env:
       R_BIOC_VERSION: "3.24"
       R_KEEP_PKG_SOURCE: "yes"
@@ -89,9 +94,24 @@ jobs:
       - name: Self-test the failure gate with synthetic results
         id: selftest
         working-directory: ${{ runner.temp }}
-        run: >-
-          Rscript "$BIOCCHECK_CI" selftest "$EVIDENCE_DIR/selftest"
-          2>&1 | tee "$EVIDENCE_DIR/selftest/console.log"
+        run: |
+          # This step uses the same job default shell as every check step.
+          printf '%s\n' "$SHELLOPTS" | tee "$EVIDENCE_DIR/selftest/shellopts.txt"
+          case ":$SHELLOPTS:" in
+            *:pipefail:*) ;;
+            *) echo "::error::pipefail is not enabled in the job shell"; exit 2 ;;
+          esac
+          d="$EVIDENCE_DIR/selftest/step-pipeline"
+          mkdir -p "$d/notes" "$d/clean-then-fail"
+          Rscript "$BIOCCHECK_CI" fixture notes "$d/notes" 2>&1 | tee "$d/notes/console.log"
+          if Rscript "$BIOCCHECK_CI" fixture clean-then-fail "$d/clean-then-fail" \
+            2>&1 | tee "$d/clean-then-fail/console.log"; then
+            echo "::error::A failing command piped through tee was reported as success"
+            exit 2
+          fi
+          grep -q '"completed": true' "$d/clean-then-fail/fixture-result.json"
+          Rscript "$BIOCCHECK_CI" selftest "$EVIDENCE_DIR/selftest" \
+            2>&1 | tee "$EVIDENCE_DIR/selftest/console.log"
 
       - name: BiocCheckGitClone on the untouched checkout
         id: gitclone
