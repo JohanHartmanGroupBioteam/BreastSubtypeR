@@ -19,5 +19,7 @@ paper <- bibentry(
   url     = "https://doi.org/10.1093/nargab/lqaf131"
 )
 
-## Auto-generate the “Manual” entry from DESCRIPTION
-pkg_manual <- citation(auto = meta)
+## Auto-generate the Manual entry when DESCRIPTION metadata is available.
+if (!is.null(meta$Package)) {
+    pkg_manual <- citation(auto = meta)
+}
