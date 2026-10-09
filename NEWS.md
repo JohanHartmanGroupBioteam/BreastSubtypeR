@@ -1,3 +1,13 @@
+# BreastSubtypeR 1.5.5
+
+## Bug fixes
+
+- Fixed standalone reading of `inst/CITATION` without package metadata.
+  The citation file now uses an ASCII-only comment and generates the
+  package-manual entry only when package metadata is available. The
+  published article citation and the metadata-derived manual entry are
+  preserved during normal installed-package use.
+
 # BreastSubtypeR 1.5.4
 
 ## Documentation
