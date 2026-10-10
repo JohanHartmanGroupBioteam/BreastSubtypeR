@@ -4,7 +4,13 @@
 \alias{BS_Multi}
 \title{Intrinsic Subtyping with Multiple Approaches (BS_Multi)}
 \usage{
-BS_Multi(data_input, methods = "AUTO", Subtype = FALSE, hasClinical = FALSE)
+BS_Multi(
+  data_input,
+  methods = "AUTO",
+  Subtype = FALSE,
+  hasClinical = FALSE,
+  er_subsample = c("target", "larger")
+)
 }
 \arguments{
 \item{data_input}{The output from the \code{\link[=Mapping]{Mapping()}} function, containing
@@ -41,6 +47,12 @@ HER2-enriched, Basal-like), excluding Normal-like.}
 \item "TSIZE": Tumor size (0 = \eqn{\le 2}{<= 2} cm; 1 = \eqn{> 2}{> 2} cm).
 \item "NODE": Lymph node status (0 = negative; \eqn{\ge 1}{>= 1} = positive).
 }}
+
+\item{er_subsample}{Character, passed to \code{BS_cIHC.itr()} and used by no
+other method: \code{"target"} (default) subsamples the ER group that is
+over-represented relative to the 54/64 ER+ : ER- target; \code{"larger"}
+subsamples the numerically larger group, as in BreastSubtypeR 1.5.5 and
+earlier, to reproduce earlier results.}
 }
 \value{
 A list containing per-method subtype assignments for each sample.

@@ -482,8 +482,10 @@ BS_cIHC <- function(
 #' Implements an **iterative** version of the conventional IHC-based intrinsic
 #' subtyping approach. This method repeatedly balances samples by estrogen
 #' receptor (ER) status across multiple iterations, allowing refinement of
-#' subtype calls in ER-skewed cohorts. Users can customise the ER+/ER– ratio to
-#' match specific cohort assumptions (e.g., training distribution).
+#' subtype calls in ER-skewed cohorts. Each iteration subsamples the ER group
+#' that is over-represented relative to an ER+ : ER- target (`ratio`, default
+#' 54/64); `er_subsample = "larger"` restores the behaviour of
+#' BreastSubtypeR 1.5.5 and earlier.
 #'
 #' @param se_obj A `SummarizedExperiment` object containing:
 #'   - **Assay data**: A log2-transformed, normalized expression matrix with
@@ -495,15 +497,29 @@ BS_cIHC <- function(
 #' @param iteration Integer. Number of iterations for the ER-balancing procedure.
 #'   Default: 100.
 #'
-#' @param ratio Numeric. Target ratio for ER balancing. Options:
-#'   - `1:1`: Equal balancing.
-#'   - `54:64`: Default; reflects the ER+/ER- ratio in the UNC232 training cohort.
+#' @param ratio Numeric. Its meaning depends on `er_subsample`:
+#'   - `er_subsample = "target"` (default): the ER+ : ER- target of the
+#'     balancing subset, a single positive number. The default `54 / 64`
+#'     (about 0.84) is the ER+ : ER- distribution of the UNC PAM50 reference
+#'     set; `1` gives equal group sizes. In each iteration the ER group that
+#'     is over-represented relative to the target is subsampled without
+#'     replacement, to `ceiling(ratio * n_ERneg)` ER+ or
+#'     `ceiling(n_ERpos / ratio)` ER- samples, and every sample of the other
+#'     group is kept. A cohort already at the target (within this rounding)
+#'     is not subsampled; every iteration then uses all samples. With the
+#'     default, for example, 100 ER+ and 40 ER- samples give 34 ER+ : 40 ER-,
+#'     40 ER+ and 100 ER- samples give 40 ER+ : 48 ER-, and 54 ER+ and
+#'     64 ER- samples are used in full.
+#'   - `er_subsample = "larger"`: the size of the subsample of the
+#'     numerically larger ER group (ER+ when the groups are equal) relative
+#'     to the smaller group, which is kept in full: `ceiling(ratio *
+#'     n_smaller)` samples are drawn. `ratio` must not exceed
+#'     `n_larger / n_smaller`. This is the behaviour of BreastSubtypeR 1.5.5
+#'     and earlier, in which the subset follows the ER+ : ER- target only when
+#'     ER+ samples are at least as many as ER- samples.
 #'
-#'   The ratio is applied to the larger ER group relative to the smaller one:
-#'   in each iteration `ceiling(ratio * n_smaller)` samples are drawn from the
-#'   larger ER group and combined with all samples of the smaller group. This
-#'   equals the ER+/ER- ratio when ER+ is the larger group and its inverse when
-#'   ER- is the larger group. `ratio` must not exceed `n_larger / n_smaller`.
+#'   Write `54 / 64`, not `54:64`: in R, `54:64` is the sequence 54, 55, ...,
+#'   64 and gives an error.
 #'
 #' @param Subtype Logical. If `TRUE`, returns only the four main subtypes
 #'   (Luminal A, Luminal B, HER2-enriched, Basal-like), excluding Normal-like.
@@ -514,6 +530,16 @@ BS_cIHC <- function(
 #' - "NODE": Lymph node status (0 = negative; \eqn{\ge 1}{>= 1} = positive). Must be numeric.
 #'
 #' @param seed Integer. Random seed for reproducibility.
+#'
+#' @param er_subsample Character. Which ER group is subsampled in each
+#'   iteration (see `ratio`):
+#'   - `"target"` (default): the group over-represented relative to the
+#'     ER+ : ER- target.
+#'   - `"larger"`: the numerically larger group, as in BreastSubtypeR 1.5.5
+#'     and earlier; it reproduces earlier results exactly.
+#'
+#'   Both give the same results whenever ER+ samples are at least as many as
+#'   ER- samples.
 #'
 #' @return A list with the following elements:
 #'   - `BS.all`: `data.frame` with `PatientID`, `BS` (five-class consensus call
@@ -556,7 +582,9 @@ BS_cIHC.itr <- function(
         ratio = 54 / 64,
         Subtype = FALSE,
         hasClinical = FALSE,
-        seed = 118) {
+        seed = 118,
+        er_subsample = c("target", "larger")) {
+    er_subsample <- match.arg(er_subsample)
     # Check if input is a SummarizedExperiment object
     if (!inherits(se_obj, "SummarizedExperiment")) {
         stop("Input must be a SummarizedExperiment object.")
@@ -588,6 +616,7 @@ BS_cIHC.itr <- function(
         Subtype = Subtype,
         hasClinical = hasClinical,
         seed = seed,
+        er_subsample = er_subsample,
         .homonyms = "last"
     )
 
@@ -1096,6 +1125,12 @@ BS_sspbc <- function(se_obj, ssp.name = "ssp.pam50") {
 #' - "TSIZE": Tumor size (0 = \eqn{\le 2}{<= 2} cm; 1 = \eqn{> 2}{> 2} cm).
 #' - "NODE": Lymph node status (0 = negative; \eqn{\ge 1}{>= 1} = positive).
 #'
+#' @param er_subsample Character, passed to `BS_cIHC.itr()` and used by no
+#'   other method: `"target"` (default) subsamples the ER group that is
+#'   over-represented relative to the 54/64 ER+ : ER- target; `"larger"`
+#'   subsamples the numerically larger group, as in BreastSubtypeR 1.5.5 and
+#'   earlier, to reproduce earlier results.
+#'
 #' @return A list containing per-method subtype assignments for each sample.
 #'   `res_subtypes` holds one column per executed method plus an `entropy`
 #'   column: the raw Shannon entropy in bits of the calls that the executed
@@ -1158,7 +1193,9 @@ BS_sspbc <- function(se_obj, ssp.name = "ssp.pam50") {
 BS_Multi <- function(data_input,
     methods = "AUTO",
     Subtype = FALSE,
-    hasClinical = FALSE) {
+    hasClinical = FALSE,
+    er_subsample = c("target", "larger")) {
+    er_subsample <- match.arg(er_subsample)
     valid_methods <- c(
         "parker.original", "genefu.scale", "genefu.robust",
         "ssBC", "ssBC.v2", "cIHC", "cIHC.itr", "PCAPAM50",
@@ -1288,7 +1325,8 @@ BS_Multi <- function(data_input,
                 BS_cIHC.itr(
                     data_input$se_NC,
                     Subtype = Subtype,
-                    hasClinical = hasClinical
+                    hasClinical = hasClinical,
+                    er_subsample = er_subsample
                 )
             )
         }

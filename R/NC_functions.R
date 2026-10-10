@@ -902,6 +902,61 @@ makeCalls.parker <- function(
     invisible(TRUE)
 }
 
+## Subsampling plan for cIHC.itr. Returns list(group, size): the ER group
+## ("ER+", "ER-" or "none") subsampled in every iteration and its subsample
+## size; the other group is always kept in full.
+##
+## er_subsample = "target": `ratio` is the ER+ : ER- target. The group that is
+##   over-represented relative to the target is subsampled to
+##   ceiling(ratio * n_neg) ER+ or ceiling(n_pos / ratio) ER- samples; a
+##   cohort already at the target (within this rounding) is not subsampled.
+##   When n_pos >= n_neg this gives the same subset as "larger".
+## er_subsample = "larger": BreastSubtypeR <= 1.5.5. The numerically larger
+##   group (ER+ on ties) is subsampled to ceiling(ratio * n_smaller); `ratio`
+##   must not exceed n_larger / n_smaller.
+##
+## Sizes are compared as doubles and converted to integer only when smaller
+## than the group size, so extreme finite ratios cannot overflow, and every
+## subsample has at least one sample.
+.cihc_itr_plan <- function(
+        n_pos,
+        n_neg,
+        ratio = 54 / 64,
+        er_subsample = c("target", "larger")) {
+    er_subsample <- match.arg(er_subsample)
+    if (!is.numeric(ratio) || length(ratio) != 1L || !is.finite(ratio) ||
+        ratio <= 0) {
+        stop(
+            "cIHC.itr: 'ratio' must be a single positive number (the ER+ : ",
+            "ER- target, e.g. 54 / 64; note that 54:64 is a sequence in R).",
+            call. = FALSE
+        )
+    }
+    .check_er_groups("cIHC.itr", n_pos, n_neg)
+
+    if (er_subsample == "larger") {
+        n_large <- max(n_pos, n_neg)
+        n_small <- min(n_pos, n_neg)
+        if (ratio > n_large / n_small) {
+            stop("please specify a ratio less than ", n_large / n_small)
+        }
+        return(list(
+            group = if (n_pos < n_neg) "ER-" else "ER+",
+            size = as.integer(ceiling(ratio * n_small))
+        ))
+    }
+
+    m_pos <- ceiling(ratio * n_neg)
+    if (m_pos < n_pos) {
+        return(list(group = "ER+", size = as.integer(m_pos)))
+    }
+    m_neg <- ceiling(n_pos / ratio)
+    if (m_neg < n_neg) {
+        return(list(group = "ER-", size = as.integer(m_neg)))
+    }
+    list(group = "none", size = 0L)
+}
+
 makeCalls_ihc <- function(
         mat,
         df.cln,
@@ -1019,8 +1074,10 @@ makeCalls_ihc <- function(
 #' @param df.cln clinical information table with PatientID and IHC column
 #' @param iterative Times to do iterative ER balanced procedure with certain
 #'   ratio.
-#' @param ratio The options are either 1:1 or 54 (ER+) : 64 (ER-) (default). The
-#'   latter was ER ratio used for UNC230 train cohort.
+#' @param ratio ER+ : ER- target of the balancing subset (default 54/64, the
+#'   UNC PAM50 reference distribution). With er_subsample = "larger" it is the
+#'   size of the larger group's subsample relative to the smaller group (the
+#'   behaviour of BreastSubtypeR <= 1.5.5). See .cihc_itr_plan().
 #' @param calibration The calibration method to use. Options are "None",
 #'   "Internal", or "External". If "Internal" is selected, see the "internal"
 #'   parameter for further details. If "External" is selected, see the
@@ -1040,6 +1097,7 @@ makeCalls_ihc <- function(
 #' @param hasClinical Logical. If `TRUE`, the function uses clinical data from
 #'   the `pheno` table. Required columns include:
 #' @param seed An integer value is used to set the random seed.
+#' @param er_subsample "target" (default) or "larger"; see .cihc_itr_plan().
 #' @noRd
 
 makeCalls_ihc.iterative <- function(
@@ -1053,7 +1111,9 @@ makeCalls_ihc.iterative <- function(
         medians = NA,
         Subtype = FALSE,
         hasClinical = FALSE,
-        seed = 118) {
+        seed = 118,
+        er_subsample = c("target", "larger")) {
+    er_subsample <- match.arg(er_subsample)
     ## loading dataset
     data_env <- new.env(parent = emptyenv())
     data("BreastSubtypeRobj", envir = data_env, package = "BreastSubtypeR")
@@ -1072,35 +1132,37 @@ makeCalls_ihc.iterative <- function(
     ERP.ihc <- df.cln[which(df.cln$ER == "ER+"), ]
     dim(ERP.ihc)
 
-    .check_er_groups("cIHC.itr", nrow(ERP.ihc), nrow(ERN.ihc))
+    ## which ER group is subsampled in each iteration, and to what size;
+    ## stops if an ER group is empty or `ratio` is invalid
+    plan <- .cihc_itr_plan(nrow(ERP.ihc), nrow(ERN.ihc), ratio, er_subsample)
 
-    ## check the ER composition
-    if (dim(ERP.ihc)[1] < dim(ERN.ihc)[1]) {
-        temp <- ERP.ihc
-        ERP.ihc <- ERN.ihc
-        ERN.ihc <- temp
+    ## the subsampled group comes first, as in BreastSubtypeR <= 1.5.5
+    if (plan$group == "ER-") {
+        sub_ids <- ERN.ihc$PatientID
+        other_ids <- ERP.ihc$PatientID
+    } else {
+        sub_ids <- ERP.ihc$PatientID
+        other_ids <- ERN.ihc$PatientID
     }
-
-    ## check ratio
-    ## make sure a reasonable ratio
-    if (ratio > dim(ERP.ihc)[1] / dim(ERN.ihc)[1]) {
-        n_ERP <- dim(ERP.ihc)[1]
-        n_ERN <- dim(ERN.ihc)[1]
-        stop(
-            "please specify a ratio less than ",
-            max(n_ERP, n_ERN) / min(n_ERP, n_ERN)
+    if (plan$group == "none" &&
+        isTRUE(getOption("BreastSubtypeR.verbose", TRUE))) {
+        message(
+            "cIHC.itr: the cohort already matches the ER+ : ER- target ",
+            "(ratio = ", format(ratio), "); all samples are used in every ",
+            "iteration."
         )
     }
 
     withr::with_seed(seed, {
         res_ihc_iterative <- mapply(
             function(itr) {
-                i <- sample(dim(ERP.ihc)[1], ceiling(ratio * dim(ERN.ihc)[1]))
+                keep <- if (plan$group == "none") {
+                    c(sub_ids, other_ids)
+                } else {
+                    c(sub_ids[sample(length(sub_ids), plan$size)], other_ids)
+                }
 
-                length(ERP.ihc$PatientID[i]) # ER positive samples
-                length(ERN.ihc$PatientID) # ER negative samples
-
-                mbal.ihc <- mat[, c(ERP.ihc$PatientID[i], ERN.ihc$PatientID)]
+                mbal.ihc <- mat[, keep]
 
                 suffix <- getsuffix(calibration = calibration, internal = internal)
 

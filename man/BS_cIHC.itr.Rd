@@ -10,7 +10,8 @@ BS_cIHC.itr(
   ratio = 54/64,
   Subtype = FALSE,
   hasClinical = FALSE,
-  seed = 118
+  seed = 118,
+  er_subsample = c("target", "larger")
 )
 }
 \arguments{
@@ -28,17 +29,30 @@ genes (Gene Symbols) as rows and samples as columns.
 \item{iteration}{Integer. Number of iterations for the ER-balancing procedure.
 Default: 100.}
 
-\item{ratio}{Numeric. Target ratio for ER balancing. Options:
+\item{ratio}{Numeric. Its meaning depends on \code{er_subsample}:
 \itemize{
-\item \code{1:1}: Equal balancing.
-\item \code{54:64}: Default; reflects the ER+/ER- ratio in the UNC232 training cohort.
+\item \code{er_subsample = "target"} (default): the ER+ : ER- target of the
+balancing subset, a single positive number. The default \code{54 / 64}
+(about 0.84) is the ER+ : ER- distribution of the UNC PAM50 reference
+set; \code{1} gives equal group sizes. In each iteration the ER group that
+is over-represented relative to the target is subsampled without
+replacement, to \code{ceiling(ratio * n_ERneg)} ER+ or
+\code{ceiling(n_ERpos / ratio)} ER- samples, and every sample of the other
+group is kept. A cohort already at the target (within this rounding)
+is not subsampled; every iteration then uses all samples. With the
+default, for example, 100 ER+ and 40 ER- samples give 34 ER+ : 40 ER-,
+40 ER+ and 100 ER- samples give 40 ER+ : 48 ER-, and 54 ER+ and
+64 ER- samples are used in full.
+\item \code{er_subsample = "larger"}: the size of the subsample of the
+numerically larger ER group (ER+ when the groups are equal) relative
+to the smaller group, which is kept in full: \code{ceiling(ratio * n_smaller)} samples are drawn. \code{ratio} must not exceed
+\code{n_larger / n_smaller}. This is the behaviour of BreastSubtypeR 1.5.5
+and earlier, in which the subset follows the ER+ : ER- target only when
+ER+ samples are at least as many as ER- samples.
 }
 
-The ratio is applied to the larger ER group relative to the smaller one:
-in each iteration \code{ceiling(ratio * n_smaller)} samples are drawn from the
-larger ER group and combined with all samples of the smaller group. This
-equals the ER+/ER- ratio when ER+ is the larger group and its inverse when
-ER- is the larger group. \code{ratio} must not exceed \code{n_larger / n_smaller}.}
+Write \code{54 / 64}, not \code{54:64}: in R, \code{54:64} is the sequence 54, 55, ...,
+64 and gives an error.}
 
 \item{Subtype}{Logical. If \code{TRUE}, returns only the four main subtypes
 (Luminal A, Luminal B, HER2-enriched, Basal-like), excluding Normal-like.}
@@ -51,6 +65,18 @@ variables from \code{colData(se_obj)}. Required columns:
 }}
 
 \item{seed}{Integer. Random seed for reproducibility.}
+
+\item{er_subsample}{Character. Which ER group is subsampled in each
+iteration (see \code{ratio}):
+\itemize{
+\item \code{"target"} (default): the group over-represented relative to the
+ER+ : ER- target.
+\item \code{"larger"}: the numerically larger group, as in BreastSubtypeR 1.5.5
+and earlier; it reproduces earlier results exactly.
+}
+
+Both give the same results whenever ER+ samples are at least as many as
+ER- samples.}
 }
 \value{
 A list with the following elements:
@@ -77,8 +103,10 @@ and distances, and the centroids.
 Implements an \strong{iterative} version of the conventional IHC-based intrinsic
 subtyping approach. This method repeatedly balances samples by estrogen
 receptor (ER) status across multiple iterations, allowing refinement of
-subtype calls in ER-skewed cohorts. Users can customise the ER+/ER– ratio to
-match specific cohort assumptions (e.g., training distribution).
+subtype calls in ER-skewed cohorts. Each iteration subsamples the ER group
+that is over-represented relative to an ER+ : ER- target (\code{ratio}, default
+54/64); \code{er_subsample = "larger"} restores the behaviour of
+BreastSubtypeR 1.5.5 and earlier.
 }
 \examples{
 data("OSLO2EMIT0obj")
