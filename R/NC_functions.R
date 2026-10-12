@@ -910,7 +910,10 @@ makeCalls.parker <- function(
 ##   over-represented relative to the target is subsampled to
 ##   ceiling(ratio * n_neg) ER+ or ceiling(n_pos / ratio) ER- samples; a
 ##   cohort already at the target (within this rounding) is not subsampled.
-##   When n_pos >= n_neg this gives the same subset as "larger".
+##   With the default ratio = 54 / 64, when n_pos >= n_neg this gives the
+##   same subset as "larger". Other ratios carry no such guarantee: for
+##   example 100 ER+ / 40 ER- with ratio = 3 is feasible here (100 : 34) but
+##   is rejected by the "larger" ratio guard below.
 ## er_subsample = "larger": BreastSubtypeR <= 1.5.5. The numerically larger
 ##   group (ER+ on ties) is subsampled to ceiling(ratio * n_smaller); `ratio`
 ##   must not exceed n_larger / n_smaller.

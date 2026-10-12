@@ -538,8 +538,11 @@ BS_cIHC <- function(
 #'   - `"larger"`: the numerically larger group, as in BreastSubtypeR 1.5.5
 #'     and earlier; it reproduces earlier results exactly.
 #'
-#'   Both give the same results whenever ER+ samples are at least as many as
-#'   ER- samples.
+#'   With the default `ratio = 54 / 64` and otherwise identical inputs, seed
+#'   and settings, the two modes give the same results when ER+ samples are
+#'   at least as many as ER- samples. This is not a guarantee for other
+#'   values of `ratio`: `"larger"` rejects a `ratio` above
+#'   `n_larger / n_smaller`, which `"target"` accepts.
 #'
 #' @return A list with the following elements:
 #'   - `BS.all`: `data.frame` with `PatientID`, `BS` (five-class consensus call

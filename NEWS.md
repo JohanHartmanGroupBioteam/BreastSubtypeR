@@ -15,12 +15,20 @@
   samples were subsampled to 54 : 46 instead of being used in full).
 - The `ceiling()` rounding convention is kept, so with the default `ratio`
   results are identical to 1.5.5 whenever ER+ samples are at least as many
-  as ER- samples. Results
+  as ER- samples. With the default `ratio = 54 / 64`, the balancing subset
   can change for cohorts or subsets in which ER- samples outnumber ER+
-  samples: the calls, scores and ROR values of `BS_cIHC.itr()`, and the
-  `cIHC.itr` and `entropy` columns of `BS_Multi()`, in manual mode and in
-  AUTO runs that select cIHC.itr (ER+ fraction above 0.39 and below 0.5).
-  AUTO method selection and all other methods are unchanged.
+  samples, that is, cohorts with an ER-negative majority. This can affect
+  the calls, scores and ROR values of `BS_cIHC.itr()`, and the `cIHC.itr`
+  and `entropy` columns of `BS_Multi()`: in manual calls that include
+  `"cIHC.itr"`, and in AUTO calls that select cIHC.itr under the existing
+  routing and size gates. AUTO selects cIHC.itr in both branches of the
+  eligible mixed cohort (at least 15 ER+ and 18 ER- samples, outside the
+  TN-only and HER2+ routes), with ten methods when the ER+ fraction is
+  strictly between 0.39 and 0.69 and with eight methods otherwise, so
+  eligible cohorts with an ER+ fraction of 0.39 or less are included. A
+  changed balancing subset need not change the subtype call of every
+  cohort or sample. AUTO method selection, its thresholds and all other
+  methods are unchanged.
 - New argument `er_subsample` in `BS_cIHC.itr()` and `BS_Multi()` (passed
   to cIHC.itr only). `er_subsample = "larger"` restores the previous rule,
   sampling order and outputs exactly, to reproduce results obtained with

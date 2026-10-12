@@ -75,8 +75,11 @@ ER+ : ER- target.
 and earlier; it reproduces earlier results exactly.
 }
 
-Both give the same results whenever ER+ samples are at least as many as
-ER- samples.}
+With the default \code{ratio = 54 / 64} and otherwise identical inputs, seed
+and settings, the two modes give the same results when ER+ samples are
+at least as many as ER- samples. This is not a guarantee for other
+values of \code{ratio}: \code{"larger"} rejects a \code{ratio} above
+\code{n_larger / n_smaller}, which \code{"target"} accepts.}
 }
 \value{
 A list with the following elements:
