@@ -1,3 +1,37 @@
+# BreastSubtypeR 1.5.6
+
+## Bug fixes (behaviour change)
+
+- cIHC.itr (`BS_cIHC.itr()`) now balances ER groups towards the ER+ : ER-
+  target `ratio` (default `54 / 64`, the ER distribution of the UNC PAM50
+  reference set). In every iteration the ER group that is over-represented
+  relative to the target is subsampled without replacement, to
+  `ceiling(ratio * n_ERneg)` ER+ or `ceiling(n_ERpos / ratio)` ER- samples,
+  and the other group is kept in full; a cohort already at the target is
+  used in full. Previously the numerically larger ER group was always
+  subsampled, to `ceiling(ratio * n_smaller)` samples, so the balancing
+  subset followed the target only when ER+ samples were at least as many as
+  ER- samples and was inverted otherwise (for example, 54 ER+ and 64 ER-
+  samples were subsampled to 54 : 46 instead of being used in full).
+- The `ceiling()` rounding convention is kept, so with the default `ratio`
+  results are identical to 1.5.5 whenever ER+ samples are at least as many
+  as ER- samples. Results
+  can change for cohorts or subsets in which ER- samples outnumber ER+
+  samples: the calls, scores and ROR values of `BS_cIHC.itr()`, and the
+  `cIHC.itr` and `entropy` columns of `BS_Multi()`, in manual mode and in
+  AUTO runs that select cIHC.itr (ER+ fraction above 0.39 and below 0.5).
+  AUTO method selection and all other methods are unchanged.
+- New argument `er_subsample` in `BS_cIHC.itr()` and `BS_Multi()` (passed
+  to cIHC.itr only). `er_subsample = "larger"` restores the previous rule,
+  sampling order and outputs exactly, to reproduce results obtained with
+  BreastSubtypeR 1.5.5 and earlier; the default is `"target"`.
+- `ratio` must be a single finite positive number (write `54 / 64`, not
+  `54:64`). `54:64` and `ratio = 0`, which previously gave a base-R error or
+  centred on the smaller ER group only, now stop with an informative error.
+  With the default `er_subsample = "target"` any such `ratio` is feasible.
+- Regression tests compare both modes with outputs retained from
+  BreastSubtypeR 1.5.5 and check that `BS_Multi()` changes no other method.
+
 # BreastSubtypeR 1.5.5
 
 ## Bug fixes
