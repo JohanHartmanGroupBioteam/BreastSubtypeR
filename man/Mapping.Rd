@@ -41,7 +41,10 @@ AUTO uses TNBC-specific cohort handling only when all evaluable TN annotations i
 \item \strong{Clinical covariates for ROR (NC-based methods only)}:
 \itemize{
 \item \code{TSIZE}: Tumor size (0 = \eqn{\le 2}{<= 2} cm; 1 = \eqn{> 2}{> 2} cm). Must be numeric (0/1).
-\item \code{NODE}: Lymph node status (0 = negative; \eqn{\ge 1}{>= 1} = positive). Must be numeric (0/1).
+\item \code{NODE}: Number of positive lymph nodes. Supply the actual nonnegative
+integer count as a numeric value when available. Binary 0/1 is accepted
+but cannot distinguish 1--3 from 4 or more positive nodes. The current
+R API does not enforce nonnegative integer counts; see Details.
 }
 \item \strong{Preferred canonical receptor coding}:
 \itemize{
@@ -108,6 +111,22 @@ intrinsic subtyping workflows (NC- and SSP-based).
 
 This design allows users to supply a single expression format, while
 BreastSubtypeR automatically applies method-specific preprocessing.
+
+\strong{Clinical ROR covariates.} With \code{hasClinical = TRUE}, NC method wrappers
+require both \code{TSIZE} and \code{NODE} columns and check that \code{NODE} is numeric;
+they do not enforce nonnegative integer counts. ROR-S and ROR-P scores and
+groups use neither covariate. ROR-C and both ROR-PC scores use \code{TSIZE},
+but no numerical ROR score uses \code{NODE}. Only the additional risk group
+\verb{ROR-PC Group (Subtype + Clinic + Prolif.Subtype)} uses \code{NODE} categories
+0, 1--3 and 4 or more. With nonmissing \code{TSIZE}, 4 or more positive nodes
+receive high risk; the other categories use different score cutoffs.
+
+In the R API, an \code{NA} value in \code{NODE} makes only this additional group
+missing. An \code{NA} value in \code{TSIZE} makes all clinical ROR scores and groups
+missing; ROR-S and ROR-P remain available. These are missing values within
+required columns, not permission to omit the columns. Exact-cutoff behavior
+is tracked separately in
+\href{https://github.com/JohanHartmanGroupBioteam/BreastSubtypeR/issues/154}{issue #154}.
 
 \strong{Phenodata normalization.} #' If receptor fields are present, they are coerced to canonical encodings
 (\code{ER -> \{ER+, ER-\}}, \code{HER2 -> \{HER2+, HER2-\}},
