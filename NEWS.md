@@ -1,3 +1,31 @@
+# BreastSubtypeR 1.5.7
+
+## Bug fixes and documentation
+
+- Fixed `BS_AIMS()` for a single mapped sample while retaining the exact
+  sample identifier and matrix dimensions. Historical multi-sample calls,
+  probabilities and other returned components are unchanged.
+- Corrected the AIMS return-value documentation: calls and assigned-call
+  probabilities are sample-by-one-column matrices; `all.probs` is a named
+  list containing the five-subtype probability matrix.
+- Fixed stale results in `iBreastSubtypeR()`. Input replacement, example
+  reload and relevant parameter changes invalidate dependent predictions,
+  plots and exports. Mapping is retained when only prediction settings change.
+- Added server-side download checks for absent, failed or outdated
+  predictions. Download controls appear only for supported current results;
+  unavailable full metrics are explained rather than replaced with calls.
+- Invalid Shiny inputs now produce actionable, recoverable errors. Correcting
+  prediction settings permits a rerun without remapping valid inputs or
+  reloading the session. Failed predictions cannot expose previous results.
+- Clarified the cIHC.itr ER-positive : ER-negative target ratio (default
+  `54 / 64`): it must be finite and strictly positive, and target mode permits
+  values above one. The Shiny iteration control retains default 100, minimum
+  10 and step 10; other whole numbers of at least 10 are accepted.
+- Added AIMS and Shiny regression tests and real-browser checks for
+  invalidation, downloads, error recovery, uploaded sample identifiers and
+  independent sessions. Synchronized installation, workflow and output
+  documentation without changing scientific algorithms or the public API.
+
 # BreastSubtypeR 1.5.6
 
 ## Bug fixes (behaviour change)
