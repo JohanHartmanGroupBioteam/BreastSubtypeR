@@ -111,15 +111,28 @@ run_case <- function(nm, er_subsample) {
     if (grepl("ratio2", nm)) args$ratio <- 2
     res <- withr::with_options(list(BreastSubtypeR.verbose = FALSE),
         do.call(BS_cIHC.itr, args))
+    out <- res$outList
+    confidence_reference <- vapply(seq_along(out$predictions), function(j) {
+        suppressWarnings(round(1 - cor.test(out$testData[, j],
+            out$centroids[rownames(out$testData), out$predictions[j]],
+            method = "spearman")$p.value, 2))
+    }, numeric(1))
     c(res[parts], list(testData = res$outList$testData,
-        distances = res$outList$distances))
+        distances = res$outList$distances,
+        confidence_reference = confidence_reference))
 }
 expect_as_1.5.5 <- function(new, old) {
     # calls, per-iteration calls and sample order exactly; numbers to tolerance
     expect_identical(new$BS.all, old$BS.all)
     expect_identical(new$BS.itr.keep, old$BS.itr.keep)
     expect_identical(new$BS.itr.keep.Subtype, old$BS.itr.keep.Subtype)
-    expect_equal(new$score.ROR, old$score.ROR, tolerance = 1e-12)
+    # Retain the historical fixture, whose Confidence contains false zeros.
+    # Compare every other score unchanged; test Confidence against Parker.
+    other_scores <- setdiff(colnames(old$score.ROR), "Confidence")
+    expect_identical(colnames(new$score.ROR), colnames(old$score.ROR))
+    expect_equal(new$score.ROR[, other_scores, drop = FALSE],
+        old$score.ROR[, other_scores, drop = FALSE], tolerance = 1e-12)
+    expect_identical(new$score.ROR$Confidence, new$confidence_reference)
     expect_equal(new$testData, old$testData, tolerance = 1e-12)
     expect_equal(new$distances, old$distances, tolerance = 1e-12)
 }
