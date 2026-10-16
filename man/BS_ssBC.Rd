@@ -36,8 +36,16 @@ genes (Gene Symbols) as rows and samples as columns.
 variables from \code{colData(se_obj)}. Required columns:
 \itemize{
 \item "TSIZE": Tumor size (0 = \eqn{\le 2}{<= 2} cm; 1 = \eqn{> 2}{> 2} cm).
-\item "NODE": Lymph node status (0 = negative; \eqn{\ge 1}{>= 1} = positive). Must be numeric.
-}}
+\item "NODE": Number of positive lymph nodes. Supply the actual nonnegative
+integer count as a numeric value when available. Binary 0/1 is accepted
+but cannot distinguish 1--3 from 4 or more positive nodes.
+}
+
+\code{NODE} affects only the additional subtype-specific risk group,
+\verb{ROR-PC Group (Subtype + Clinic + Prolif.Subtype)}, using categories
+0, 1--3 and 4 or more. It does not enter any numerical ROR score.
+The current R API does not enforce nonnegative integer values for \code{NODE}.
+See \code{\link[=Mapping]{Mapping()}} for clinical missing-value behavior.}
 }
 \value{
 A list with the following elements:

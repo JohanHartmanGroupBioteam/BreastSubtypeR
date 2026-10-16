@@ -294,11 +294,26 @@ retained in the five-class summary and per-method results. SSPBC uses its
 four-class `ssp.subtype` model for the four-class summary.
 
 NC methods return ROR-S and ROR-P scores and risk groups in `score.ROR` without
-requiring clinical covariates. Setting `hasClinical = TRUE` adds ROR-C/ROR-PC
-outputs using numeric `TSIZE` (0 for at most 2 cm, 1 for more than 2 cm) and
-`NODE` (0 for no positive nodes, otherwise the number of positive nodes) in
-`colData`. Method-specific return components are documented in their help
-pages. These are research-use outputs, not a clinical assay result.
+requiring clinical covariates. Setting `hasClinical = TRUE` requires `TSIZE`
+and `NODE` columns in `colData` and adds clinical ROR outputs. `TSIZE` is binary
+(0 for at most 2 cm, 1 for more than 2 cm); it enters ROR-C and both ROR-PC
+scores. No numerical ROR score uses `NODE`.
+
+For `NODE`, supply the actual nonnegative integer number of positive lymph
+nodes as numeric values when available. Only the additional risk group
+`ROR-PC Group (Subtype + Clinic + Prolif.Subtype)` distinguishes 0, 1--3 and
+4 or more positive nodes. With nonmissing `TSIZE`, 4 or more nodes receive high
+risk; 0 and 1--3 use different score cutoffs. Binary 0/1 coding is accepted,
+but cannot distinguish 1--3 from 4 or more positive nodes. The current R API
+checks numeric type without enforcing nonnegative integer counts.
+
+In the R API, `NA` in `NODE` makes only this additional risk group missing.
+`NA` in `TSIZE` makes all clinical ROR scores and groups missing, while ROR-S
+and ROR-P remain available. These are missing values within required columns;
+the columns themselves must still be supplied. Exact-cutoff assignments are
+tracked separately in [issue #154](https://github.com/JohanHartmanGroupBioteam/BreastSubtypeR/issues/154)
+and are unresolved. Method-specific return components are documented in their
+help pages. These are research-use outputs, not a clinical assay result.
 
 # Guidance & best practices
 

@@ -95,7 +95,10 @@ NULL
 #'         AUTO uses TNBC-specific cohort handling only when all evaluable TN annotations indicate TN.
 #'     - **Clinical covariates for ROR (NC-based methods only)**:
 #'       * `TSIZE`: Tumor size (0 = \eqn{\le 2}{<= 2} cm; 1 = \eqn{> 2}{> 2} cm). Must be numeric (0/1).
-#'       * `NODE`: Lymph node status (0 = negative; \eqn{\ge 1}{>= 1} = positive). Must be numeric (0/1).
+#'       * `NODE`: Number of positive lymph nodes. Supply the actual nonnegative
+#'         integer count as a numeric value when available. Binary 0/1 is accepted
+#'         but cannot distinguish 1--3 from 4 or more positive nodes. The current
+#'         R API does not enforce nonnegative integer counts; see Details.
 #'
 #'     - **Preferred canonical receptor coding**:
 #'       * `ER`: `ER+`, `ER-`
@@ -155,6 +158,22 @@ NULL
 #' This design allows users to supply a single expression format, while
 #' BreastSubtypeR automatically applies method-specific preprocessing.
 #' 
+#' **Clinical ROR covariates.** With `hasClinical = TRUE`, NC method wrappers
+#' require both `TSIZE` and `NODE` columns and check that `NODE` is numeric;
+#' they do not enforce nonnegative integer counts. ROR-S and ROR-P scores and
+#' groups use neither covariate. ROR-C and both ROR-PC scores use `TSIZE`,
+#' but no numerical ROR score uses `NODE`. Only the additional risk group
+#' `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)` uses `NODE` categories
+#' 0, 1--3 and 4 or more. With nonmissing `TSIZE`, 4 or more positive nodes
+#' receive high risk; the other categories use different score cutoffs.
+#'
+#' In the R API, an `NA` value in `NODE` makes only this additional group
+#' missing. An `NA` value in `TSIZE` makes all clinical ROR scores and groups
+#' missing; ROR-S and ROR-P remain available. These are missing values within
+#' required columns, not permission to omit the columns. Exact-cutoff
+#' assignments are a separate unresolved issue; see
+#' \href{https://github.com/JohanHartmanGroupBioteam/BreastSubtypeR/issues/154}{issue #154}.
+#'
 #' **Phenodata normalization.** #' If receptor fields are present, they are coerced to canonical encodings
 #' (\code{ER -> \{ER+, ER-\}}, \code{HER2 -> \{HER2+, HER2-\}},
 #' \code{TN -> \{TN, nonTN\}}). Ambiguous values (e.g., \code{HER2 == "2+"})
@@ -271,7 +290,15 @@ Mapping <- function(se_obj,
 #' @param hasClinical Logical. If `TRUE`, incorporates clinical variables from
 #'   `colData(se_obj)`. Required columns:
 #' - "TSIZE": Tumor size (0 = \eqn{\le 2}{<= 2} cm; 1 = \eqn{> 2}{> 2} cm).
-#' - "NODE": Lymph node status (0 = negative; \eqn{\ge 1}{>= 1} = positive). Must be numeric.
+#' - "NODE": Number of positive lymph nodes. Supply the actual nonnegative
+#'   integer count as a numeric value when available. Binary 0/1 is accepted
+#'   but cannot distinguish 1--3 from 4 or more positive nodes.
+#'
+#' `NODE` affects only the additional subtype-specific risk group,
+#' `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)`, using categories
+#' 0, 1--3 and 4 or more. It does not enter any numerical ROR score.
+#' The current R API does not enforce nonnegative integer values for `NODE`.
+#' See [Mapping()] for clinical missing-value behavior.
 #'
 #' @return A list containing PAM50 intrinsic subtype calls using the Parker
 #'   classifier and selected calibration strategy.
@@ -398,7 +425,15 @@ BS_parker <- function(se_obj,
 #' @param hasClinical Logical. If `TRUE`, incorporates additional clinical
 #'   variables from `colData(se_obj)`. Required columns:
 #' - "TSIZE": Tumor size (0 = \eqn{\le 2}{<= 2} cm; 1 = \eqn{> 2}{> 2} cm).
-#' - "NODE": Lymph node status (0 = negative; \eqn{\ge 1}{>= 1} = positive). Must be numeric.
+#' - "NODE": Number of positive lymph nodes. Supply the actual nonnegative
+#'   integer count as a numeric value when available. Binary 0/1 is accepted
+#'   but cannot distinguish 1--3 from 4 or more positive nodes.
+#'
+#' `NODE` affects only the additional subtype-specific risk group,
+#' `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)`, using categories
+#' 0, 1--3 and 4 or more. It does not enter any numerical ROR score.
+#' The current R API does not enforce nonnegative integer values for `NODE`.
+#' See [Mapping()] for clinical missing-value behavior.
 #'
 #' @param seed Integer. Random seed for reproducibility of ER-balancing.
 #'
@@ -530,7 +565,15 @@ BS_cIHC <- function(
 #' @param hasClinical Logical. If `TRUE`, incorporates additional clinical
 #'   variables from `colData(se_obj)`. Required columns:
 #' - "TSIZE": Tumor size (0 = \eqn{\le 2}{<= 2} cm; 1 = \eqn{> 2}{> 2} cm).
-#' - "NODE": Lymph node status (0 = negative; \eqn{\ge 1}{>= 1} = positive). Must be numeric.
+#' - "NODE": Number of positive lymph nodes. Supply the actual nonnegative
+#'   integer count as a numeric value when available. Binary 0/1 is accepted
+#'   but cannot distinguish 1--3 from 4 or more positive nodes.
+#'
+#' `NODE` affects only the additional subtype-specific risk group,
+#' `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)`, using categories
+#' 0, 1--3 and 4 or more. It does not enter any numerical ROR score.
+#' The current R API does not enforce nonnegative integer values for `NODE`.
+#' See [Mapping()] for clinical missing-value behavior.
 #'
 #' @param seed Integer. Random seed for reproducibility.
 #'
@@ -655,7 +698,15 @@ BS_cIHC.itr <- function(
 #' @param hasClinical Logical. If `TRUE`, incorporates additional clinical
 #'   variables from `colData(se_obj)`. Required columns:
 #' - "TSIZE": Tumor size (0 = \eqn{\le 2}{<= 2} cm; 1 = \eqn{> 2}{> 2} cm).
-#' - "NODE": Lymph node status (0 = negative; \eqn{\ge 1}{>= 1} = positive). Must be numeric.
+#' - "NODE": Number of positive lymph nodes. Supply the actual nonnegative
+#'   integer count as a numeric value when available. Binary 0/1 is accepted
+#'   but cannot distinguish 1--3 from 4 or more positive nodes.
+#'
+#' `NODE` affects only the additional subtype-specific risk group,
+#' `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)`, using categories
+#' 0, 1--3 and 4 or more. It does not enter any numerical ROR score.
+#' The current R API does not enforce nonnegative integer values for `NODE`.
+#' See [Mapping()] for clinical missing-value behavior.
 #'
 #' @param seed Integer. Random seed for reproducibility.
 #'
@@ -828,7 +879,15 @@ BS_PCAPAM50 <- function(
 #' @param hasClinical Logical. If `TRUE`, incorporates additional clinical
 #'   variables from `colData(se_obj)`. Required columns:
 #' - "TSIZE": Tumor size (0 = \eqn{\le 2}{<= 2} cm; 1 = \eqn{> 2}{> 2} cm).
-#' - "NODE": Lymph node status (0 = negative; \eqn{\ge 1}{>= 1} = positive). Must be numeric.
+#' - "NODE": Number of positive lymph nodes. Supply the actual nonnegative
+#'   integer count as a numeric value when available. Binary 0/1 is accepted
+#'   but cannot distinguish 1--3 from 4 or more positive nodes.
+#'
+#' `NODE` affects only the additional subtype-specific risk group,
+#' `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)`, using categories
+#' 0, 1--3 and 4 or more. It does not enter any numerical ROR score.
+#' The current R API does not enforce nonnegative integer values for `NODE`.
+#' See [Mapping()] for clinical missing-value behavior.
 #'
 #' @return A list with the following elements:
 #'   - `BS.all`: `data.frame` with `PatientID`, `BS` (five-class call) and,
@@ -1141,7 +1200,15 @@ BS_sspbc <- function(se_obj, ssp.name = "ssp.pam50") {
 #' @param hasClinical Logical. If `TRUE`, incorporates clinical data from
 #'   `colData(data_input$se_NC)`. Required columns:
 #' - "TSIZE": Tumor size (0 = \eqn{\le 2}{<= 2} cm; 1 = \eqn{> 2}{> 2} cm).
-#' - "NODE": Lymph node status (0 = negative; \eqn{\ge 1}{>= 1} = positive).
+#' - "NODE": Number of positive lymph nodes. Supply the actual nonnegative
+#'   integer count as a numeric value when available. Binary 0/1 is accepted
+#'   but cannot distinguish 1--3 from 4 or more positive nodes.
+#'
+#' `NODE` affects only the additional subtype-specific risk group,
+#' `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)`, using categories
+#' 0, 1--3 and 4 or more. It does not enter any numerical ROR score.
+#' The current R API does not enforce nonnegative integer values for `NODE`.
+#' See [Mapping()] for clinical missing-value behavior.
 #'
 #' @param er_subsample Character, passed to `BS_cIHC.itr()` and used by no
 #'   other method: `"target"` (default) subsamples the ER group that is

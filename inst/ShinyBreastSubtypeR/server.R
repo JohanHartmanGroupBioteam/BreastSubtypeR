@@ -364,14 +364,14 @@ server <- function(input, output, session) {
           HTML("<ul>
               <li><b>Minimum:</b> <code>PatientID</code>.</li>
               <li><b>Method-specific:</b> cIHC/itr/PCAPAM50 need <code>ER</code>. ssBC needs <code>ER</code> (and <code>HER2</code> for ER.v2) or <code>TN</code>.</li>
-              <li><b>For ROR:</b> <code>TSIZE</code> and <code>NODE</code> numeric.</li>
+              <li><b>For clinical ROR:</b> <code>TSIZE</code> is numeric 0 (at most 2 cm) or 1 (more than 2 cm). <code>NODE</code> is the numeric number of positive lymph nodes; supply the actual nonnegative integer count when available. Binary 0/1 is accepted but cannot distinguish 1&ndash;3 from 4 or more nodes for the additional subtype-specific ROR-PC risk group. NODE does not enter numerical ROR scores. Counts are not checked for nonnegative integer values; Shiny requires both columns to be numeric and nonmissing.</li>
             </ul>"))
     } else {
       div(class = "method-help",
           tags$b("Clinical data requirements"),
           HTML("<ul>
               <li><b>Minimum:</b> <code>PatientID</code>.</li>
-              <li><b>Optional for NC methods (ROR):</b> <code>TSIZE</code>, <code>NODE</code>.</li>
+              <li><b>Optional for NC methods (clinical ROR):</b> binary tumor size <code>TSIZE</code> and positive-node count <code>NODE</code>. Use actual counts when available; binary 0/1 cannot distinguish 1&ndash;3 from 4 or more nodes for the additional subtype-specific ROR-PC risk group.</li>
             </ul>"))
     }
   })

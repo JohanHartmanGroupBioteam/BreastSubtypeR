@@ -248,7 +248,14 @@ You can explore the app without preparing files:
 
 - NC Full metrics include ROR-S and ROR-P. Enable **Use clinical variables
   (ROR)** with valid numeric `TSIZE` and `NODE` to add clinical ROR-C/ROR-PC
-  outputs. AUTO provides calls and entropy rather than a Full metrics export.
+  outputs. `TSIZE` is binary (0 for at most 2 cm, 1 for more than 2 cm).
+  For `NODE`, supply the actual nonnegative integer number of positive nodes
+  when available. Binary 0/1 is accepted but cannot distinguish 1--3 from
+  4 or more nodes for `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)`.
+  NODE affects only that additional risk group, not numerical ROR scores.
+  The R API does not enforce nonnegative integer counts; see `?Mapping`
+  for missing-value behavior and the separate pending cutoff issue #154.
+  AUTO provides calls and entropy rather than a Full metrics export.
 
 - Shiny cIHC.itr uses target-mode balancing and the ratio semantics above.
   Iterations default to 100, with a minimum of 10 and a UI step of 10; other

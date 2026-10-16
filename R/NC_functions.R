@@ -369,8 +369,11 @@ sspPredict <- function(x, y, std = FALSE, distm = "spearman", Subtype = TRUE) {
 #' @param out clinical table
 #' @param Subtype Logic.
 #' @param hasClinical Logic. Specify whether clinical information is included.
-#'   For example, tumor size should be in the "T" column, and lymph node status
-#' - "NODE": Lymph node status (0 = negative; \eqn{\ge 1}{>= 1} = positive).
+#'   Tumor size is in "TSIZE" (0 = at most 2 cm; 1 = more than 2 cm).
+#' - "NODE": Numeric number of positive lymph nodes; use actual nonnegative
+#'   integer counts when available. Binary 0/1 cannot distinguish 1--3 from
+#'   4 or more positive nodes for the additional subtype-specific ROR-PC group.
+#'   Integer counts are not validated; see [Mapping()] for details.
 #' @return ROR, ROR risk group and other indications
 #' @noRd
 
@@ -755,8 +758,8 @@ RORgroup <- function(
 #'   "Given.mdns" values in the second column.
 #' @param Subtype Logic.
 #' @param hasClinical Logic. Please specify if you prepared clinical
-#'   information, like Tumore size as T column, lymphatic node status as NODE
-#'   column.
+#'   information: binary tumor size in TSIZE and the number of positive lymph
+#'   nodes in NODE. See [Mapping()] for clinical coding and missing values.
 #' @noRd
 #'
 
@@ -878,8 +881,11 @@ makeCalls.parker <- function(
 #'   second column contains the corresponding "Given.mdns" values.
 #' @param Subtype Logic.
 #' @param hasClinical Logic. Specify whether clinical information is included.
-#'   For example, tumor size should be in the "T" column, and lymph node status
-#' - "NODE": Lymph node status (0 = negative; \eqn{\ge 1}{>= 1} = positive).
+#'   Tumor size is in "TSIZE" (0 = at most 2 cm; 1 = more than 2 cm).
+#' - "NODE": Numeric number of positive lymph nodes; use actual nonnegative
+#'   integer counts when available. Binary 0/1 cannot distinguish 1--3 from
+#'   4 or more positive nodes for the additional subtype-specific ROR-PC group.
+#'   Integer counts are not validated; see [Mapping()] for details.
 #' @param seed An integer value is used to set the random seed.
 #' @noRd
 
@@ -1343,8 +1349,11 @@ makeCalls_ihc.iterative <- function(
 #' @param medians NA
 #' @param Subtype Logic
 #' @param hasClinical Logic. Specify whether clinical information is included.
-#'   For example, tumor size should be in the "T" column, and lymph node status
-#' - "NODE": Lymph node status (0 = negative; \eqn{\ge 1}{>= 1} = positive).
+#'   Tumor size is in "TSIZE" (0 = at most 2 cm; 1 = more than 2 cm).
+#' - "NODE": Numeric number of positive lymph nodes; use actual nonnegative
+#'   integer counts when available. Binary 0/1 cannot distinguish 1--3 from
+#'   4 or more positive nodes for the additional subtype-specific ROR-PC group.
+#'   Integer counts are not validated; see [Mapping()] for details.
 #' @param seed An integer value is used to set the random seed.
 #' @noRd
 
@@ -1571,8 +1580,11 @@ makeCalls.PC1ihc <- function(mat,
 #' @param medians NA
 #' @param Subtype Logic.
 #' @param hasClinical Logic. Specify whether clinical information is included.
-#'   For example, tumor size should be in the "T" column, and lymph node status
-#' - "NODE": Lymph node status (0 = negative; \eqn{\ge 1}{>= 1} = positive).
+#'   Tumor size is in "TSIZE" (0 = at most 2 cm; 1 = more than 2 cm).
+#' - "NODE": Numeric number of positive lymph nodes; use actual nonnegative
+#'   integer counts when available. Binary 0/1 cannot distinguish 1--3 from
+#'   4 or more positive nodes for the additional subtype-specific ROR-PC group.
+#'   Integer counts are not validated; see [Mapping()] for details.
 #' @param seed An integer value is used to set the random seed.
 #' @noRd
 
@@ -1707,8 +1719,11 @@ makeCalls.v1PAM <- function(mat,
 #'   choose quantile from TNBC-JAMAOncol2024.
 #' @param Subtype Logic. Specify whether to predict Subtype-like subtyping.
 #' @param hasClinical Logic. Specify whether clinical information is included.
-#'   For example, tumor size should be in the "T" column, and lymph node status
-#' - "NODE": Lymph node status (0 = negative; \eqn{\ge 1}{>= 1} = positive).
+#'   Tumor size is in "TSIZE" (0 = at most 2 cm; 1 = more than 2 cm).
+#' - "NODE": Numeric number of positive lymph nodes; use actual nonnegative
+#'   integer counts when available. Binary 0/1 cannot distinguish 1--3 from
+#'   4 or more positive nodes for the additional subtype-specific ROR-PC group.
+#'   Integer counts are not validated; see [Mapping()] for details.
 #' @noRd
 
 makeCalls.ssBC <- function(mat,
