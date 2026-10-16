@@ -21,10 +21,11 @@
   `54 / 64`): it must be finite and strictly positive, and target mode permits
   values above one. The Shiny iteration control retains default 100, minimum
   10 and step 10; other whole numbers of at least 10 are accepted.
-- Added AIMS and Shiny regression tests and real-browser checks for
-  invalidation, downloads, error recovery, uploaded sample identifiers and
-  independent sessions. Synchronized installation, workflow and output
-  documentation without changing scientific algorithms or the public API.
+- Added AIMS and Shiny regression tests. Validation also included real-browser
+  checks covering input invalidation, downloads, error recovery, uploaded
+  sample identifiers and independent sessions. Synchronized installation,
+  workflow and output documentation without changing scientific algorithms
+  or the public API.
 
 # BreastSubtypeR 1.5.6
 
