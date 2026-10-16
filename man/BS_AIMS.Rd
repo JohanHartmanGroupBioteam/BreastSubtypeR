@@ -49,6 +49,12 @@ data("OSLO2EMIT0obj")
 res <- BS_AIMS(
     se_obj = OSLO2EMIT0obj$data_input$se_SSP
 )
+## A single sample retains its identifier and output dimensions
+single_input <- Mapping(OSLO2EMIT0obj$se_obj[, 1], RawCounts = FALSE)
+single <- BS_AIMS(single_input$se_SSP)
+single$cl
+dim(single$all.probs[["20"]])
+stopifnot(identical(rownames(single$cl), colnames(single_input$se_SSP)))
 
 }
 \references{

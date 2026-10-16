@@ -497,7 +497,8 @@ BS_cIHC <- function(
 #' @param iteration Integer. Number of iterations for the ER-balancing procedure.
 #'   Default: 100.
 #'
-#' @param ratio Numeric. Its meaning depends on `er_subsample`:
+#' @param ratio A single finite, strictly positive number. Its meaning depends
+#'   on `er_subsample`:
 #'   - `er_subsample = "target"` (default): the ER+ : ER- target of the
 #'     balancing subset, a single positive number. The default `54 / 64`
 #'     (about 0.84) is the ER+ : ER- distribution of the UNC PAM50 reference
@@ -519,10 +520,12 @@ BS_cIHC <- function(
 #'     ER+ samples are at least as many as ER- samples.
 #'
 #'   Write `54 / 64`, not `54:64`: in R, `54:64` is the sequence 54, 55, ...,
-#'   64 and gives an error.
+#'   64 and gives an error. Values above one are permitted in target mode;
+#'   legacy mode retains the feasibility limit described above.
 #'
-#' @param Subtype Logical. If `TRUE`, returns only the four main subtypes
-#'   (Luminal A, Luminal B, HER2-enriched, Basal-like), excluding Normal-like.
+#' @param Subtype Logical. If `TRUE`, also returns four-class consensus
+#'   calls (Luminal A, Luminal B, HER2-enriched, Basal-like) in `BS.Subtype`.
+#'   The five-class consensus calls in `BS` are retained.
 #'
 #' @param hasClinical Logical. If `TRUE`, incorporates additional clinical
 #'   variables from `colData(se_obj)`. Required columns:
@@ -970,6 +973,12 @@ BS_ssBC <- function(
 #' res <- BS_AIMS(
 #'     se_obj = OSLO2EMIT0obj$data_input$se_SSP
 #' )
+#' ## A single sample retains its identifier and output dimensions
+#' single_input <- Mapping(OSLO2EMIT0obj$se_obj[, 1], RawCounts = FALSE)
+#' single <- BS_AIMS(single_input$se_SSP)
+#' single$cl
+#' dim(single$all.probs[["20"]])
+#' stopifnot(identical(rownames(single$cl), colnames(single_input$se_SSP)))
 #'
 #' @export
 
@@ -1123,11 +1132,14 @@ BS_sspbc <- function(se_obj, ssp.name = "ssp.pam50") {
 #'   - If `"AUTO"` is selected, it must be the sole value in `methods`.
 #'   - Otherwise, at least **two** methods must be specified.
 #'
-#' @param Subtype Logical. If `TRUE`, returns four subtypes (Luminal A, Luminal B,
-#'   HER2-enriched, Basal-like), excluding Normal-like.
+#' @param Subtype Logical. If `TRUE`, also returns a four-class summary in
+#'   `res_subtypes.Subtype` (Luminal A, Luminal B, HER2-enriched, Basal-like).
+#'   The five-class `res_subtypes` table is retained. AIMS has no four-class
+#'   model: its Normal-like calls become `NA` in the four-class summary,
+#'   while its per-method result retains the original five-class calls.
 #'
 #' @param hasClinical Logical. If `TRUE`, incorporates clinical data from
-#'   `colData(se_obj)`. Required columns:
+#'   `colData(data_input$se_NC)`. Required columns:
 #' - "TSIZE": Tumor size (0 = \eqn{\le 2}{<= 2} cm; 1 = \eqn{> 2}{> 2} cm).
 #' - "NODE": Lymph node status (0 = negative; \eqn{\ge 1}{>= 1} = positive).
 #'
@@ -1137,14 +1149,26 @@ BS_sspbc <- function(se_obj, ssp.name = "ssp.pam50") {
 #'   subsamples the numerically larger group, as in BreastSubtypeR 1.5.5 and
 #'   earlier, to reproduce earlier results.
 #'
+#' @details
+#' With the default AUTO routing thresholds, an eligible mixed cohort is
+#' ER-balanced only when `0.39 < ER-positive fraction < 0.69`; equality at
+#' either boundary is outside that interval. The balanced and unbalanced
+#' mixed-cohort panels contain ten and eight methods, respectively, and both
+#' include cIHC.itr when the ER-group size gates are met. TN-only and HER2+
+#' cohort routes are evaluated separately. See the package vignette for
+#' cohort-specific eligibility and minimum subgroup sizes.
+#'
 #' @return A list containing per-method subtype assignments for each sample.
-#'   `res_subtypes` holds one column per executed method plus an `entropy`
+#'   `res_subtypes` has samples as rows and one column per executed method
+#'   plus an `entropy`
 #'   column: the raw Shannon entropy in bits of the calls that the executed
 #'   methods returned for that sample. It is 0 when every contributing method
 #'   agrees and `NA` when no method returned a call. The entropy is computed
 #'   over the contributing methods only, so a low value obtained from few
 #'   contributing methods reflects few available calls rather than strong
 #'   agreement; the per-method columns show which methods contributed.
+#'   When `Subtype = TRUE`, `res_subtypes.Subtype` has the same orientation
+#'   and its entropy is calculated from the available four-class calls.
 #'
 #' @references
 #' Yang Q, Hartman J, Sifakis EG.

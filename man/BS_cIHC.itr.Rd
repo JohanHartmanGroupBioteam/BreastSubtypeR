@@ -29,7 +29,8 @@ genes (Gene Symbols) as rows and samples as columns.
 \item{iteration}{Integer. Number of iterations for the ER-balancing procedure.
 Default: 100.}
 
-\item{ratio}{Numeric. Its meaning depends on \code{er_subsample}:
+\item{ratio}{A single finite, strictly positive number. Its meaning depends
+on \code{er_subsample}:
 \itemize{
 \item \code{er_subsample = "target"} (default): the ER+ : ER- target of the
 balancing subset, a single positive number. The default \code{54 / 64}
@@ -52,10 +53,12 @@ ER+ samples are at least as many as ER- samples.
 }
 
 Write \code{54 / 64}, not \code{54:64}: in R, \code{54:64} is the sequence 54, 55, ...,
-64 and gives an error.}
+64 and gives an error. Values above one are permitted in target mode;
+legacy mode retains the feasibility limit described above.}
 
-\item{Subtype}{Logical. If \code{TRUE}, returns only the four main subtypes
-(Luminal A, Luminal B, HER2-enriched, Basal-like), excluding Normal-like.}
+\item{Subtype}{Logical. If \code{TRUE}, also returns four-class consensus
+calls (Luminal A, Luminal B, HER2-enriched, Basal-like) in \code{BS.Subtype}.
+The five-class consensus calls in \code{BS} are retained.}
 
 \item{hasClinical}{Logical. If \code{TRUE}, incorporates additional clinical
 variables from \code{colData(se_obj)}. Required columns:
