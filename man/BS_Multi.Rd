@@ -38,11 +38,14 @@ Available options include:
 \item Otherwise, at least \strong{two} methods must be specified.
 }}
 
-\item{Subtype}{Logical. If \code{TRUE}, returns four subtypes (Luminal A, Luminal B,
-HER2-enriched, Basal-like), excluding Normal-like.}
+\item{Subtype}{Logical. If \code{TRUE}, also returns a four-class summary in
+\code{res_subtypes.Subtype} (Luminal A, Luminal B, HER2-enriched, Basal-like).
+The five-class \code{res_subtypes} table is retained. AIMS has no four-class
+model: its Normal-like calls become \code{NA} in the four-class summary,
+while its per-method result retains the original five-class calls.}
 
 \item{hasClinical}{Logical. If \code{TRUE}, incorporates clinical data from
-\code{colData(se_obj)}. Required columns:
+\code{colData(data_input$se_NC)}. Required columns:
 \itemize{
 \item "TSIZE": Tumor size (0 = \eqn{\le 2}{<= 2} cm; 1 = \eqn{> 2}{> 2} cm).
 \item "NODE": Lymph node status (0 = negative; \eqn{\ge 1}{>= 1} = positive).
@@ -56,13 +59,16 @@ earlier, to reproduce earlier results.}
 }
 \value{
 A list containing per-method subtype assignments for each sample.
-\code{res_subtypes} holds one column per executed method plus an \code{entropy}
+\code{res_subtypes} has samples as rows and one column per executed method
+plus an \code{entropy}
 column: the raw Shannon entropy in bits of the calls that the executed
 methods returned for that sample. It is 0 when every contributing method
 agrees and \code{NA} when no method returned a call. The entropy is computed
 over the contributing methods only, so a low value obtained from few
 contributing methods reflects few available calls rather than strong
 agreement; the per-method columns show which methods contributed.
+When \code{Subtype = TRUE}, \code{res_subtypes.Subtype} has the same orientation
+and its entropy is calculated from the available four-class calls.
 }
 \description{
 Executes multiple intrinsic molecular subtyping methods in parallel.
@@ -72,6 +78,15 @@ Users can either specify a set of classifiers directly, or enable the
 AUTO reduces misclassification in skewed or subtype-specific cohorts by
 disabling methods whose assumptions are violated, but does not perform
 consensus voting—subtypes are still returned per method.
+}
+\details{
+With the default AUTO routing thresholds, an eligible mixed cohort is
+ER-balanced only when \verb{0.39 < ER-positive fraction < 0.69}; equality at
+either boundary is outside that interval. The balanced and unbalanced
+mixed-cohort panels contain ten and eight methods, respectively, and both
+include cIHC.itr when the ER-group size gates are met. TN-only and HER2+
+cohort routes are evaluated separately. See the package vignette for
+cohort-specific eligibility and minimum subgroup sizes.
 }
 \examples{
 ## Example: run multiple methods

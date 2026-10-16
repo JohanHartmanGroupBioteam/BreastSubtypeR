@@ -46,7 +46,7 @@ Yang Q., Hartman J., Sifakis E.G. (2025). BreastSubtypeR: a unified R/Bioconduct
 - **Unified interface for published methods:** consolidates PAM50 variants, AIMS, ssBC/sspbc, and others under one consistent API.
 - **Run multiple methods at once (`BS_Multi`):** execute several classifiers in a single call and compare results side by side.
 - **AUTO (cohort-aware selection):** checks ER/HER2 distribution, subtype purity, and subgroup sizes; disables incompatible classifiers.
-- **Method-specific pre-processing:** automatically routes raw RNA-seq counts, precomputed FPKM, or log2-processed microarray/nCounter matrices.
+- **Method-specific pre-processing:** routes raw RNA-seq counts, or log2-normalized RNA-seq/microarray/nCounter expression with `RawCounts = FALSE`.
 - **Robust mapping:** Entrez ID–based gene mapping with conflict resolution.
 - **Local Shiny app (`iBreastSubtypeR`):** point-and-click analysis; data stay on your machine.
 - **Reproducibility:** Bioconductor distribution, unit tests, vignettes, and `SummarizedExperiment` compatibility.
@@ -74,22 +74,38 @@ Yang Q., Hartman J., Sifakis E.G. (2025). BreastSubtypeR: a unified R/Bioconduct
 
 ## Installation
 
-Install the released version from Bioconductor:
+Install the package from the Bioconductor release compatible with your R installation:
 
 ``` r
-# Requires R >= 4.5.0
 if (!require("BiocManager", quietly = TRUE)) install.packages("BiocManager")
 BiocManager::install("BreastSubtypeR")
-
-# Devel:
-BiocManager::install("BreastSubtypeR", version = "devel")
 ```
 
-Or install from GitHub:
+Bioconductor release, Bioconductor devel, and GitHub are separate distribution
+channels. GitHub may contain newer development changes that are not yet
+available through Bioconductor. Consult the official
+[release package page](https://bioconductor.org/packages/release/bioc/html/BreastSubtypeR.html)
+and [devel package page](https://bioconductor.org/packages/devel/bioc/html/BreastSubtypeR.html)
+for available versions and their R requirements. Use the R version compatible
+with your selected Bioconductor release or devel environment; the package's
+minimum R requirement does not replace that channel's requirements.
+After installing from any channel, check your installed version with
+`packageVersion("BreastSubtypeR")`.
+
+For the development Bioconductor environment, use a separate R library and the
+R version required by [Bioconductor devel](https://bioconductor.org/packages/devel/bioc/html/BreastSubtypeR.html):
+
+``` r
+BiocManager::install(version = "devel")
+BiocManager::install("BreastSubtypeR")
+```
+
+Or install the development source from GitHub:
 
 ``` r
 if (!require("remotes", quietly = TRUE)) install.packages("remotes")
 remotes::install_github("JohanHartmanGroupBioteam/BreastSubtypeR")
+packageVersion("BreastSubtypeR")
 ```
 
 ## Quick start
@@ -126,21 +142,27 @@ Vis_Multi(res_auto$res_subtypes)
 
 ***AUTO logic (clarifications)***
 
-- **ER/HER2-defined cohorts** (ER+/HER2-, ER-/HER2-, ER+/HER2+, ER-/HER2+):
-**ssBC.v2 only** + SSP (AIMS, sspbc), provided the ER group reaches its
-minimum (ER+ 15, ER- 18) and the HER2 subgroup reaches its minimum (8 for
-ER+, 9 for ER-); smaller cohorts run AIMS and sspbc only.
+- **TNBC cohorts** take precedence when all evaluable TN annotations indicate
+TN. At least 18 TN samples enable **ssBC and ssBC.v2** + SSP (AIMS, sspbc);
+smaller TN cohorts run AIMS and sspbc only.
 - A cohort is treated as HER2+ when it has at least one evaluable HER2 value
 and every evaluable HER2 value is HER2+. The test reads the HER2 column
 alone: one HER2- sample ends the HER2+ classification whether or not its ER
 value is known, and a sample whose HER2 value is missing or equivocal ("2+")
 neither creates nor removes a HER2+ cohort. AUTO reports how many samples
 had no evaluable HER2 value and therefore took no part in the decision.
+- In this **HER2+ cohort** route, **ssBC.v2** + SSP run when there are at least
+8 ER+/HER2+ samples or 9 ER-/HER2+ samples; otherwise only SSP run. This route
+does not additionally require the total-ER minima of 15 and 18.
 - Cohorts without any evaluable HER2 value are not treated as HER2+; they
 follow the ER-based rules (ssBC.v2 then returns NA for every sample).
-- **ER-only** (ER+ or ER−) and **TNBC** (size permitting): 
-**ssBC and/or ssBC.v2** + SSP.
-- ER balance gate (simulation-based): `lower_ratio = 0.39`, `upper_ratio = 0.69`.
+- For the remaining cohorts, both ER totals below their minima run SSP only.
+If only one ER group reaches its minimum, its HER2 subgroups determine whether
+**ssBC and/or ssBC.v2** run alongside SSP.
+- **Mixed cohorts** with at least 15 ER+ and 18 ER- samples run ten methods when
+`0.39 < n_ERpos / (n_ERpos + n_ERneg) < 0.69`. The inequalities are strict;
+at or outside either boundary, eight methods run, excluding `parker.original`
+and `genefu.scale`. Both branches include `cIHC.itr`.
 - Minimum sizes (defaults): ER+ = 15, ER− = 18, TN = 18. 
 Subgroups use half of ER totals (rounded):
     -   ER+: `n_ERposHER2pos_threshold = n_ERposHER2neg_threshold = round(15 / 2)`
@@ -151,7 +173,41 @@ TN currently uses the ER− minimum (18).
 Subgroup gates and TN minimum may be refined in future releases 
 as additional simulations become available.
 
-**4) Launch the local Shiny app**
+**4) Classify a single sample with AIMS**
+
+``` r
+one_sample <- Mapping(OSLO2EMIT0obj$se_obj[, 1], RawCounts = FALSE)
+aims_one <- BS_AIMS(one_sample$se_SSP)
+aims_one$cl
+stopifnot(
+    identical(dim(aims_one$cl), c(1L, 1L)),
+    identical(rownames(aims_one$cl), colnames(one_sample$se_SSP)),
+    identical(dim(aims_one$prob), c(1L, 1L)),
+    identical(dim(aims_one$all.probs[["20"]]), c(1L, 5L))
+)
+```
+
+AIMS assigns one of five subtypes independently to each sample. Its `cl` and
+`prob` components retain sample-by-one matrix dimensions and sample IDs for
+one or many samples. In `BS_Multi(Subtype = TRUE)`, the five-class summary is
+retained and a separate four-class summary is added; AIMS Normal calls become
+`NA` in that four-class summary because AIMS has no four-class model.
+
+**5) Configure iterative ER balancing**
+
+`BS_cIHC.itr()` defaults to `iteration = 100`, `ratio = 54 / 64`, and
+`er_subsample = "target"`. The ratio is the target number of ER-positive
+samples per ER-negative sample, not the ER-positive fraction of a cohort.
+It must be one finite, strictly positive number; target mode accepts values
+above 1. Write `54 / 64`, not `54:64`.
+
+Target mode subsamples the group over-represented relative to the target,
+using ceiling rounding, and retains the other group. For reproduction of
+BreastSubtypeR 1.5.5 and earlier, `er_subsample = "larger"` instead subsamples
+the numerically larger group; its ratio cannot exceed `n_larger / n_smaller`.
+See `?BS_cIHC.itr` for the exact rules and output structures.
+
+**6) Launch the local Shiny app**
 
 ``` r
 BreastSubtypeR::iBreastSubtypeR() # interactive GUI (local)
@@ -172,7 +228,33 @@ install.packages(c("shiny","bslib"))
 You can explore the app without preparing files:
 
 - In **iBreastSubtypeR**, click **“Load example data…”** to pre-fill
-  the UI with a small demo cohort. Then click **Preprocess & map** and proceed to Step 2.
+  the UI with a small demo cohort. Then click **Preprocess & map**, choose a
+  method and settings in Step 2, and run subtyping.
+
+- For uploaded data, supply expression, clinical and annotation tables with
+  matching sample/feature identifiers. Select normalized **log2** expression
+  or raw RNA-seq counts; raw counts also require gene lengths in the annotation.
+
+- Reloading the example, replacing any input file, or changing the input data
+  type clears the mapped data, previous predictions, plots and downloads.
+  Preprocess and run again. Changing relevant prediction settings clears predictions,
+  plots and downloads while retaining valid mapped data when remapping is
+  unnecessary.
+
+- Downloads appear only after a successful current prediction. Calls-only
+  exports are available for every method; Full metrics is available for
+  supported single NC methods, not AUTO, AIMS or sspbc. Old download URLs are
+  also rejected by the server after invalidation.
+
+- NC Full metrics include ROR-S and ROR-P. Enable **Use clinical variables
+  (ROR)** with valid numeric `TSIZE` and `NODE` to add clinical ROR-C/ROR-PC
+  outputs. AUTO provides calls and entropy rather than a Full metrics export.
+
+- Shiny cIHC.itr uses target-mode balancing and the ratio semantics above.
+  Iterations default to 100, with a minimum of 10 and a UI step of 10; other
+  whole numbers such as 11 are allowed. Invalid ratios or iterations show an
+  actionable error and leave the session connected. Correct the setting and
+  rerun using the valid mapped input; failed runs cannot export old results.
 
 - Programmatically, the same files are shipped inside the package:
 ```r

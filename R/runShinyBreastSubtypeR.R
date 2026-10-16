@@ -1,15 +1,40 @@
 #' Launch the iBreastSubtypeR Shiny app
 #'
 #' @description Starts the Shiny UI bundled with the BreastSubtypeR package.
-#' The launcher can (optionally) attach Shiny/Bslib so UI/server can use
-#' unqualified functions like `tags`, `icon`, `fileInput`, etc.
+#' The launcher checks and loads dependency namespaces; `shiny::runApp()`
+#' starts the local application.
 #'
-#' @param attach Character vector of packages to attach before launch.
-#'        Defaults to c("shiny","bslib"). Set to character(0) to skip attaching.
+#' @param attach Character vector of package namespaces to load before launch.
+#'        Defaults to c("shiny","bslib"). Set to character(0) to skip this
+#'        explicit dependency check; the application still requires its UI
+#'        dependencies. The argument name is retained for compatibility.
 #' @param attach_tidyverse Logical; if TRUE and tidyverse is installed, it will
-#'        be attached quietly for the session (purely optional).
+#'        have its namespace loaded quietly (purely optional).
 #' @param max_upload_mb Numeric; Shiny upload size limit (in MB). Default 1000.
 #' @return The value returned by `shiny::runApp()` (usually `invisible(NULL)`).
+#'
+#' @details
+#' Load the bundled example or upload expression, clinical and annotation
+#' tables, then select **Preprocess & map** before running subtyping.
+#' Replacing an input, reloading the example or changing the input data type
+#' clears dependent mapping, predictions, plots and exports. Relevant
+#' prediction-setting changes clear predictions and plots while preserving
+#' valid mapped inputs. A failed prediction cannot leave old results available.
+#'
+#' Download controls are shown only for a supported, current prediction.
+#' AUTO, AIMS and SSPBC provide calls only; supported single NC methods also
+#' provide full metrics. Server-side guards reject stale or unsupported
+#' downloads even when an earlier download URL is requested directly.
+#'
+#' For cIHC.itr, the ratio is the ER-positive : ER-negative target, defaults
+#' to `54 / 64`, and must be finite and strictly positive. Values above one
+#' are allowed. The Shiny iteration control defaults to 100, has minimum 10
+#' and step 10, and accepts whole numbers from 10 to 2147483647, including
+#' values such as 11. These UI validation rules do not change the R API.
+#' Invalid prediction settings produce an actionable error; correct them and
+#' rerun without reloading the page or remapping valid inputs.
+#'
+#' @seealso [BS_AIMS()], [BS_cIHC.itr()], [BS_Multi()]
 #'
 #' @examples
 #' if (interactive()) {
