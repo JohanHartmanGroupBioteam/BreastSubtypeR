@@ -412,6 +412,18 @@ sspPredict <- function(x, y, std = FALSE, distm = "spearman", Subtype = TRUE) {
     confidence
 }
 
+# Assign only the NODE-dependent research ROR-PC categories, without rounding
+# or otherwise transforming scores. This is separate from the Parker groups.
+.ror_pc_subtype_labels <- function(score, low, high) {
+    group <- setNames(rep(NA_character_, length(score)), names(score))
+    # Preserve the existing representation of an undefined numerical score.
+    group[is.nan(score)] <- "NaN"
+    group[!is.na(score) & score <= low] <- "low"
+    group[!is.na(score) & score > low & score <= high] <- "med"
+    group[!is.na(score) & score > high] <- "high"
+    group
+}
+
 #' Function for risk calculation
 #'
 #' @param out The result of sspPredict() function.
@@ -658,10 +670,9 @@ RORgroup <- function(
 
                     if (length(pts.NODE.3) > 0) {
                         temp <- cmbWprolif.Subtype[pts.NODE.3]
-                        cprskg.Subtype[pts.NODE.3][temp > cph.Subtype.NODE] <- "high"
-                        cprskg.Subtype[pts.NODE.3][temp > cpl.Subtype.NODE &
-                            temp < cph.Subtype.NODE] <- "med"
-                        cprskg.Subtype[pts.NODE.3][temp < cpl.Subtype.NODE] <- "low"
+                        cprskg.Subtype[pts.NODE.3] <- .ror_pc_subtype_labels(
+                            temp, cpl.Subtype.NODE, cph.Subtype.NODE
+                        )
                     }
 
                     ## negative node
@@ -670,10 +681,9 @@ RORgroup <- function(
 
                     if (length(pts.NODE.0) > 0) {
                         tmp <- cmbWprolif.Subtype[pts.NODE.0]
-                        cprskg.Subtype[pts.NODE.0][tmp > cph.Subtype.NODE.0] <- "high"
-                        which.med <- tmp > cpl.Subtype.NODE.0 & tmp < cph.Subtype.NODE.0
-                        cprskg.Subtype[pts.NODE.0][which.med] <- "med"
-                        cprskg.Subtype[pts.NODE.0][tmp < cpl.Subtype.NODE.0] <- "low"
+                        cprskg.Subtype[pts.NODE.0] <- .ror_pc_subtype_labels(
+                            tmp, cpl.Subtype.NODE.0, cph.Subtype.NODE.0
+                        )
                     }
                 }
 
