@@ -205,3 +205,114 @@ test_that("missing TSIZE removes clinical ROR results regardless of NODE", {
         )
     }
 })
+
+test_that("subtype-specific ROR-PC endpoints include the upper cutoff", {
+    ## Adjacent IEEE double values make equality distinct from either side.
+    ## Test categorization directly: the unchanged final score multiplication
+    ## skips exact doubles 15 and 60, whereas exact 40 is attainable below.
+    score <- c(15 - 2^-49, 15, 15 + 2^-49,
+        40 - 2^-47, 40, 40 + 2^-47,
+        60 - 2^-47, 60, 60 + 2^-47, NA_real_)
+    names(score) <- paste0("B", seq_along(score))
+    expected_n0 <- c("low", "low", "low", "low", "low", "med",
+        "med", "med", "high", NA_character_)
+    expected_n1_3 <- c("low", "low", "med", "med", "med", "high",
+        "high", "high", "high", NA_character_)
+    expect_identical(BreastSubtypeR:::.ror_pc_subtype_labels(score, 40, 60),
+        setNames(expected_n0, names(score)))
+    expect_identical(BreastSubtypeR:::.ror_pc_subtype_labels(score, 15, 40),
+        setNames(expected_n1_3, names(score)))
+    expect_identical(BreastSubtypeR:::.ror_pc_subtype_labels(
+        c(NA_real_, NaN, -Inf, Inf), 15, 40),
+        c(NA_character_, "NaN", "low", "high"))
+})
+
+make_boundary_ror_input <- function() {
+    input <- make_ror_input()
+    ## Fixed synthetic proliferation values yield scores immediately around
+    ## 15/40/60, exactly 40, and four nonboundary controls. No score is rounded.
+    prolif <- c(-3.0728038441551813, -3.0728038441551808,
+        -0.76860092918918199, -0.76860092918918088, -0.76860092918918044,
+        1.0747614027836181, 1.074761402783619,
+        -3.5336444271483809, -2.1511226781687807,
+        0.15308023679721919, 2.4572831517632188)
+    ids <- paste0("B", seq_along(prolif))
+    input$out$testData <- input$out$testData[, rep(1L, length(ids))]
+    colnames(input$out$testData) <- ids
+    input$out$testData[c("CCNB1", "UBE2C", "MKI67"), ] <- rep(prolif, each = 3)
+    input$out$distances <- matrix(0, nrow = length(ids), ncol = 5,
+        dimnames = list(ids, colnames(input$out$centroids)))
+    input$out$dist.RORSubtype <- input$out$distances[, seq_len(4)]
+    input$out$predictions <- setNames(rep("LumA", length(ids)), ids)
+    input$df.cln <- data.frame(PatientID = ids, TSIZE = 0, NODE = 0)
+    input
+}
+
+test_that("NODE boundary labels leave scores and other outputs unchanged", {
+    input <- make_boundary_ror_input()
+    score_col <- "ROR-PC (Subtype + Clinic + Prolif.Subtype)"
+    group_col <- "ROR-PC Group (Subtype + Clinic + Prolif.Subtype)"
+    baseline <- suppressMessages(BreastSubtypeR:::RORgroup(
+        input$out, input$df.cln, hasClinical = TRUE
+    ))
+    ## Compare exact doubles, including the genuinely exact score 40.
+    expect_identical(unname(baseline[[score_col]]),
+        c(15 - 2^-48, 15 + 2^-49, 40 - 2^-47, 40, 40 + 2^-47,
+            60 - 2^-47, 60 + 2^-47, 10 - 2^-49, 25, 50, 75))
+    expect_identical(unname(as.character(baseline$Call)), rep("LumA", 11))
+    standard_groups <- c("ROR-S Group (Subtype Only)",
+        "ROR-P Group (Subtype + Prolif)", "ROR-C Group (Subtype + Clinic)",
+        "ROR-PC Group (Subtype + Clinic + Prolif)")
+    expected_prolif <- c(rep("low", 5), "high", "high",
+        "low", "low", "med", "high")
+    expect_identical(unname(as.matrix(baseline[, standard_groups])),
+        unname(cbind(rep("med", 11), expected_prolif, rep("med", 11), expected_prolif)))
+    expected_n0 <- c("low", "low", "low", "low", "med", "med", "high",
+        "low", "low", "med", "high")
+    expected_n1_3 <- c("low", "med", "med", "med", "high", "high", "high",
+        "low", "med", "high", "high")
+    nodes <- c(0, 1, 2, 3, 4, NA_real_)
+    expected <- list(expected_n0, expected_n1_3, expected_n1_3,
+        expected_n1_3, rep("high", 11), rep(NA_character_, 11))
+    other_cols <- setdiff(names(baseline), group_col)
+    for (i in seq_along(nodes)) {
+        input$df.cln$NODE <- nodes[i]
+        res <- suppressMessages(BreastSubtypeR:::RORgroup(
+            input$out, input$df.cln, hasClinical = TRUE
+        ))
+        info <- paste("NODE =", nodes[i])
+        expect_identical(res[, other_cols], baseline[, other_cols], info = info)
+        expect_identical(unname(as.character(res[[group_col]])), expected[[i]],
+            info = info)
+        expect_true(all(is.na(res[[group_col]]) |
+            res[[group_col]] %in% c("low", "med", "high")), info = info)
+    }
+})
+
+test_that("boundary correction preserves missing clinical output", {
+    input <- make_boundary_ror_input()
+    group_col <- "ROR-PC Group (Subtype + Clinic + Prolif.Subtype)"
+    clinical_cols <- c("ROR-C (Subtype + Clinic)", "ROR-C Group (Subtype + Clinic)",
+        "ROR-PC (Subtype + Clinic + Prolif)",
+        "ROR-PC Group (Subtype + Clinic + Prolif)",
+        "ROR-PC (Subtype + Clinic + Prolif.Subtype)", group_col)
+    for (node in c(0, 1, 2, 3, 4, NA_real_)) {
+        input$df.cln$NODE <- node
+        input$df.cln$TSIZE <- 0
+        complete <- suppressMessages(BreastSubtypeR:::RORgroup(
+            input$out, input$df.cln, hasClinical = TRUE
+        ))
+        input$df.cln$TSIZE <- NA_real_
+        missing <- suppressMessages(BreastSubtypeR:::RORgroup(
+            input$out, input$df.cln, hasClinical = TRUE
+        ))
+        info <- paste("NODE =", node)
+        expect_true(all(is.na(missing[, clinical_cols])), info = info)
+        other_cols <- setdiff(names(complete), clinical_cols)
+        expect_identical(missing[, other_cols], complete[, other_cols], info = info)
+        no_clinical <- suppressMessages(BreastSubtypeR:::RORgroup(
+            input$out, input$df.cln, hasClinical = FALSE
+        ))
+        expect_false(any(clinical_cols %in% names(no_clinical)), info = info)
+    }
+})
