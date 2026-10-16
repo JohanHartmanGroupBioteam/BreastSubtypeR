@@ -942,12 +942,15 @@ BS_ssBC <- function(
 #'
 #' @return A **list** with the following elements:
 #' \itemize{
-#'   \item \code{cl}: Character vector of AIMS subtype calls per sample.
-#'         One of \code{"Basal"}, \code{"Her2"}, \code{"LumA"}, \code{"LumB"}, or \code{"Normal"}.
-#'   \item \code{prob}: Numeric vector of posterior probabilities corresponding
-#'         to the assigned subtype in \code{cl} (one value per sample).
-#'   \item \code{all.probs}: Matrix of posterior probabilities for all samples
-#'         and all subtypes (rows = samples, columns = subtypes).
+#'   \item \code{cl}: Character matrix of AIMS subtype calls, with one row per
+#'         sample (named by sample ID) and one column named \code{"20"} for
+#'         the model's rule-pair setting. Calls are \code{"Basal"},
+#'         \code{"Her2"}, \code{"LumA"}, \code{"LumB"}, or \code{"Normal"}.
+#'   \item \code{prob}: Numeric matrix of posterior probabilities for the
+#'         assigned calls, with the same dimensions and dimnames as \code{cl}.
+#'   \item \code{all.probs}: Named list with element \code{"20"} containing
+#'         a posterior-probability matrix (rows = samples, columns = the five
+#'         subtypes). Matrix dimensions are retained for a single sample.
 #'   \item \code{rules.matrix}: 0/1 matrix of the 100 AIMS rules used for assignment
 #'         (rows = rules, columns = samples); \code{1} indicates the rule evaluated to TRUE.
 #'   \item \code{data.used}: Expression values actually used to evaluate the rules
@@ -994,7 +997,7 @@ BS_AIMS <- function(se_obj) {
             which(BreastSubtypeRobj$genes.signature$AIMS == "Yes")
         ]
     )
-    gene_expr <- gene_expr[rownames(gene_expr) %in% genes, ]
+    gene_expr <- gene_expr[rownames(gene_expr) %in% genes, , drop = FALSE]
 
     arguments <- rlang::dots_list(
         eset = as.matrix(gene_expr),
