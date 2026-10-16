@@ -273,7 +273,11 @@ ui <- bslib::page_fluid(
       bslib::layout_columns(
         col_widths = c(6, 6),
         numericInput("iteration", label = "Iterations", value = 100, min = 10, step = 10),
-        numericInput("ratio", label = "ER+ training ratio", value = 54/64, min = 0, max = 1, step = 0.01)
+        tagList(
+          numericInput("ratio", label = "ER+ : ER- target ratio", value = 54/64,
+                       min = 5e-324, step = "any"),
+          helpText("Target number of ER-positive samples per ER-negative sample. Use a finite positive number; values above 1 are allowed. Default: 54 / 64.")
+        )
       )
     ),
     
@@ -291,6 +295,8 @@ ui <- bslib::page_fluid(
     )
   ),
   
+  uiOutput("analysis_error"),
+
   # Visualization
   uiOutput("plotSection"),
   
@@ -300,11 +306,7 @@ ui <- bslib::page_fluid(
       col_widths = c(8,4),
       uiOutput("export_selector"),
       div(style = "text-align:center;",
-          downloadButton(
-            "download",
-            HTML("Download results<br>(.tsv)"),
-            style = "width: 220px; height: auto; padding: 10px 16px; white-space: normal; line-height: 1.2; background-color: #FF69B4; color: white; border: none;"
-          )
+          uiOutput("download_control")
       )
     )
   ),
