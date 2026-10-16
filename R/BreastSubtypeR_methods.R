@@ -170,8 +170,8 @@ NULL
 #' In the R API, an `NA` value in `NODE` makes only this additional group
 #' missing. An `NA` value in `TSIZE` makes all clinical ROR scores and groups
 #' missing; ROR-S and ROR-P remain available. These are missing values within
-#' required columns, not permission to omit the columns. Exact-cutoff
-#' assignments are a separate unresolved issue; see
+#' required columns, not permission to omit the columns. Exact-cutoff behavior
+#' is tracked separately in
 #' \href{https://github.com/JohanHartmanGroupBioteam/BreastSubtypeR/issues/154}{issue #154}.
 #'
 #' **Phenodata normalization.** #' If receptor fields are present, they are coerced to canonical encodings

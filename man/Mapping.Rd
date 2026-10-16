@@ -124,8 +124,8 @@ receive high risk; the other categories use different score cutoffs.
 In the R API, an \code{NA} value in \code{NODE} makes only this additional group
 missing. An \code{NA} value in \code{TSIZE} makes all clinical ROR scores and groups
 missing; ROR-S and ROR-P remain available. These are missing values within
-required columns, not permission to omit the columns. Exact-cutoff
-assignments are a separate unresolved issue; see
+required columns, not permission to omit the columns. Exact-cutoff behavior
+is tracked separately in
 \href{https://github.com/JohanHartmanGroupBioteam/BreastSubtypeR/issues/154}{issue #154}.
 
 \strong{Phenodata normalization.} #' If receptor fields are present, they are coerced to canonical encodings

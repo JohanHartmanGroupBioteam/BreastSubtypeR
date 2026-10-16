@@ -254,7 +254,8 @@ You can explore the app without preparing files:
   4 or more nodes for `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)`.
   NODE affects only that additional risk group, not numerical ROR scores.
   The R API does not enforce nonnegative integer counts; see `?Mapping`
-  for missing-value behavior and the separate pending cutoff issue #154.
+  for missing-value behavior. Exact-cutoff behavior is tracked separately
+  in [issue #154](https://github.com/JohanHartmanGroupBioteam/BreastSubtypeR/issues/154).
   AUTO provides calls and entropy rather than a Full metrics export.
 
 - Shiny cIHC.itr uses target-mode balancing and the ratio semantics above.

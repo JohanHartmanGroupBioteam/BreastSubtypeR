@@ -310,9 +310,9 @@ checks numeric type without enforcing nonnegative integer counts.
 In the R API, `NA` in `NODE` makes only this additional risk group missing.
 `NA` in `TSIZE` makes all clinical ROR scores and groups missing, while ROR-S
 and ROR-P remain available. These are missing values within required columns;
-the columns themselves must still be supplied. Exact-cutoff assignments are
-tracked separately in [issue #154](https://github.com/JohanHartmanGroupBioteam/BreastSubtypeR/issues/154)
-and are unresolved. Method-specific return components are documented in their
+the columns themselves must still be supplied. Exact-cutoff behavior is tracked
+separately in [issue #154](https://github.com/JohanHartmanGroupBioteam/BreastSubtypeR/issues/154).
+Method-specific return components are documented in their
 help pages. These are research-use outputs, not a clinical assay result.
 
 # Guidance & best practices
