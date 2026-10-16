@@ -39,13 +39,15 @@ BiocManager::install("BreastSubtypeR")
 ```
 
 Bioconductor release, Bioconductor devel, and GitHub are separate distribution
-channels. As of 16 October 2026, Bioconductor 3.23 release provides BreastSubtypeR
-1.4.1 and Bioconductor 3.24 devel provides 1.5.4. Both Bioconductor versions use
-R 4.6. The package's declared minimum of R 4.5.0 does not replace the R
-requirements of the selected Bioconductor channel. Changes on GitHub may not
-yet be available from Bioconductor.
-The 1.5.7 maintenance candidate documented here is local and unpublished;
-GitHub main remains 1.5.6 as of that date.
+channels. GitHub may contain newer development changes that are not yet
+available through Bioconductor. Consult the official
+[release package page](https://bioconductor.org/packages/release/bioc/html/BreastSubtypeR.html)
+and [devel package page](https://bioconductor.org/packages/devel/bioc/html/BreastSubtypeR.html)
+for available versions and their R requirements. Use the R version compatible
+with your selected Bioconductor release or devel environment; the package's
+minimum R requirement does not replace that channel's requirements.
+After installing from any channel, check your installed version with
+`packageVersion("BreastSubtypeR")`.
 
 Use a separate R library and the R version required by
 [Bioconductor devel](https://bioconductor.org/packages/devel/bioc/html/BreastSubtypeR.html)
