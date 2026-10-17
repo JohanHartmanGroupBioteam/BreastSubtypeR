@@ -26,7 +26,8 @@ Available options include:
 \item \code{"cIHC.itr"}: Iterative ER-balancing (Curtis et al., 2012).
 \item \code{"PCAPAM50"}: PCA-based PAM50 using ESR1 balancing (Raj-Kumar et al., 2019).
 \item \code{"ssBC"}: Subgroup-specific gene-centering (Zhao et al., 2015).
-\item \code{"ssBC.v2"}: Updated subgroup-specific centering (Fernandez-Martinez et al., 2020).
+\item \code{"ssBC.v2"}: Updated subgroup-specific centering (Fernandez-Martinez
+et al., 2020, 2024); see \code{\link[=BS_ssBC]{BS_ssBC()}} for quantile provenance.
 \item \code{"AIMS"}: Absolute Intrinsic Molecular Subtyping (Paquet & Hallett, 2015).
 \item \code{"sspbc"}: SSPBC, a large-cohort SSP trained on SCAN-B (Staaf et al., 2022).
 \item \code{"AUTO"}: Cohort-aware selection of compatible methods (must be the only entry).
@@ -95,6 +96,14 @@ mixed-cohort panels contain ten and eight methods, respectively, and both
 include cIHC.itr when the ER-group size gates are met. TN-only and HER2+
 cohort routes are evaluated separately. See the package vignette for
 cohort-specific eligibility and minimum subgroup sizes.
+
+For \code{ssBC.v2}, Fernandez-Martinez et al. (2020) described the earlier
+HER2/ER-specific application. The updated quantiles match the public
+\code{SIGMA.txt} reference in the
+\href{https://github.com/perou-lab/PAM50_ER_HER2_normalization}{Perou Lab normalization repository},
+associated with Fernandez-Martinez et al. (2024). \code{ER.v2} uses the four
+ER/HER2 columns and \code{TN.v2} uses \code{TNBC}; see \code{\link[=BS_ssBC]{BS_ssBC()}} for their names.
+The original \code{ssBC} methods retain the Zhao et al. (2015) reference quantiles.
 }
 \examples{
 ## Example: run multiple methods
@@ -129,13 +138,21 @@ Curtis C, Shah SP, Chin SF, Turashvili G, Rueda OM, Dunning MJ, et al.
 \emph{The genomic and transcriptomic architecture of 2,000 breast tumors reveals novel subgroups.}
 Nature. 2012;486(7403):346-352. https://doi.org/10.1038/nature10983
 
-Zhao X, Rodland EA, Tibshirani R, Plevritis S.
+Zhao X, Rødland EA, Tibshirani R, Plevritis S.
 \emph{Molecular subtyping for clinically defined breast cancer subgroups.}
-Breast Cancer Res. 2015;17(1):29. https://doi.org/10.1186/s13058-015-0520-4
+Breast Cancer Res. 2015;17:29. https://doi.org/10.1186/s13058-015-0520-4
 
-Fernandez-Martinez A, Krop IE, Hillman DW, Polley MY, Parker JS, Huebner L, et al.
-\emph{Survival, pathologic response, and genomics in CALGB 40601 (Alliance), a neoadjuvant Phase III trial of paclitaxel–trastuzumab with or without lapatinib in HER2-positive breast cancer.}
-J Clin Oncol. 2020;38(36):4184-4197. https://doi.org/10.1200/JCO.20.01276
+Fernandez-Martinez A, Krop IE, Hillman DW, et al.
+\emph{Survival, Pathologic Response, and Genomics in CALGB 40601 (Alliance),
+a Neoadjuvant Phase III Trial of Paclitaxel-Trastuzumab With or Without
+Lapatinib in HER2-Positive Breast Cancer.}
+J Clin Oncol. 2020;38(35):4184-4193. https://doi.org/10.1200/JCO.20.01276
+
+Fernandez-Martinez A, Rediti M, Tang G, et al.
+\emph{Tumor Intrinsic Subtypes and Gene Expression Signatures in Early-Stage
+ERBB2/HER2-Positive Breast Cancer: A Pooled Analysis of CALGB 40601,
+NeoALTTO, and NSABP B-41 Trials.}
+JAMA Oncol. 2024;10(5):603-611. https://doi.org/10.1001/jamaoncol.2023.7304
 
 Paquet ER, Hallett MT.
 \emph{Absolute assignment of breast cancer intrinsic molecular subtype.}
