@@ -111,9 +111,18 @@ The package includes implementations of commonly used subtyping methods (NC-base
 | `cIHC.itr` | Iterative version of cIHC | NC-based | [Curtis et al., 2012](https://doi.org/10.1038/nature10983) |
 | `PCAPAM50` | Selects IHC-defined ER subsets, then uses Principal Component Analysis (PCA) to create ESR1 expression-based ER-balancing | NC-based | [Raj-Kumar et al., 2019](https://doi.org/10.1038/s41598-019-44339-4) |
 | `ssBC` | Subgroup-specific gene-centering PAM50 | NC-based | [Zhao et al., 2015](https://doi.org/10.1186/s13058-015-0520-4) |
-| `ssBC.v2` | Updated subgroup-specific gene-centering PAM50 with refined quantiles | NC-based | [Fernandez-Martinez et al., 2020](https://doi.org/10.1200/JCO.20.01276) |
+| `ssBC.v2` | Updated subgroup-specific gene-centering PAM50 | NC-based | [Fernandez-Martinez et al., 2020](https://doi.org/10.1200/JCO.20.01276), [2024](https://doi.org/10.1001/jamaoncol.2023.7304) |
 | `AIMS` | Absolute Intrinsic Molecular Subtyping (AIMS) method | SSP-based | [Paquet & Hallett, 2015](https://doi.org/10.1093/jnci/dju357) |
 | `sspbc` | Single-Sample Predictors for Breast Cancer (AIMS adaptation) | SSP-based | [Staaf et al., 2022](https://doi.org/10.1038/s41523-022-00465-3) |
+
+Zhao et al. (2015) introduced subgroup-specific gene centering.
+Fernandez-Martinez et al. (2020) described its HER2/ER-specific application.
+The packaged `ssBC.v2` quantiles match the public `SIGMA.txt` reference in the
+[Perou Lab normalization repository](https://github.com/perou-lab/PAM50_ER_HER2_normalization),
+associated with Fernandez-Martinez et al. (2024). Across the 50 PAM50 genes,
+`ER.v2` uses `ERneg_HER2neg`, `ERpos_HER2neg`, `HER2pos_ERneg` and
+`HER2pos_ERpos`; `TN.v2` uses `TNBC`. The original `ER` and `TN` quantiles
+remain separate. See `?BreastSubtypeRobj` for the pinned numerical reference.
 
 
 # Quick start
@@ -455,9 +464,11 @@ clinical validation requires paired clinical assay data.\
 
 - Raj-Kumar PK, Liu J, Hooke JA, Kovatich AJ, Kvecher L, Shriver CD, Hu H. (2019). PCA-PAM50 improves subtype assignment in ER-positive breast cancer. *Sci Rep*, 9:14386. <https://doi.org/10.1038/s41598-019-44339-4>
 
-- Zhao X, Rodland EA, Tibshirani R, Edvardsen H, Sauer T, Hovig E. (2015). Systematic evaluation of subtype prediction using gene expression profiles and intrinsic subtyping methods. *Breast Cancer Res*, 17:55. <https://doi.org/10.1186/s13058-015-0520-4>
+- Zhao X, Rødland EA, Tibshirani R, Plevritis S. (2015). Molecular subtyping for clinically defined breast cancer subgroups. *Breast Cancer Res*, 17:29. <https://doi.org/10.1186/s13058-015-0520-4>
 
-- Fernandez-Martinez A, Krop IE, Hillman DW, Polley M-YC, Parker JS, Huebner L, *et al.* (2020). Survival, pathologic response, and PAM50 subtype in stage II–III HER2-positive breast cancer treated with neoadjuvant chemotherapy and trastuzumab ± lapatinib. *J Clin Oncol*, 38(19):2140–2150. <https://doi.org/10.1200/JCO.20.01276>
+- Fernandez-Martinez A, Krop IE, Hillman DW, *et al.* (2020). Survival, Pathologic Response, and Genomics in CALGB 40601 (Alliance), a Neoadjuvant Phase III Trial of Paclitaxel-Trastuzumab With or Without Lapatinib in HER2-Positive Breast Cancer. *J Clin Oncol*, 38(35):4184-4193. <https://doi.org/10.1200/JCO.20.01276>
+
+- Fernandez-Martinez A, Rediti M, Tang G, *et al.* (2024). Tumor Intrinsic Subtypes and Gene Expression Signatures in Early-Stage ERBB2/HER2-Positive Breast Cancer: A Pooled Analysis of CALGB 40601, NeoALTTO, and NSABP B-41 Trials. *JAMA Oncol*, 10(5):603-611. <https://doi.org/10.1001/jamaoncol.2023.7304>
 
 - Paquet ER, Hallett MT. (2015). Absolute assignment of breast cancer intrinsic molecular subtype. *J Natl Cancer Inst*, 107(1):357. <https://doi.org/10.1093/jnci/dju357>
 

@@ -871,7 +871,10 @@ BS_PCAPAM50 <- function(
 #'
 #' @param s Character. Specifies which subgroup-specific quantiles to use:
 #'   - `"ER"`, `"TN"`: Original subgroup-specific quantiles (*Breast Cancer Research*, 2015).
-#'   - `"ER.v2"`, `"TN.v2"`: Updated subgroup-specific quantiles (*Journal of Clinical Oncology*, 2020).
+#'   - `"ER.v2"`, `"TN.v2"`: Updated quantiles matching the public `SIGMA.txt`
+#'     reference associated with Fernandez-Martinez et al. (2024), following
+#'     the HER2/ER-specific application described by Fernandez-Martinez et al.
+#'     (2020). See Details for the reference resource and column mapping.
 #'
 #' @param Subtype Logical. If `TRUE`, returns only the four main subtypes
 #'   (Luminal A, Luminal B, HER2-enriched, Basal-like), excluding Normal-like.
@@ -902,16 +905,36 @@ BS_PCAPAM50 <- function(
 #'   - `outList`: list with the internal nearest-centroid results
 #'     (`predictions`, `distances`, `centroids`, ...).
 #'
+#' @details
+#' Zhao et al. (2015) introduced subgroup-specific gene centering.
+#' Fernandez-Martinez et al. (2020) described its HER2/ER-specific application.
+#' The updated quantiles match the public `SIGMA.txt` reference in the
+#' [Perou Lab normalization repository](https://github.com/perou-lab/PAM50_ER_HER2_normalization),
+#' associated with Fernandez-Martinez et al. (2024).
+#' For the 50 PAM50 genes, `ER.v2` uses `ERneg_HER2neg`, `ERpos_HER2neg`,
+#' `HER2pos_ERneg` and `HER2pos_ERpos`; `TN.v2` uses `TNBC`.
+#' The original `ER` and `TN` reference quantiles remain separate.
+#' See [BreastSubtypeRobj] for the pinned numerical reference.
+#'
 #' @references
-#' Zhao X, Rodland EA, Tibshirani R, Plevritis S.
+#' Zhao X, Rødland EA, Tibshirani R, Plevritis S.
 #' *Molecular subtyping for clinically defined breast cancer subgroups.*
-#' Breast Cancer Research. 2015;17(1):29.
+#' Breast Cancer Research. 2015;17:29.
 #' https://doi.org/10.1186/s13058-015-0520-4
 #'
-#' Fernandez-Martinez A, Krop IE, Hillman DW, Polley MY, Parker JS, Huebner L, et al.
-#' *Survival, pathologic response, and genomics in CALGB 40601 (Alliance), a neoadjuvant Phase III trial of paclitaxel–trastuzumab with or without lapatinib in HER2-positive breast cancer.*
-#' Journal of Clinical Oncology. 2020;38(36):4184–4197.
+#' Fernandez-Martinez A, Krop IE, Hillman DW, et al.
+#' *Survival, Pathologic Response, and Genomics in CALGB 40601 (Alliance),
+#' a Neoadjuvant Phase III Trial of Paclitaxel-Trastuzumab With or Without
+#' Lapatinib in HER2-Positive Breast Cancer.*
+#' Journal of Clinical Oncology. 2020;38(35):4184-4193.
 #' https://doi.org/10.1200/JCO.20.01276
+#'
+#' Fernandez-Martinez A, Rediti M, Tang G, et al.
+#' *Tumor Intrinsic Subtypes and Gene Expression Signatures in Early-Stage
+#' ERBB2/HER2-Positive Breast Cancer: A Pooled Analysis of CALGB 40601,
+#' NeoALTTO, and NSABP B-41 Trials.*
+#' JAMA Oncology. 2024;10(5):603-611.
+#' https://doi.org/10.1001/jamaoncol.2023.7304
 #'
 #' @examples
 #' ## Example: Updated subgroup-specific quantiles (ER.v2)
@@ -1182,7 +1205,8 @@ BS_sspbc <- function(se_obj, ssp.name = "ssp.pam50") {
 #'   - `"cIHC.itr"`: Iterative ER-balancing (Curtis et al., 2012).
 #'   - `"PCAPAM50"`: PCA-based PAM50 using ESR1 balancing (Raj-Kumar et al., 2019).
 #'   - `"ssBC"`: Subgroup-specific gene-centering (Zhao et al., 2015).
-#'   - `"ssBC.v2"`: Updated subgroup-specific centering (Fernandez-Martinez et al., 2020).
+#'   - `"ssBC.v2"`: Updated subgroup-specific centering (Fernandez-Martinez
+#'     et al., 2020, 2024); see [BS_ssBC()] for quantile provenance.
 #'   - `"AIMS"`: Absolute Intrinsic Molecular Subtyping (Paquet & Hallett, 2015).
 #'   - `"sspbc"`: SSPBC, a large-cohort SSP trained on SCAN-B (Staaf et al., 2022).
 #'   - `"AUTO"`: Cohort-aware selection of compatible methods (must be the only entry).
@@ -1225,6 +1249,14 @@ BS_sspbc <- function(se_obj, ssp.name = "ssp.pam50") {
 #' cohort routes are evaluated separately. See the package vignette for
 #' cohort-specific eligibility and minimum subgroup sizes.
 #'
+#' For `ssBC.v2`, Fernandez-Martinez et al. (2020) described the earlier
+#' HER2/ER-specific application. The updated quantiles match the public
+#' `SIGMA.txt` reference in the
+#' [Perou Lab normalization repository](https://github.com/perou-lab/PAM50_ER_HER2_normalization),
+#' associated with Fernandez-Martinez et al. (2024). `ER.v2` uses the four
+#' ER/HER2 columns and `TN.v2` uses `TNBC`; see [BS_ssBC()] for their names.
+#' The original `ssBC` methods retain the Zhao et al. (2015) reference quantiles.
+#'
 #' @return A list containing per-method subtype assignments for each sample.
 #'   `res_subtypes` has samples as rows and one column per executed method
 #'   plus an `entropy`
@@ -1258,13 +1290,21 @@ BS_sspbc <- function(se_obj, ssp.name = "ssp.pam50") {
 #' *The genomic and transcriptomic architecture of 2,000 breast tumors reveals novel subgroups.*
 #' Nature. 2012;486(7403):346-352. https://doi.org/10.1038/nature10983
 #'
-#' Zhao X, Rodland EA, Tibshirani R, Plevritis S.
+#' Zhao X, Rødland EA, Tibshirani R, Plevritis S.
 #' *Molecular subtyping for clinically defined breast cancer subgroups.*
-#' Breast Cancer Res. 2015;17(1):29. https://doi.org/10.1186/s13058-015-0520-4
+#' Breast Cancer Res. 2015;17:29. https://doi.org/10.1186/s13058-015-0520-4
 #'
-#' Fernandez-Martinez A, Krop IE, Hillman DW, Polley MY, Parker JS, Huebner L, et al.
-#' *Survival, pathologic response, and genomics in CALGB 40601 (Alliance), a neoadjuvant Phase III trial of paclitaxel–trastuzumab with or without lapatinib in HER2-positive breast cancer.*
-#' J Clin Oncol. 2020;38(36):4184-4197. https://doi.org/10.1200/JCO.20.01276
+#' Fernandez-Martinez A, Krop IE, Hillman DW, et al.
+#' *Survival, Pathologic Response, and Genomics in CALGB 40601 (Alliance),
+#' a Neoadjuvant Phase III Trial of Paclitaxel-Trastuzumab With or Without
+#' Lapatinib in HER2-Positive Breast Cancer.*
+#' J Clin Oncol. 2020;38(35):4184-4193. https://doi.org/10.1200/JCO.20.01276
+#'
+#' Fernandez-Martinez A, Rediti M, Tang G, et al.
+#' *Tumor Intrinsic Subtypes and Gene Expression Signatures in Early-Stage
+#' ERBB2/HER2-Positive Breast Cancer: A Pooled Analysis of CALGB 40601,
+#' NeoALTTO, and NSABP B-41 Trials.*
+#' JAMA Oncol. 2024;10(5):603-611. https://doi.org/10.1001/jamaoncol.2023.7304
 #'
 #' Paquet ER, Hallett MT.
 #' *Absolute assignment of breast cancer intrinsic molecular subtype.*

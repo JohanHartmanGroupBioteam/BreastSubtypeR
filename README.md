@@ -64,11 +64,20 @@ Yang Q., Hartman J., Sifakis E.G. (2025). BreastSubtypeR: a unified R/Bioconduct
 | `cIHC.itr` | Iterative version of cIHC | NC-based | [Curtis et al., 2012](https://doi.org/10.1038/nature10983) |
 | `PCAPAM50` | Selects IHC-defined ER subsets, then uses Principal Component Analysis (PCA) to create ESR1 expression-based ER-balancing | NC-based | [Raj-Kumar et al., 2019](https://doi.org/10.1038/s41598-019-44339-4) |
 | `ssBC` | Subgroup-specific gene-centering PAM50 | NC-based | [Zhao et al., 2015](https://doi.org/10.1186/s13058-015-0520-4) |
-| `ssBC.v2` | Updated subgroup-specific gene-centering PAM50 with refined quantiles | NC-based | [Fernandez-Martinez et al., 2020](https://doi.org/10.1200/JCO.20.01276) |
+| `ssBC.v2` | Updated subgroup-specific gene-centering PAM50 | NC-based | [Fernandez-Martinez et al., 2020](https://doi.org/10.1200/JCO.20.01276), [2024](https://doi.org/10.1001/jamaoncol.2023.7304) |
 | `AIMS` | Absolute Intrinsic Molecular Subtyping (AIMS) method | SSP-based | [Paquet & Hallett, 2015](https://doi.org/10.1093/jnci/dju357) |
 | `sspbc` | Single-Sample Predictors for Breast Cancer (AIMS adaptation) | SSP-based | [Staaf et al., 2022](https://doi.org/10.1038/s41523-022-00465-3) |
 
 (See the vignette for implementation details.)
+
+Zhao et al. (2015) introduced subgroup-specific gene centering.
+Fernandez-Martinez et al. (2020) described its HER2/ER-specific application.
+The packaged `ssBC.v2` quantiles match the public `SIGMA.txt` reference in the
+[Perou Lab normalization repository](https://github.com/perou-lab/PAM50_ER_HER2_normalization),
+associated with Fernandez-Martinez et al. (2024). Across the 50 PAM50 genes,
+`ER.v2` uses `ERneg_HER2neg`, `ERpos_HER2neg`, `HER2pos_ERneg` and
+`HER2pos_ERpos`; `TN.v2` uses `TNBC`. The original `ER` and `TN` quantiles
+remain separate. See `?BreastSubtypeRobj` for the pinned numerical reference.
 
 ------------------------------------------------------------------------
 

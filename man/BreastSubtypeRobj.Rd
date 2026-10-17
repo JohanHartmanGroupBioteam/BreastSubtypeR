@@ -16,11 +16,17 @@ Picornell et al. (2019). Platform columns include:
 \code{htp1.5_WU_update}, \code{arrayTrain_postMeanCollapse}.}
 \item{\code{centroid}}{PAM50 centroids used by \code{parker.original}.}
 \item{\code{genes.sig50}}{Data frame of the 50 PAM50 genes with a proliferation flag.}
-\item{\code{ssBC.subgroupQuantile}}{Subgroup-specific quantiles used by \code{ssBC}.}
+\item{\code{ssBC.subgroupQuantile}}{Original and updated subgroup-specific
+quantiles used by \code{ssBC} and \code{ssBC.v2}; see Details.}
 \item{\code{genes.signature}}{Marker genes used across NC- and SSP-based methods.}
 \item{\code{UNC232}}{Summary data for the UNC232 training cohort.}
 \item{\code{platform.UNC232}}{Platform annotation for UNC232.}
 }
+}
+\source{
+\href{https://github.com/perou-lab/PAM50_ER_HER2_normalization}{Perou Lab normalization repository}.
+The updated columns were verified against
+\href{https://github.com/perou-lab/PAM50_ER_HER2_normalization/blob/9ba84ebc131a58a18446e235c9422d9802f56671/SIGMA.txt}{SIGMA.txt at commit 9ba84eb}.
 }
 \usage{
 data("BreastSubtypeRobj")
@@ -29,6 +35,15 @@ data("BreastSubtypeRobj")
 List of reference resources required by nearest-centroid (NC) subtyping
 methods: platform medians, centroids, signatures, subgroup quantiles, and
 metadata from the UNC232 training cohort.
+}
+\details{
+The original \code{ER} and \code{TN} methods retain the reference quantiles for
+subgroup-specific gene centering introduced by Zhao et al. (2015).
+Fernandez-Martinez et al. (2020) described a HER2/ER-specific application.
+The five updated columns match the public \code{SIGMA.txt} reference associated
+with Fernandez-Martinez et al. (2024), across all 50 PAM50 genes:
+\code{ER.v2} uses \code{ERneg_HER2neg}, \code{ERpos_HER2neg}, \code{HER2pos_ERneg} and
+\code{HER2pos_ERpos}; \code{TN.v2} uses \code{TNBC}.
 }
 \examples{
 library(BreastSubtypeR)
@@ -39,13 +54,21 @@ Parker JS, Mullins M, Cheung MCU, Leung S, Voduc D, et al.
 Supervised risk predictor of breast cancer based on intrinsic subtypes.
 \emph{J Clin Oncol}. 2009;27(8):1160–1167. https://doi.org/10.1200/JCO.2008.18.1370
 
-Zhao X, Rodland EA, Tibshirani R, Plevritis S.
+Zhao X, Rødland EA, Tibshirani R, Plevritis S.
 Molecular subtyping for clinically defined breast cancer subgroups.
-\emph{Breast Cancer Res}. 2015;17(1):29. https://doi.org/10.1186/s13058-015-0520-4
+\emph{Breast Cancer Res}. 2015;17:29. https://doi.org/10.1186/s13058-015-0520-4
 
-Fernandez-Martinez A, Krop IE, Hillman DW, Polley MY, Parker JS, Huebner L, et al.
-Survival, pathologic response, and genomics in CALGB 40601 (Alliance).
-\emph{J Clin Oncol}. 2020;38(36):4184–4197. https://doi.org/10.1200/JCO.20.01276
+Fernandez-Martinez A, Krop IE, Hillman DW, et al.
+Survival, Pathologic Response, and Genomics in CALGB 40601 (Alliance),
+a Neoadjuvant Phase III Trial of Paclitaxel-Trastuzumab With or Without
+Lapatinib in HER2-Positive Breast Cancer.
+\emph{J Clin Oncol}. 2020;38(35):4184-4193. https://doi.org/10.1200/JCO.20.01276
+
+Fernandez-Martinez A, Rediti M, Tang G, et al.
+Tumor Intrinsic Subtypes and Gene Expression Signatures in Early-Stage
+ERBB2/HER2-Positive Breast Cancer: A Pooled Analysis of CALGB 40601,
+NeoALTTO, and NSABP B-41 Trials.
+\emph{JAMA Oncol}. 2024;10(5):603-611. https://doi.org/10.1001/jamaoncol.2023.7304
 
 Picornell AC, Echavarria I, Alvarez E, López-Tarruella S, Jerez Y, Hoadley K, et al.
 Breast cancer PAM50 signature: correlation and concordance between RNA-seq and digital multiplexed gene expression technologies in a TNBC series.
