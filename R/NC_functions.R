@@ -1729,16 +1729,17 @@ makeCalls.v1PAM <- function(mat,
 }
 
 
-#' Function for calling PAM50 subtypes by subgroup-specifc (ssBC) methods This
-#' function is adapted from ssBC TNBC-BreastCancerRes2015 and subgroup specific
-#' TNBC-JAMAOncol2024
+#' PAM50 subtyping by subgroup-specific gene centering (Zhao et al., 2015).
+#' Fernandez-Martinez et al. (2020) described the HER2/ER-specific application.
+#' The updated quantiles match SIGMA.txt in the public Perou Lab normalization
+#' repository associated with Fernandez-Martinez et al. (2024).
+#' See BS_ssBC and BreastSubtypeRobj for references and numerical provenance.
 #' @param mat gene expression matrix
 #' @param df.cln clinical information table. The first column must be named
 #'   "PatientID".
-#' @param s Options are "ER" or "TN" or "ER.v2" or "TN.v2". Specify the medians
-#'   you want. The original quantile is "ER" and "TN" of
-#'   TNBC-BreastCancerRes2015.  If you choose "ER.v2" or "TN.v2", it means you
-#'   choose quantile from TNBC-JAMAOncol2024.
+#' @param s "ER" and "TN" use the original reference quantiles (Zhao et al.,
+#'   2015). "ER.v2" uses the four ER/HER2 columns of the public SIGMA.txt
+#'   reference; "TN.v2" uses its TNBC column (Fernandez-Martinez et al., 2024).
 #' @param Subtype Logic. Specify whether to predict Subtype-like subtyping.
 #' @param hasClinical Logic. Specify whether clinical information is included.
 #'   Tumor size is in "TSIZE" (0 = at most 2 cm; 1 = more than 2 cm).
@@ -1784,7 +1785,7 @@ makeCalls.ssBC <- function(mat,
 
         samples_selected <- list(TN = TN_samples, nonTN = nTN_samples)
     } else if (s == "ER.v2") {
-        # TNBC-JAMAOncol2024
+        # Public SIGMA.txt ER/HER2 reference columns.
 
         ## if there is no sample in either of both, wont influence the code
         ERN_HER2N_samples <- rownames(df.cln)[which(df.cln$ER == "ER-" &
@@ -1804,7 +1805,7 @@ makeCalls.ssBC <- function(mat,
             HER2pos_ERpos = ERP_HER2P_samples
         )
     } else if (s == "TN.v2") {
-        ## selected cohort; TNBC-JAMAOncol2024
+        ## Public SIGMA.txt TNBC reference column.
         ## if there is no sample in either of both, wont influence the code
         TN_samples <- rownames(df.cln)[which(df.cln$TN == "TN")]
         samples_selected <- list(TNBC = TN_samples)
