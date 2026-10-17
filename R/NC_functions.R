@@ -363,6 +363,55 @@ sspPredict <- function(x, y, std = FALSE, distm = "spearman", Subtype = TRUE) {
 }
 
 
+# PAM50 Confidence uses Parker's Spearman test and two-decimal rounding.
+# Align by gene indices: data.frame columns need not retain row names.
+.pam50_confidence <- function(out) {
+    confidence <- rep(NA_real_, length(out$predictions))
+    test_genes <- rownames(out$testData)
+    centroid_genes <- rownames(out$centroids)
+    if (is.null(test_genes) || is.null(centroid_genes) ||
+        anyNA(test_genes) || anyNA(centroid_genes) ||
+        any(!nzchar(test_genes)) || any(!nzchar(centroid_genes)) ||
+        anyDuplicated(test_genes) || anyDuplicated(centroid_genes)) {
+        return(confidence)
+    }
+
+    genes <- intersect(test_genes, centroid_genes)
+    test_idx <- match(genes, test_genes)
+    centroid_idx <- match(genes, centroid_genes)
+    if (length(genes) < 2L) {
+        return(confidence)
+    }
+
+    for (j in seq_along(out$predictions)) {
+        centroid_col <- which(colnames(out$centroids) == out$predictions[j])
+        if (length(centroid_col) != 1L || j > ncol(out$testData)) {
+            next
+        }
+        x <- out$testData[test_idx, j, drop = TRUE]
+        y <- out$centroids[centroid_idx, centroid_col, drop = TRUE]
+        if (!is.numeric(x) || !is.numeric(y)) {
+            next
+        }
+        # Match cor.test's complete-pair semantics, including ranking Inf.
+        ok <- stats::complete.cases(x, y)
+        if (sum(ok) < 2L || length(unique(x[ok])) < 2L ||
+            length(unique(y[ok])) < 2L) {
+            next
+        }
+        p_value <- tryCatch(
+            # Keep the original default; tied ranks use its approximation.
+            suppressWarnings(cor.test(x[ok], y[ok],
+                method = "spearman")$p.value),
+            error = function(e) NA_real_
+        )
+        if (length(p_value) == 1L && is.finite(p_value)) {
+            confidence[j] <- round(1 - p_value, 2)
+        }
+    }
+    confidence
+}
+
 # Assign only the NODE-dependent research ROR-PC categories, without rounding
 # or otherwise transforming scores. This is separate from the Parker groups.
 .ror_pc_subtype_labels <- function(score, low, high) {
@@ -505,45 +554,8 @@ RORgroup <- function(
     prolifScore_Subtype <- apply(prolifG_Subtype, 2, mean, na.rm = TRUE)
 
     ## confidence
-    call.conf <- c()
-    # for (j in seq_len(length(out$predictions))) {
-    #     centroid_col <- which(colnames(out$centroids) == out$predictions[j])
-    #     call.conf[j] <- 1 - cor.test(out$testData[, j],
-    #         out$centroids[, centroid_col],
-    #         method = "spearman",
-    #         exact = FALSE
-    #     )$p.value
-    # }
-
-    for (j in seq_len(length(out$predictions))) {
-        centroid_col <- which(colnames(out$centroids) == out$predictions[j])
-        x <- out$testData[, j, drop = TRUE]
-        y <- out$centroids[, centroid_col, drop = TRUE]
-        common <- intersect(names(x), rownames(out$centroids))
-        # if names are NULL, fall back to positional intersection with rownames
-        if (length(common) > 0L) {
-            xi <- x[common]
-            yi <- y[common]
-        } else {
-            # assume already aligned; trim to min length to avoid accidental mismatch
-            n <- min(length(x), length(y))
-            xi <- x[seq_len(n)]
-            yi <- y[seq_len(n)]
-        }
-        ok <- is.finite(xi) & is.finite(yi)
-        pv <- tryCatch(
-            {
-                if (sum(ok) >= 3L) cor.test(xi[ok], yi[ok], method = "spearman", exact = FALSE)$p.value else 1
-            },
-            error = function(e) 1
-        )
-        call.conf[j] <- 1 - pv
-    }
-    call.conf <- as.numeric(call.conf)
-    call.conf[!is.finite(call.conf)] <- NA_real_
-    call.conf <- round(call.conf, 2)
     call.conf <- data.frame(
-        "Confidence" = call.conf,
+        "Confidence" = .pam50_confidence(out),
         row.names = names(out$predictions)
     )
 
