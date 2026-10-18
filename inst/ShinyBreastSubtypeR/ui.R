@@ -145,6 +145,7 @@ ui <- bslib::page_fluid(
     actionButton("map", "Preprocess & map", icon = icon("sliders")),
     helpText("Runs Mapping() to align IDs and normalize (as needed). When complete, continue to Step 2.")
   ),
+  uiOutput("input_coverage"),
   
   #### Step 2
   h3(id = "step2", "Step 2 · Choose method & parameters"),

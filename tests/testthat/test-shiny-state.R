@@ -23,6 +23,119 @@ shiny_upload <- function(name) {
                type = "text/plain", datapath = path)
 }
 
+test_that("input coverage uses the shared report for the current mapped inputs", {
+    env <- shiny_app_env()
+    shiny::testServer(env$server, {
+        expect_null(current_input_coverage())
+        expect_null(output$input_coverage)
+        shiny_defaults(session)
+        mapped <- reactive_files$data_input
+        expected <- BreastSubtypeR::InputCoverage(mapped)
+        expect_identical(current_input_coverage()$data, expected)
+        expect_null(current_input_coverage()$error)
+        html <- output$input_coverage$html
+        expect_match(html, "Input coverage", fixed = TRUE)
+        expect_match(html, '<th scope="col">Method/model</th>', fixed = TRUE)
+        expect_match(html, '<th scope="row">NC-based (PAM50)</th>', fixed = TRUE)
+        expect_match(html, "Genes represented", fixed = TRUE)
+        expect_match(html, "Genes absent", fixed = TRUE)
+        expect_match(html, "Rules evaluable", fixed = TRUE)
+        expect_match(html, "N/A", fixed = TRUE)
+        for (i in seq_len(nrow(expected))) {
+            expect_match(html, expected$model[i], fixed = TRUE)
+            expect_match(html, sprintf("%s/%s", expected$genes_present[i],
+                                      expected$genes_total[i]), fixed = TRUE)
+        }
+        expect_match(html, "NC-based methods share the 50-gene PAM50 subtype reference; AIMS and both SSPBC models are SSP-based. These rows describe input coverage, not which methods were selected or run.",
+                     fixed = TRUE)
+        expect_match(html, "Descriptive coverage of processed expression inputs. Coverage does not establish prediction reliability or change method eligibility.",
+                     fixed = TRUE)
+        expect_identical(reactive_files$data_input, mapped)
+        expect_null(current_prediction())
+        session$setInputs(BSmethod = "AUTO Mode", k_subtypes = "4")
+        expect_identical(current_input_coverage()$data, expected)
+        expect_identical(output$input_coverage$html, html)
+    })
+})
+
+test_that("input coverage displays rule ranges across processed samples", {
+    env <- shiny_app_env()
+    shiny::testServer(env$server, {
+        shiny_defaults(session)
+        mapped <- reactive_files$data_input
+        SummarizedExperiment::assay(mapped$se_SSP)[, 1L] <- NA_real_
+        reactive_files$data_input <- mapped
+        session$flushReact()
+        expected <- BreastSubtypeR::InputCoverage(mapped)
+        expect_identical(current_input_coverage()$data, expected)
+        for (i in which(!is.na(expected$rules_total))) {
+            expect_equal(expected$rules_evaluable_min[i], 0L)
+            expect_gt(expected$rules_evaluable_max[i], 0L)
+            range <- sprintf("%s-%s/%s per sample", expected$rules_evaluable_min[i],
+                             expected$rules_evaluable_max[i], expected$rules_total[i])
+            expect_match(output$input_coverage$html, range, fixed = TRUE)
+        }
+        expect_identical(reactive_files$data_input, mapped)
+    })
+})
+
+test_that("unavailable coverage is informative without changing prediction state", {
+    env <- shiny_app_env()
+    shiny::testServer(env$server, {
+        shiny_defaults(session)
+        mapped <- reactive_files$data_input
+        key <- reactive_files$mapped_key
+        fail_coverage <- function() {
+            testthat::local_mocked_bindings(
+                InputCoverage = function(data_input) stop("Deterministic coverage failure"),
+                .package = "BreastSubtypeR")
+            reactive_files$mapped_key <- NULL
+            session$flushReact()
+            expect_null(current_input_coverage())
+            reactive_files$mapped_key <- key
+            session$flushReact()
+            expect_true(mapping_current())
+            expect_null(current_input_coverage()$data)
+            expect_match(output$input_coverage$html,
+                         "Input coverage is unavailable: Deterministic coverage failure", fixed = TRUE)
+            expect_false(grepl("Genes represented", output$input_coverage$html, fixed = TRUE))
+            expect_null(reactive_files$error)
+            session$setInputs(run = 1)
+            expect_false(is.null(current_prediction()))
+            expect_identical(reactive_files$data_input, mapped)
+            expect_match(output$download_control$html, 'id="download"', fixed = TRUE)
+            expect_false(session$isClosed())
+        }
+        fail_coverage()
+        reactive_files$mapped_key <- NULL
+        session$flushReact()
+        expect_null(current_input_coverage())
+        reactive_files$mapped_key <- key
+        session$flushReact()
+        expect_identical(current_input_coverage()$data, BreastSubtypeR::InputCoverage(mapped))
+    })
+})
+
+test_that("coverage provenance rejects retained mapping from an older generation", {
+    env <- shiny_app_env()
+    shiny::testServer(env$server, {
+        shiny_defaults(session)
+        mapped <- reactive_files$data_input
+        key <- reactive_files$mapped_key
+        expect_false(is.null(current_input_coverage()))
+        session$setInputs(load_example_step1 = 2)
+        reactive_files$data_input <- mapped
+        reactive_files$mapped_key <- key
+        session$flushReact()
+        expect_false(mapping_current())
+        expect_null(current_input_coverage())
+        expect_null(output$input_coverage)
+        session$setInputs(map = 2)
+        expect_identical(current_input_coverage()$data,
+                         BreastSubtypeR::InputCoverage(reactive_files$data_input))
+    })
+})
+
 test_that("iteration control preserves its historical default, minimum and step", {
     env <- shiny_app_env()
     withr::local_dir(system.file("ShinyBreastSubtypeR", package = "BreastSubtypeR"))
@@ -53,6 +166,8 @@ for (changed in c("GEX", "clinic", "anno")) {
                               anno = "OSLO2EMIT0_anno.txt")
                 do.call(session$setInputs, setNames(list(shiny_upload(files[[id]])), id))
                 expect_null(reactive_files$data_input)
+                expect_null(current_input_coverage())
+                expect_null(output$input_coverage)
                 expect_null(reactive_files$prediction)
                 expect_null(current_prediction())
                 expect_null(output$plotSection)
@@ -64,6 +179,7 @@ for (changed in c("GEX", "clinic", "anno")) {
                 expect_error(output$download, "No current prediction")
                 session$setInputs(map = 2)
                 expect_null(reactive_files$data_input)
+                expect_null(output$input_coverage)
                 expect_match(reactive_files$error, "upload expression, clinical and annotation")
                 expect_false(session$isClosed())
             })
@@ -93,10 +209,13 @@ test_that("example reload invalidates AUTO exports and fresh prediction restores
         expect_error(output$download, "does not provide this export")
         session$setInputs(export_kind = "calls", load_example_step1 = 2)
         expect_false(mapping_current())
+        expect_null(output$input_coverage)
         expect_null(output$plotSection)
         expect_null(output$download_control)
         expect_error(output$download, "No current prediction")
         session$setInputs(map = 2)
+        expect_identical(current_input_coverage()$data,
+                         BreastSubtypeR::InputCoverage(reactive_files$data_input))
         set.seed(148); session$setInputs(run = 2)
         expect_identical(current_prediction()$calls, original)
         expect_match(output$plotSection$html, "multi_plot")
@@ -110,6 +229,7 @@ test_that("prediction parameters invalidate results while retaining mapped input
     shiny::testServer(env$server, {
         shiny_defaults(session)
         mapped <- reactive_files$data_input
+        coverage <- current_input_coverage()
         changes <- list(list(k_subtypes = "4"), list(hasClinical = TRUE),
                         list(internal = "meanCtr"), list(calibration = "None"),
                         list(BSmethod = "cIHC.itr"), list(ratio = 1.5),
@@ -124,6 +244,7 @@ test_that("prediction parameters invalidate results while retaining mapped input
             expect_error(output$download, "No current prediction")
             expect_identical(reactive_files$data_input, mapped)
             expect_true(mapping_current())
+            expect_identical(current_input_coverage(), coverage)
         }
         session$setInputs(BSmethod = "PAM50", calibration = "External", external = "nCounter")
         session$setInputs(run = 20)
@@ -161,11 +282,15 @@ test_that("data type changes and explicit remapping revoke predictions", {
         session$setInputs(run = 1)
         session$setInputs(map = 2)
         expect_true(mapping_current())
+        expect_identical(current_input_coverage()$data,
+                         BreastSubtypeR::InputCoverage(reactive_files$data_input))
         expect_null(current_prediction())
         expect_error(output$download, "No current prediction")
         session$setInputs(run = 2)
         session$setInputs(is_raw_counts = "raw")
         expect_false(mapping_current())
+        expect_null(current_input_coverage())
+        expect_null(output$input_coverage)
         expect_null(current_prediction())
         expect_error(output$download, "No current prediction")
     })
@@ -305,11 +430,14 @@ test_that("actual upload tables map and replace the example without sharing sess
                          anno = shiny_upload("OSLO2EMIT0_anno.txt"))
         session$setInputs(map = 2)
         expect_true(mapping_current())
+        expect_identical(current_input_coverage()$data,
+                         BreastSubtypeR::InputCoverage(reactive_files$data_input))
         expect_identical(reactive_files$source, "upload")
         session$setInputs(run = 1)
         expect_equal(nrow(current_prediction()$calls), 102L)
         session$setInputs(load_example_step1 = 2)
         expect_identical(reactive_files$source, "example")
+        expect_null(output$input_coverage)
         expect_null(current_prediction())
         session$setInputs(map = 3)
         session$setInputs(run = 2)
@@ -318,6 +446,8 @@ test_that("actual upload tables map and replace the example without sharing sess
     shiny::testServer(env$server, {
         session$setInputs(BSmethod = "PAM50", k_subtypes = "5")
         expect_null(reactive_files$data_input)
+        expect_null(current_input_coverage())
+        expect_null(output$input_coverage)
         expect_null(current_prediction())
         expect_error(output$download, "No current prediction")
     })
@@ -387,6 +517,8 @@ test_that("mapping errors stay connected and cannot fall back to previous data",
                          clinic = bad_upload, anno = shiny_upload("OSLO2EMIT0_anno.txt"))
         session$setInputs(map = 2)
         expect_false(mapping_current())
+        expect_null(current_input_coverage())
+        expect_null(output$input_coverage)
         expect_match(output$analysis_error$html, "PatientID")
         expect_false(session$isClosed())
         expect_error(output$download, "No current prediction")
@@ -394,6 +526,8 @@ test_that("mapping errors stay connected and cannot fall back to previous data",
         session$setInputs(map = 3)
         session$setInputs(run = 2)
         expect_true(mapping_current())
+        expect_identical(current_input_coverage()$data,
+                         BreastSubtypeR::InputCoverage(reactive_files$data_input))
         expect_equal(nrow(current_prediction()$calls), 102L)
         expect_null(reactive_files$error)
     })
@@ -439,16 +573,30 @@ test_that("a second live session cannot clear or inherit the first prediction", 
         download_control_for <- function(s) {
             shiny::withReactiveDomain(s, shiny::isolate(s$getOutput("download_control")))
         }
+        coverage_for <- function(s) {
+            shiny::withReactiveDomain(s, shiny::isolate(s$getOutput("input_coverage")))
+        }
         original <- readLines(download_for(first))
+        original_coverage <- coverage_for(first)
+        expect_match(original_coverage$html, "Input coverage", fixed = TRUE)
         expect_match(download_control_for(first)$html, 'id="download"', fixed = TRUE)
         shiny::withReactiveDomain(second, env$server(second$input, second$output, second))
         second$setInputs(BSmethod = "PAM50", k_subtypes = "5")
+        expect_null(coverage_for(second))
         expect_null(download_control_for(second))
         expect_error(download_for(second), "No current prediction")
         expect_null(download_control_for(second))
         expect_match(download_control_for(first)$html, 'id="download"', fixed = TRUE)
         second$setInputs(load_example_step1 = 1)
         expect_error(download_for(second), "No current prediction")
+        expect_null(coverage_for(second))
+        expect_identical(coverage_for(first), original_coverage)
+        second$setInputs(is_raw_counts = "norm", map = 1)
+        expect_match(coverage_for(second)$html, "Input coverage", fixed = TRUE)
+        expect_identical(coverage_for(first), original_coverage)
+        second$setInputs(is_raw_counts = "raw")
+        expect_null(coverage_for(second))
+        expect_identical(coverage_for(first), original_coverage)
         current <- readLines(download_for(first))
         expect_identical(current[-3L], original[-3L])
         expect_match(current[3L], "^# Export: calls \\| Date: .+ \\| R: ")
