@@ -269,6 +269,54 @@ server <- function(input, output, session) {
     !is.null(reactive_files$data_input) &&
       identical(reactive_files$mapped_key, input_key())
   })
+  current_input_coverage <- reactive({
+    if (!mapping_current()) return(NULL)
+    tryCatch(
+      list(data = BreastSubtypeR::InputCoverage(reactive_files$data_input),
+           error = NULL),
+      error = function(e) list(data = NULL, error = conditionMessage(e))
+    )
+  })
+  output$input_coverage <- renderUI({
+    coverage <- current_input_coverage()
+    if (is.null(coverage)) return(NULL)
+    if (!is.null(coverage$error)) {
+      return(bslib::card(
+        bslib::card_header("Input coverage"),
+        tags$p(paste("Input coverage is unavailable:", coverage$error))
+      ))
+    }
+    tab <- coverage$data
+    rules <- vapply(seq_len(nrow(tab)), function(i) {
+      if (is.na(tab$rules_total[i])) return("N/A")
+      if (tab$rules_evaluable_min[i] == tab$rules_evaluable_max[i]) {
+        sprintf("%s/%s", tab$rules_evaluable_min[i], tab$rules_total[i])
+      } else {
+        sprintf("%s-%s/%s per sample", tab$rules_evaluable_min[i],
+                tab$rules_evaluable_max[i], tab$rules_total[i])
+      }
+    }, character(1))
+    bslib::card(
+      bslib::card_header("Input coverage"),
+      tags$div(class = "table-responsive",
+        tags$table(class = "table table-sm",
+          tags$thead(tags$tr(
+            tags$th(scope = "col", "Method/model"),
+            tags$th(scope = "col", "Genes represented"),
+            tags$th(scope = "col", "Genes absent"),
+            tags$th(scope = "col", "Rules evaluable")
+          )),
+          tags$tbody(lapply(seq_len(nrow(tab)), function(i) {
+            tags$tr(tags$th(scope = "row", tab$model[i]),
+                    tags$td(sprintf("%s/%s", tab$genes_present[i], tab$genes_total[i])),
+                    tags$td(tab$genes_absent[i]), tags$td(rules[i]))
+          }))
+        )
+      ),
+      tags$p("NC-based methods share the 50-gene PAM50 subtype reference; AIMS and both SSPBC models are SSP-based. These rows describe input coverage, not which methods were selected or run."),
+      tags$p("Descriptive coverage of processed expression inputs. Coverage does not establish prediction reliability or change method eligibility.")
+    )
+  })
   current_prediction <- reactive({
     p <- reactive_files$prediction
     if (is.null(p) || !mapping_current() ||

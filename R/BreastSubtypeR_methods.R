@@ -241,8 +241,13 @@ Mapping <- function(se_obj,
         assays = list(counts = x_SSP),
         colData = colData(se_obj)
     )
-    # Return both objects as a list
-    return(list(se_NC = se_NC, se_SSP = se_SSP))
+    # Keep reporting separate from the processed inputs and prediction results.
+    result <- list(se_NC = se_NC, se_SSP = se_SSP)
+    if (isTRUE(verbose)) {
+        tryCatch(.message_input_coverage(InputCoverage(result)),
+            error = function(e) message("Input coverage unavailable: ", conditionMessage(e)))
+    }
+    return(result)
 }
 
 
