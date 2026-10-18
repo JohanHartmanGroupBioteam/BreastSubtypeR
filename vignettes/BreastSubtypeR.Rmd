@@ -138,6 +138,14 @@ not replace validated clinical diagnostics.
 
 The examples below use small example datasets shipped with the package. For your own data, provide a `SummarizedExperiment` **with clinical metadata in `colData`** (e.g., `PatientID`, ER/HER2; for ROR: `TSIZE`, `NODE`).
 
+`OSLO2EMIT0obj$se_obj` contains expression values for 356 gene features from
+102 OSLO2-EMIT0 samples, calculated as `log2(FPKM + 1)` from
+library-protocol-adjusted FPKM. Clinical metadata are stored in `colData`,
+and feature annotations in `rowData`. The source is
+`OSLO2EMIT0.103.genematrix_noNeg.Rdata` in Mendeley Data, version 3
+([Vallon-Christersson, 2023](https://doi.org/10.17632/yzxtxn4nmd.3)).
+See `?OSLO2EMIT0obj` for the packaged example's source and structure.
+
 ```{r pkgs-and-data, message=FALSE}
 library(BreastSubtypeR)
 
@@ -499,7 +507,17 @@ The Shiny UI provides a **“Load example data…”** button that preloads a sm
 demo cohort (expression, clinical, annotation). After loading, click
 **Preprocess & map** (Step 1), then proceed to analyses (Step 2).
 
-Programmatic access to the same files:
+The Shiny expression file contains the same 356 features and 102 samples as
+`OSLO2EMIT0obj$se_obj`, with `log2(FPKM + 1)` expression agreeing at text
+serialization precision. The expression values are not binary-identical.
+The Shiny annotation table covers 19,675 genes, including all 356 packaged
+features with matching annotations. Its clinical table has 12 fields rather
+than the packaged object's six; sample identifiers align, but PR labels use
+`Negative`/`Positive` instead of `PR-`/`PR+`. The full metadata tables therefore
+differ. Numerical agreement does not establish the exact historical
+generating or export script.
+
+Programmatic access to the same Shiny files:
 
 ```{r load example data, eval = FALSE}
 exdir <- system.file("RshinyTest", package = "BreastSubtypeR")
@@ -556,6 +574,8 @@ clinical validation requires paired clinical assay data.\
 
 - Staaf J, Hakkinen J, Hegardt C, Saal LH, Kimbung S, Hedenfalk I, *et al.* (2022). RNA sequencing-based single sample predictors of molecular subtype and risk of recurrence for clinical assessment of early-stage breast cancer. *npj Breast Cancer*, 8:94. <https://doi.org/10.1038/s41523-022-00465-3>
 
+
+- Vallon-Christersson J (2023). RNA Sequencing-Based Single Sample Predictors of Molecular Subtype and Risk of Recurrence for Clinical Assessment of Early-Stage Breast Cancer. Mendeley Data, V3. <https://doi.org/10.17632/yzxtxn4nmd.3>
 
 ## Session information
 

@@ -200,7 +200,8 @@ NULL
 #'     se_obj_counts <- TCGABRCAobj$se_obj[, 1:3] # tiny subset to keep checks fast
 #'     res <- Mapping(se_obj_counts, RawCounts = TRUE)
 #'
-#'     # Using example pre-normalized log2(FPKM+0.1)
+#'     # Using OSLO2-EMIT0 log2(FPKM + 1) expression
+#'     # from library-protocol-adjusted FPKM (see ?OSLO2EMIT0obj)
 #'     data("OSLO2EMIT0obj")
 #'     se_obj_fpkm <- OSLO2EMIT0obj$se_obj[, 1:3] # tiny subset to keep checks fast
 #'     res <- Mapping(se_obj_fpkm, RawCounts = FALSE)

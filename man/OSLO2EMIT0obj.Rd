@@ -7,12 +7,18 @@
 \format{
 A list with:
 \describe{
-\item{\code{se_obj}}{A \code{SummarizedExperiment} containing a subset of the
-log2-transformed, normalized expression matrix (log2(FPKM+0.1)) with \code{colData} clinical
-metadata and row-level feature annotations.}
+\item{\code{se_obj}}{A \code{SummarizedExperiment} containing expression
+values for 356 gene features from 102 OSLO2-EMIT0 samples, calculated as
+\code{log2(FPKM + 1)} from library-protocol-adjusted FPKM. Clinical metadata
+are stored in \code{colData}, and feature annotations in \code{rowData}.}
 \item{\code{data_input}}{Example output structure produced by \code{Mapping()}.}
 \item{\code{res}}{Example results from \code{BS_Multi()} run in \emph{AUTO} mode.}
 }
+}
+\source{
+\code{OSLO2EMIT0.103.genematrix_noNeg.Rdata}, Mendeley Data, version 3,
+from the library-protocol-adjusted FPKM collection.
+\doi{10.17632/yzxtxn4nmd.3}
 }
 \usage{
 data("OSLO2EMIT0obj")
@@ -27,6 +33,11 @@ library(BreastSubtypeR)
 data("OSLO2EMIT0obj")
 }
 \references{
+Vallon-Christersson J (2023). RNA Sequencing-Based Single Sample Predictors
+of Molecular Subtype and Risk of Recurrence for Clinical Assessment of
+Early-Stage Breast Cancer. Mendeley Data, V3.
+\doi{10.17632/yzxtxn4nmd.3}
+
 Staaf J, Hakkinen J, Hegardt C, Saal LH, Kimbung S, Hedenfalk I, et al.
 RNA sequencing-based single sample predictors of molecular subtype and risk of
 recurrence for clinical assessment of early-stage breast cancer.
