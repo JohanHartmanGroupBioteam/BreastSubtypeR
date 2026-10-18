@@ -101,9 +101,15 @@ counts require gene lengths. See the
 
 ### Input coverage
 
-Current GitHub source contains `InputCoverage()`; older Bioconductor builds
-may not. Consult your selected channel's
-[package page](https://bioconductor.org/packages/BreastSubtypeR/) before running this additional example.
+`InputCoverage()` and the Shiny coverage table are available in current GitHub
+source. As of 18 October 2026, the published source packages for
+[Bioconductor release 3.23](https://bioconductor.org/packages/release/bioc/html/BreastSubtypeR.html)
+(BreastSubtypeR 1.4.1) and
+[Bioconductor devel 3.24](https://bioconductor.org/packages/devel/bioc/html/BreastSubtypeR.html)
+(1.5.7) do not include them. Matching package version numbers do not establish
+feature availability. Check your installed version with
+`"InputCoverage" %in% getNamespaceExports("BreastSubtypeR")` before running
+this additional example.
 
 ```r
 InputCoverage(mapped)
@@ -139,18 +145,37 @@ AUTO rules and threshold provenance remain in the
 BreastSubtypeR::iBreastSubtypeR()
 ```
 
-The app runs locally in your R session. Use the current **Load example
-data...**, **Preprocess & map** and **Run subtyping** controls. Install
-optional interface dependencies if needed:
+The app runs locally in your R session. Install optional interface
+dependencies if needed:
 
 ```r
 install.packages(c("shiny", "bslib"))
 ```
 
-Current GitHub main displays input coverage for the current successful
-mapping. It clears stale predictions and downloads when inputs or relevant
-settings change. See the [development Shiny guide source](vignettes/BreastSubtypeR.Rmd#shiny-app)
-for Calls-only and supported Full metrics exports.
+The workflow below describes current GitHub main; Bioconductor builds can
+have an older interface.
+
+1. **Data and preprocessing:** choose **Load example data...** or upload your
+   expression, clinical and annotation tables, select the data type, then
+   click **Preprocess & map**. **Input coverage** describes the current
+   successful mapping.
+2. **Analysis settings:** select a method and its settings, then click
+   **Run subtyping**. Before successful preprocessing, AUTO displays
+   **AUTO: awaiting preprocessing**. After mapping, it shows readiness
+   counts or guidance for genuinely blocked annotations.
+3. **Results and downloads:** inspect the current results and download
+   tab-separated text (TSV). AUTO exports separate method calls and entropy;
+   **Full metrics** are available for supported single NC methods.
+
+Changing inputs or relevant settings clears stale predictions and downloads.
+See the [development Shiny guide source](vignettes/BreastSubtypeR.Rmd#shiny-app)
+for the preprocessing, recovery and export details.
+
+<img src="man/figures/shiny-auto-oslo2-emit0.jpg" width="900" alt="iBreastSubtypeR Results and downloads view with eight separate AUTO method predictions, Shannon entropy and a Calls only TSV download for 102 public OSLO2-EMIT0 tumors."/>
+
+*Public packaged OSLO2-EMIT0 example after preprocessing and five-class AUTO
+subtyping. Raw Shannon entropy measures disagreement among available method
+calls, not calibrated confidence.*
 
 ## Documentation and support
 

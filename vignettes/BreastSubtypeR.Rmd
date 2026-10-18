@@ -185,10 +185,14 @@ data_input <- Mapping(
 
 `InputCoverage()` reports the current processed inputs independently of which
 methods are selected or run. It uses the same calculation as the current
-GitHub Shiny coverage table. Current GitHub source contains `InputCoverage()`;
-older Bioconductor builds may not. Consult your selected channel's
-[package page](https://bioconductor.org/packages/BreastSubtypeR/) before running
-this additional example.
+GitHub Shiny coverage table. These features are available in current GitHub
+source. As of 18 October 2026, the published source packages for
+[Bioconductor release 3.23](https://bioconductor.org/packages/release/bioc/html/BreastSubtypeR.html)
+(BreastSubtypeR 1.4.1) and
+[Bioconductor devel 3.24](https://bioconductor.org/packages/devel/bioc/html/BreastSubtypeR.html)
+(1.5.7) do not include them. Check your installed namespace with
+`"InputCoverage" %in% getNamespaceExports("BreastSubtypeR")`; matching package
+version numbers alone do not establish feature availability.
 
 ```{r input-coverage, eval=TRUE}
 coverage <- InputCoverage(data_input)
@@ -464,18 +468,36 @@ separate deployment with different data-handling responsibilities.
 
 ## Preprocessing, prediction and downloads
 
-Upload all three tables: expression with feature IDs in the first column and
+The following workflow describes the current GitHub interface; installed
+Bioconductor builds can have an older interface.
+
+**1. Data and preprocessing.** Upload all three tables: expression with feature IDs in the first column and
 sample IDs as column names, clinical metadata with `PatientID`, and annotation
 with `probe` and `ENTREZID`. The application aligns overlapping sample and
 feature identifiers. Choose normalized **log2** expression or raw RNA-seq
 counts; raw-count annotation must also contain gene lengths in `Length` (bp).
-Alternatively, load the bundled example below. Click **Preprocess & map**,
-select a method and its settings, then run subtyping. In current GitHub main,
-the **Input coverage** table appears after successful mapping and describes
+Alternatively, use **Load example data...** to load the bundled example below.
+Click **Preprocess & map**. The **Input coverage** table appears after
+successful mapping and describes
 the current processed inputs, including possible imputation. It reports all
 four input models independently of method selection. Replacing or invalidating
 mapped inputs hides the table; a coverage-reporting error is informative and
 does not change prediction state.
+
+**2. Analysis settings.** Select a method and its settings, then click
+**Run subtyping**. Before successful preprocessing, AUTO displays the neutral
+**AUTO: awaiting preprocessing** message and guidance to run Step 1. After
+mapping, valid annotations restore the readiness counts; genuinely blocked
+annotations retain their error guidance. A failed preprocessing operation
+still displays its actual error. AUTO applies the implemented receptor and
+subgroup-size selection rules without guaranteeing complete model-input
+adequacy or clinical validity.
+
+**Results and downloads.** Inspect the plots and download current results as
+tab-separated text (TSV), using **Calls only** or **Full metrics** where
+supported. AUTO reports separate method predictions and raw Shannon entropy,
+not consensus calls or calibrated confidence. Research ROR outputs are not
+clinical Prosigna results.
 
 Replacing any expression, clinical or annotation file, reloading the example,
 or changing the data type clears the mapped inputs, predictions, plots and
@@ -503,9 +525,11 @@ default settings.
 
 ## Example data (for Shiny & scripts)
 
-The Shiny UI provides a **“Load example data…”** button that preloads a small
+The Shiny UI provides a **Load example data...** button that preloads a small
 demo cohort (expression, clinical, annotation). After loading, click
-**Preprocess & map** (Step 1), then proceed to analyses (Step 2).
+**Preprocess & map** in **Data and preprocessing** (Step 1), select settings in
+**Analysis settings** (Step 2), then click **Run subtyping**. Current plots and
+supported TSV exports appear under **Results and downloads**.
 
 The Shiny expression file contains the same 356 features and 102 samples as
 `OSLO2EMIT0obj$se_obj`, with `log2(FPKM + 1)` expression agreeing at text
