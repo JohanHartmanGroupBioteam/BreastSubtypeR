@@ -12,7 +12,7 @@ data("AIMSmodel")
 }
 \value{
 \item{all.pairs}{Character vector of the 100 AIMS rules (EntrezID comparisons).}
-\item{k}{Integer; number of optimal rules (commonly 20).}
+\item{k}{Integer fitted-model setting (20 in the bundled model), not the total rule count.}
 \item{one.vs.all.tsp}{Naive Bayes classifier object used with the rules.}
 \item{selected.pairs.list}{Rules ranked by discriminative power per subtype.}
 }
@@ -21,10 +21,13 @@ Model definition for AIMS consisting of 100 pairwise rules and a Naive Bayes
 classifier (via \pkg{e1071}) as described by Paquet & Hallett (2015).
 }
 \details{
-The 100 rules are of the form “EntrezID gene A < EntrezID gene B”. A subset
-of \code{k} rules (typically 20) is used within a Naive Bayes classifier to
-assign subtypes (Basal-like, HER2-enriched, LumA, LumB, Normal-like) on a
-per-sample basis.
+The 100 rules are of the form \code{EntrezID gene A < EntrezID gene B}.
+The bundled \code{k = 20} identifies the fitted-model setting; its
+\code{all.pairs} vector and fitted naive Bayes tables contain all 100
+rule predictors, involving 151 unique genes. Thus \code{k} is not the
+total rule denominator. The model assigns Basal-like, HER2-enriched,
+LumA, LumB and Normal-like subtypes independently for each sample.
+See \code{\link{InputCoverage}} for descriptive input reporting.
 }
 \examples{
 library(BreastSubtypeR)

@@ -43,6 +43,15 @@ approaches, AIMS is a single-sample predictor (SSP): it assigns subtypes
 independently for each sample using within-sample, pairwise gene expression
 rules. This makes it robust to cohort composition and scaling.
 }
+\details{
+The bundled \code{k = 20} names the fitted-model setting and output column;
+its \code{all.pairs} vector and fitted naive Bayes tables contain 100 rule
+predictors. \code{k} is not the total rule denominator. \code{\link[=InputCoverage]{InputCoverage()}} reports
+represented genes and rule evaluability without modifying this model.
+The posterior probabilities come from the fitted model and are distinct
+from input coverage, multi-method entropy and Parker \code{Confidence}.
+They are not externally calibrated measures of clinical reliability.
+}
 \examples{
 ## Example using SummarizedExperiment input
 data("OSLO2EMIT0obj")
