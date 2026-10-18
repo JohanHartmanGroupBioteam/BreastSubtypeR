@@ -117,11 +117,9 @@ prepare_nc_matrix <- function(x, genes.sig50, samplenames, verbose) {
     ## Parker
     missing_ID_parker <- setdiff(genes.sig50$EntrezGene.ID, rownames(x))
 
-    if (length(missing_ID_parker) == 0 & verbose) {
-        message("Genes used in NC-based methods are covered.")
-    } else if (verbose) {
-        message("These genes are missing for NC-based methods:")
-        message(paste(missing_ID_parker, collapse = "\n"))
+    if (verbose && length(missing_ID_parker) > 0L) {
+        message("Absent PAM50 reference Entrez IDs: ",
+            paste(missing_ID_parker, collapse = ", "))
     }
 
     ## get matrix for NC (symbol as rows, sample as col)
@@ -149,9 +147,8 @@ prepare_ssp_matrix <- function(x, genes.s, RawCounts, samplenames, verbose) {
     missing <- setdiff(genes_ssp, rownames(x))
 
     if (verbose && length(missing) > 0) {
-        message("Missing SSP genes: ", paste(missing, collapse = ", "))
-    } else if (verbose) {
-        message("Genes used in SSP-based methods are covered.")
+        message("Absent Entrez IDs in the shared SSP input: ",
+            paste(missing, collapse = ", "))
     }
 
     ## get matrix for AIMS (entrezID as colnames)
