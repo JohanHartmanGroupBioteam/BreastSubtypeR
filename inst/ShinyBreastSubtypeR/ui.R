@@ -1,13 +1,13 @@
 # Define UI for iBreastSubtypeR
 app_theme <- bslib::bs_theme(
   version = 5,
-  base_font    = bslib::font_google("Inter"),
-  heading_font = bslib::font_google("Poppins"),
-  primary = "#FF69B4"
+  base_font = bslib::font_collection("system-ui", "Segoe UI", "sans-serif"),
+  primary = "#9C245F"
 )
 
 ui <- bslib::page_fluid(
   theme = app_theme,
+  title = "iBreastSubtypeR",
   
   # --- Global CSS fixes ---
   tags$head(tags$style(HTML("
@@ -15,33 +15,48 @@ ui <- bslib::page_fluid(
     .selectize-control, .selectize-dropdown, .dropdown-menu { z-index: 1040 !important; }
     .modal-backdrop { z-index: 1050 !important; }
     .modal { z-index: 1060 !important; }
-    .app-title { text-align: center; margin: 16px 0 8px; }
-    .app-title h2 { margin: 0; }
-    .method-help { margin: 6px 0 12px; padding: 10px 12px; border-left: 4px solid #e9ecef; background: #fafbfc; border-radius: 6px; }
+    body { line-height: 1.5; }
+    .container-fluid { max-width: 1440px; padding: 20px clamp(12px, 3vw, 36px); }
+    .app-header { display: flex; gap: 18px; align-items: center; padding-bottom: 18px; border-bottom: 1px solid var(--bs-border-color); }
+    .app-logo { width: 84px; height: 96px; flex-shrink: 0; }
+    .app-header h1 { font-size: clamp(1.6rem, 3vw, 2rem); margin: 0 0 4px; }
+    .app-header p { margin: 0 0 6px; }
+    .header-meta { display: flex; gap: 8px 16px; flex-wrap: wrap; align-items: center; font-size: .9rem; }
+    .research-label { font-weight: 600; color: var(--bs-emphasis-color); }
+    .workflow-nav { display: flex; gap: 12px 24px; flex-wrap: wrap; margin: 14px 0 24px; }
+    .section-heading { font-size: 1.4rem; margin: 24px 0 12px; scroll-margin-top: 16px; }
+    .section-toolbar { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+    .section-toolbar .section-heading { margin: 0; }
+    .card-header { font-weight: 600; }
+    .bslib-card .card-body { gap: 12px; }
+    .input-essential { font-size: .9rem; margin-bottom: 8px; }
+    .help-details { margin: 4px 0 12px; }
+    .help-details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
+    .method-help { margin: 6px 0 12px; padding: 10px 12px; border-left: 3px solid var(--bs-border-color); background: var(--bs-tertiary-bg); border-radius: 6px; }
     .method-help ul { margin-bottom: 0; }
-    .paper-cite { font-size: 12.5px; color: #555; margin-top: 8px; }
-    .paper-cite a { text-decoration: none; }
-  "))),
-  
-  # HERO styles
-  tags$head(tags$style(HTML("
-    .hero-card { background: linear-gradient(135deg, #ffe3f0 0%, #ffffff 60%); border: 1px solid #f1f3f5; border-radius: 12px; }
-    .hero-inner { display: grid; grid-template-columns: 180px 1fr; gap: 16px; align-items: center; }
-    @media (max-width: 768px) { .hero-inner { grid-template-columns: 1fr; text-align:center; } }
-    .hero-title { margin: 4px 0 6px; font-weight: 600; }
-    .hero-subtitle { margin: 0 0 10px; color: #4a4f55; }
-    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 6px; }
-    .chip { font-size: 12px; padding: 4px 8px; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; }
-    .chip i { opacity: 0.8; }
-    .feature-list { margin: 8px 0 0 0; padding-left: 18px; }
-    .feature-list li { margin: 3px 0; }
-    .hero-ctas { display:flex; gap:10px; margin-top:12px; flex-wrap:wrap; }
-    .btn-pink { background-color:#FF69B4; border:none; color:white; }
-    .btn-outline { border:1px solid #dee2e6; background:#fff; }
-    .chip.auto { border:1px solid; padding:6px 10px; border-radius:999px; display:inline-flex; gap:8px; align-items:center; }
-    .chip.auto.ready   { background:#e6f7ed; border-color:#2fb170; }
-    .chip.auto.blocked { background:#fff5f5; border-color:#e03131; }
-    .chip .chip-note   { font-size:11px; opacity:0.75; }
+    .chip.auto { border: 1px solid; padding: 6px 10px; border-radius: 6px; display: inline-flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: .9rem; margin-bottom: 12px; }
+    .chip.auto.pending { color: var(--bs-body-color); background: var(--bs-tertiary-bg); border-color: var(--bs-border-color); }
+    .chip.auto.ready { color: var(--bs-success-text-emphasis); background: var(--bs-success-bg-subtle); border-color: var(--bs-success-border-subtle); }
+    .chip.auto.blocked { color: var(--bs-danger-text-emphasis); background: var(--bs-danger-bg-subtle); border-color: var(--bs-danger-border-subtle); }
+    .chip-note { font-size: .85rem; }
+    .map-actions { display: flex; gap: 12px 20px; align-items: center; flex-wrap: wrap; }
+    .map-actions .help-block { margin: 0; }
+    .plot-scroll { overflow-x: auto; }
+    .plot-scroll-hint { display: none; margin: 0; font-size: .85rem; color: var(--bs-secondary-color); }
+    #multi_plot, #heat2 { min-width: 760px; }
+    #pie1 { min-width: 360px; }
+    :is(a, button, input, select, summary, [tabindex]):focus-visible,
+    .selectize-input.focus, .btn-file:focus-within { outline: 3px solid var(--bs-link-color); outline-offset: 3px; }
+    .table-responsive:focus-visible, .plot-scroll:focus-visible { outline-offset: -3px; }
+    footer { margin: 20px 0 4px; color: var(--bs-secondary-color); }
+    @media (max-width: 575px) {
+      .plot-scroll-hint { display: block; }
+      .app-header { gap: 12px; align-items: flex-start; }
+      .app-logo { width: 56px; height: 64px; }
+      .header-meta { gap: 6px 12px; }
+      .workflow-nav { gap: 8px 16px; }
+      .section-toolbar .btn, .map-actions .btn { width: 100%; }
+    }
   "))),
   
   # Preserve scroll position helper
@@ -63,55 +78,32 @@ ui <- bslib::page_fluid(
     "))
   ),
   
-  # Title
-  tags$div(class = "app-title", tags$h2("Interactive Breast Cancer Intrinsic Molecular Subtyping")),
-  
-  # Hero
-  bslib::card(
-    class = "hero-card",
-    bslib::card_body(
-      div(class = "hero-inner",
-          div(bslib::card_image("logo.svg", height = "160px")),
-          div(
-            h3(class = "hero-title", "Welcome to iBreastSubtypeR"),
-            div(class = "hero-subtitle",
-                "An interactive companion to the BreastSubtypeR Bioconductor package."
-            ),
-            div(class = "chips",
-                span(class = "chip", icon("bullseye"),
-                     HTML("<b>NC-based:</b> PAM50 (parker.original | genefu.scale | genefu.robust), cIHC / cIHC.itr, PCAPAM50, ssBC / ssBC.v2")),
-                span(class = "chip", icon("vial"),
-                     HTML("<b>SSP-based:</b> AIMS, SSPBC")),
-                span(class = "chip", icon("chart-line"),
-                     HTML("<b>ROR:</b> research-use Risk of Recurrence (TSIZE, NODE)")),
-                uiOutput("auto_chip")
-            ),
-            tags$ul(class = "feature-list",
-                    tags$li("Assumption-aware AUTO reduces bias in ER/HER2-skewed cohorts."),
-                    tags$li(HTML("standardized mapping & normalization (<i>log<sub>2</sub></i>-CPM for NC; FPKM for SSP).")),
-                    tags$li("Choose 5-class (incl. Normal-like) or 4-class; AIMS is 5-class only."),
-                    tags$li("All computation runs locally; exports are Bioconductor-ready.")
-            ),
-            div(class = "paper-cite",
-                HTML("Please cite: Yang Q., Hartman J., Sifakis E.G. <em>BreastSubtypeR</em>, ",
-                     "<span class='journal'>NAR Genomics and Bioinformatics</span> (2025). ",
-                     "<a href='https://doi.org/10.1093/nargab/lqaf131' target='_blank' rel='noopener noreferrer'>https://doi.org/10.1093/nargab/lqaf131</a>")
-            ),
-            div(class = "hero-ctas",
-                actionButton("load_example_step1", "Load example data...", icon = icon("database")),
-                tags$a(class = "btn btn-pink", href = "#step1", icon("upload"), "Go to Step 1"),
-                tags$a(class = "btn btn-outline", href = "#step2", icon("play-circle"), "Go to Step 2"),
-                actionLink("about", "About & Citation", class = "btn btn-outline")
-            )
-          )
+  tags$header(class = "app-header",
+    bslib::card_image("logo.svg", alt = "BreastSubtypeR logo",
+      class = "app-logo", border_radius = "none"),
+    div(
+      h1("iBreastSubtypeR"),
+      p("Intrinsic molecular subtyping with published classifiers."),
+      div(class = "header-meta",
+        span(class = "research-label", "For research use"),
+        span("The application runs locally in your R session."),
+        actionLink("about", "About & Citation")
       )
     )
   ),
+  tags$nav(class = "workflow-nav", `aria-label` = "Workflow",
+    tags$a(href = "#step1", "Data and preprocessing"),
+    tags$a(href = "#step2", "Analysis settings"),
+    tags$a(href = "#results", "Results and downloads")
+  ),
   
   #### Step 1
-  h3(id = "step1", "Step 1 · Upload your data"),
-  bslib::layout_column_wrap(
-    col_width = 3,
+  div(class = "section-toolbar",
+    h2(id = "step1", class = "section-heading", "1. Data and preprocessing"),
+    actionButton("load_example_step1", "Load example data...", icon = icon("database"))
+  ),
+  bslib::layout_columns(
+    col_widths = bslib::breakpoints(sm = c(12, 12, 12), lg = c(4, 4, 4)),
     
     # GEX
     bslib::card(
@@ -121,15 +113,19 @@ ui <- bslib::page_fluid(
       radioButtons("is_raw_counts", "Data type",
                    choices  = list("normalized (log2)" = "norm", "Raw counts (RNA-seq only)" = "raw"),
                    selected = "norm", inline = TRUE),
-      uiOutput("gex_help")
+      p(class = "input-essential", "Genes in rows; samples in columns. Gene IDs must match annotation probe IDs; sample IDs must match clinical PatientID."),
+      tags$details(class = "help-details",
+        tags$summary("Expression format and processing"), uiOutput("gex_help"))
     ),
     
     # Clinical
     bslib::card(
-      bslib::card_header("2) Clinical data"),
+      bslib::card_header("2) Clinical metadata"),
       fileInput("clinic", "Upload clinical table",
                 accept = c("text/csv", "text/comma-separated-values,text/plain", ".csv", ".txt")),
-      uiOutput("clin_help")
+      p(class = "input-essential", "Required: PatientID. AUTO requires ER and HER2, coded ER+/ER- and HER2+/HER2-. Other requirements depend on the method."),
+      tags$details(class = "help-details",
+        tags$summary("Clinical fields and research ROR"), uiOutput("clin_help"))
     ),
     
     # Annotation
@@ -137,48 +133,62 @@ ui <- bslib::page_fluid(
       bslib::card_header("3) Feature annotation"),
       fileInput("anno", "Upload annotation table",
                 accept = c("text/csv", "text/comma-separated-values,text/plain", ".csv", ".txt")),
-      uiOutput("anno_help")
+      p(class = "input-essential", "Required: probe and ENTREZID. For raw counts, also supply gene Length in base pairs."),
+      tags$details(class = "help-details",
+        tags$summary("Annotation format"), uiOutput("anno_help"))
     )
   ),
 
   bslib::card(
-    actionButton("map", "Preprocess & map", icon = icon("sliders")),
-    helpText("Runs Mapping() to align IDs and normalize (as needed). When complete, continue to Step 2.")
+    div(class = "map-actions",
+      actionButton("map", "Preprocess & map", icon = icon("sliders"), class = "btn-primary"),
+      helpText("Runs Mapping() to align IDs and normalize (as needed). When complete, continue to Step 2.")
+    )
   ),
   uiOutput("input_coverage"),
   
   #### Step 2
-  h3(id = "step2", "Step 2 · Choose method & parameters"),
+  h2(id = "step2", class = "section-heading", "2. Analysis settings"),
   
   bslib::card(
     style = "overflow: visible;",
     
+    bslib::layout_columns(col_widths = bslib::breakpoints(sm = c(12, 12), lg = c(7, 5)),
     selectizeInput(
       "BSmethod", "Subtyping method",
       choices = list(
-        "Run all (AUTO Mode)" = "AUTO Mode",
+        "AUTO - select methods for this cohort" = "AUTO Mode",
         "PAM50 (parker.original | genefu.scale | genefu.robust)" = "PAM50",
         "cIHC" = "cIHC",
         "cIHC.itr" = "cIHC.itr",
         "PCAPAM50" = "PCAPAM50",
         "ssBC" = "ssBC",
         "AIMS" = "AIMS",
-        "sspbc" = "sspbc"
+        "SSPBC" = "sspbc"
       ),
       selected = "AUTO Mode", width = "100%",
       options = list(openOnFocus = TRUE, dropdownParent = "body")
     ),
-    
-    uiOutput("auto_preflight"),
     
     radioButtons(
       "k_subtypes", "Subtype classes",
       choices = list("5 classes (includes Normal-like)" = "5",
                      "4 classes (excludes Normal-like)" = "4"),
       selected = "5", inline = TRUE
-    ),
+    )),
+    uiOutput("auto_chip"),
+    uiOutput("auto_preflight"),
     
     uiOutput("method_help"),
+    tags$details(class = "help-details",
+      tags$summary("Method guide"),
+      tags$ul(
+        tags$li(tags$b("AUTO: "), "selects methods according to implemented receptor-annotation and subgroup-size rules. It does not establish complete model-input adequacy or clinical validity."),
+        tags$li(tags$b("NC-based: "), "PAM50 (parker.original, genefu.scale, genefu.robust), cIHC, cIHC.itr, PCAPAM50, ssBC and ssBC.v2."),
+        tags$li(tags$b("SSP-based: "), "AIMS and SSPBC. AIMS supports five classes only."),
+        tags$li("Choose four classes to exclude Normal-like, or five classes to include it. Research ROR is available for supported NC-based analyses.")
+      )
+    ),
     
     conditionalPanel(
       condition = "input.BSmethod == 'PAM50' || input.BSmethod == 'cIHC' || input.BSmethod == 'cIHC.itr' || input.BSmethod == 'PCAPAM50' || input.BSmethod == 'ssBC'",
@@ -291,20 +301,20 @@ ui <- bslib::page_fluid(
       )
     ),
     
-    bslib::card(
-      actionButton("run", "Run subtyping", icon = icon("play-circle"))
-    )
+    actionButton("run", "Run subtyping", icon = icon("play-circle"), class = "btn-primary")
   ),
   
   uiOutput("analysis_error"),
 
+  h2(id = "results", class = "section-heading", "Results and downloads"),
+  p("Compare subtype calls in the plots below. Download current results as tab-separated text (TSV)."),
   # Visualization
   uiOutput("plotSection"),
   
   # Export
   bslib::card(
     bslib::layout_columns(
-      col_widths = c(8,4),
+      col_widths = bslib::breakpoints(sm = c(12, 12), lg = c(8, 4)),
       uiOutput("export_selector"),
       div(style = "text-align:center;",
           uiOutput("download_control")

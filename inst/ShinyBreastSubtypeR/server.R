@@ -298,7 +298,8 @@ server <- function(input, output, session) {
     }, character(1))
     bslib::card(
       bslib::card_header("Input coverage"),
-      tags$div(class = "table-responsive",
+      tags$div(class = "table-responsive", tabindex = "0", role = "region",
+        `aria-label` = "Input coverage by method and model",
         tags$table(class = "table table-sm",
           tags$thead(tags$tr(
             tags$th(scope = "col", "Method/model"),
@@ -361,25 +362,38 @@ server <- function(input, output, session) {
     p <- current_prediction()
     if (is.null(p)) return(NULL)
     if (identical(p$method, "AUTO")) {
-      bslib::layout_columns(col_width = 2, bslib::card(plotOutput("multi_plot", height = 480)))
+      bslib::card(
+        bslib::card_header("Method comparison and entropy"),
+        tags$p(class = "plot-scroll-hint", "Swipe horizontally to view the full plot."),
+        tags$div(class = "plot-scroll", tabindex = "0", role = "region",
+          `aria-label` = "Method comparison plot; scroll horizontally on narrow screens",
+          plotOutput("multi_plot", height = 560)))
     } else {
-      bslib::layout_columns(col_width = 2,
-                           bslib::card(plotOutput("pie1")),
-                           bslib::card(plotOutput("heat2")))
+      bslib::layout_columns(
+        col_widths = bslib::breakpoints(sm = c(12, 12), lg = c(5, 7)),
+        bslib::card(bslib::card_header("Subtype calls"),
+          tags$div(class = "plot-scroll", tabindex = "0", role = "region",
+            `aria-label` = "Subtype proportion plot; scroll horizontally on narrow screens",
+            plotOutput("pie1"))),
+        bslib::card(bslib::card_header("Expression and subtype calls"),
+          tags$p(class = "plot-scroll-hint", "Swipe horizontally to view the full plot."),
+          tags$div(class = "plot-scroll", tabindex = "0", role = "region",
+            `aria-label` = "Expression heatmap; scroll horizontally on narrow screens",
+            plotOutput("heat2"))))
     }
   })
   output$multi_plot <- renderPlot({
     p <- current_prediction(); req(p, identical(p$method, "AUTO"))
     BreastSubtypeR::Vis_Multi(p$plot)
-  })
+  }, res = 96, alt = "Subtype calls across selected methods, with per-sample entropy and subtype legend.")
   output$pie1 <- renderPlot({
     p <- current_prediction(); req(p, !identical(p$method, "AUTO"))
     BreastSubtypeR::Vis_pie(p$plot)
-  })
+  }, res = 96, alt = "Proportions of subtype calls for the selected method.")
   output$heat2 <- renderPlot({
     p <- current_prediction(); req(p, !identical(p$method, "AUTO"))
     BreastSubtypeR::Vis_heatmap(as.matrix(p$matrix), out = p$plot)
-  })
+  }, res = 96, alt = "Expression heatmap annotated with subtype calls for the selected method.")
 
   # ---- UI dynamic help ----
   output$gex_help <- renderUI({
@@ -464,12 +478,18 @@ server <- function(input, output, session) {
            "AIMS"   = .p("AIMS", list("Category"="SSP-based","Description"="Absolute Intrinsic Molecular Subtyping.","Key refs"="Paquet & Hallett, 2015 JNCI")),
            "sspbc"  = .p("SSPBC", list("Category"="SSP-based","Description"="SCAN-B SSP models (4 or 5 classes).","Key refs"="Staaf et al., 2022 npj Breast Cancer")),
            "PAM50"  = .p("PAM50", list("Variants"="parker.original | genefu.scale | genefu.robust")),
-           "AUTO Mode" = .p("AUTO Mode", list("Description"="Cohort-aware method selection")),
            NULL)
   })
   
   output$auto_chip <- renderUI({
+    if (!identical(input$BSmethod, "AUTO Mode")) return(NULL)
+    if (!mapping_current()) {
+      return(tags$span(class = "chip auto pending",
+        tags$b("AUTO: awaiting preprocessing"),
+        tags$span(class = "chip-note", "Run Step 1 (Preprocess & map) to continue.")))
+    }
     chk <- auto_requirements()
+    if (!isTRUE(chk$show)) return(NULL)
     cls <- if (isTRUE(chk$ready)) "chip auto ready" else "chip auto blocked"
     
     stats <- ""
@@ -484,7 +504,7 @@ server <- function(input, output, session) {
     htmltools::tags$span(
       class = cls,
       icon("magic"),
-      htmltools::HTML("<b>AUTO:</b> assumption-aware selection"),
+      htmltools::HTML("<b>AUTO:</b> cohort-aware selection"),
       htmltools::HTML(stats)
     )
   })
@@ -523,8 +543,9 @@ server <- function(input, output, session) {
     if (!supports_export(p, kind))
       return(NULL)
     downloadButton(
-      "download", HTML("Download results<br>(.tsv)"),
-      style = "width: 220px; height: auto; padding: 10px 16px; white-space: normal; line-height: 1.2; background-color: #FF69B4; color: white; border: none;"
+      "download", HTML("Download results<br>(TSV)"),
+      class = "btn-primary",
+      style = "max-width: 100%; width: 220px; padding: 10px 16px; white-space: normal; line-height: 1.4;"
     )
   })
   
@@ -551,6 +572,7 @@ server <- function(input, output, session) {
   })
   
   output$auto_preflight <- renderUI({
+    if (!mapping_current()) return(NULL)
     chk <- auto_requirements()
     if (!isTRUE(chk$show)) return(NULL)
     
@@ -601,7 +623,9 @@ server <- function(input, output, session) {
         "<p><b>Please cite:</b><br/>",
         "Yang Q., Hartman J., Sifakis E.G. <em>BreastSubtypeR</em>. ",
         "<em>NAR Genomics and Bioinformatics</em> (2025). ",
-        "<a href='https://doi.org/10.1093/nargab/lqaf131' target='_blank' rel='noopener noreferrer'>https://doi.org/10.1093/nargab/lqaf131</a></p>"
+        "<a href='https://doi.org/10.1093/nargab/lqaf131' target='_blank' rel='noopener noreferrer'>https://doi.org/10.1093/nargab/lqaf131</a></p>",
+        "<p><a href='https://academic.oup.com/nargab/pages/editors-choice-articles' target='_blank' rel='noopener noreferrer'>Editor's Choice (2025)</a> - ",
+        "<a href='https://doi.org/10.1093/nargab/lqaf131' target='_blank' rel='noopener noreferrer'>NAR Genomics and Bioinformatics</a>.</p>"
       ))
     ))
   })
