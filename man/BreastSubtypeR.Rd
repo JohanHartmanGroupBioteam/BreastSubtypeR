@@ -10,15 +10,18 @@ for Intrinsic Molecular Subtyping in Breast Cancer Research}
 \strong{BreastSubtypeR} is an R/Bioconductor package that unifies multiple
 published intrinsic subtyping (IS) methods for breast cancer into a single,
 reproducible framework. It supports both nearest-centroid (NC-based) and
-single-sample predictor (SSP-based) classifiers and introduces an
-assumption-aware \strong{AUTO mode} that dynamically selects methods compatible
-with the input cohort.
+single-sample predictor (SSP-based) classifiers. \strong{AUTO mode} selects
+methods using implemented receptor-annotation and subgroup-size rules
+and returns per-method calls without a consensus prediction.
 
 By standardizing input handling, applying method-specific normalization,
-and providing optimised probe-to-gene mapping, BreastSubtypeR reduces
-inconsistencies across platforms and improves reproducibility in translational
-research. A companion Shiny app (\strong{iBreastSubtypeR}) offers an intuitive GUI
-for non-programmers while preserving data privacy.
+and providing probe-to-gene mapping, BreastSubtypeR offers a common
+workflow for comparing published classifiers. A companion Shiny app
+(\strong{iBreastSubtypeR}) runs in the user's local R session.
+Outputs are for research use and do not replace validated clinical
+diagnostics. AUTO selection does not establish complete input adequacy
+or clinical validity. \code{\link[=InputCoverage]{InputCoverage()}} provides descriptive reporting
+of processed inputs without changing method eligibility.
 \subsection{Workflow}{
 \enumerate{
 \item \strong{Data Input}: Supply a gene expression dataset as a \code{SummarizedExperiment}.
@@ -29,21 +32,20 @@ including Entrez ID-based resolution of duplicates.
 \item \strong{Subtyping}: Apply multiple classifiers simultaneously using
 \code{\link{BS_Multi}}, or enable \strong{AUTO mode} for
 cohort-aware method selection.
-\item \strong{visualization}: Summarise and interpret subtyping results with
+\item \strong{Visualization}: Summarize and interpret subtyping results with
 \code{\link{Vis_Multi}}.
 }
 }
 
 \subsection{Key Features}{
 \itemize{
-\item \strong{Multi-method framework}: Ten published NC- and SSP-based classifiers,
-harmonised under one interface.
-\item \strong{AUTO mode}: Evaluates cohort composition (e.g., ER/HER2 prevalence,
-subtype purity, subgroup sizes) and disables classifiers with violated
-assumptions; improves accuracy, Cohen’s kappa, and IHC concordance.
+\item \strong{Multi-method framework}: Ten published NC-based and SSP-based
+method IDs under one interface.
+\item \strong{AUTO mode}: Uses implemented cohort rules based on receptor
+annotations and subgroup sizes; returns separate method calls.
 \item \strong{standardized normalization}: Upper-quartile log2-CPM for NC-based
 methods; FPKM for SSP-based methods.
-\item \strong{Optimised gene mapping}: Entrez ID-based mapping with conflict resolution.
+\item \strong{Gene mapping}: Entrez ID-based mapping with conflict resolution.
 \item \strong{Dual accessibility}: A Bioconductor-compliant R API and a local Shiny app
 (iBreastSubtypeR).
 }
@@ -57,8 +59,7 @@ methods; FPKM for SSP-based methods.
 
 Authors:
 \itemize{
-  \item Qiao Yang \email{yq.kiuo@gmail.com} (\href{https://orcid.org/0000-0002-4098-3246}{ORCID})
-  \item Emmanouil G. Sifakis \email{emmanouil.sifakis@ki.se} (\href{https://orcid.org/0000-0001-9919-4471}{ORCID})
+\item Qiao Yang \email{yq.kiuo@gmail.com} (\href{https://orcid.org/0000-0002-4098-3246}{ORCID})
+\item Emmanouil G. Sifakis \email{emmanouil.sifakis@ki.se} (\href{https://orcid.org/0000-0001-9919-4471}{ORCID})
 }
-
 }

@@ -18,10 +18,10 @@
 #' }
 #'
 #' @references
-#' Staaf J, Häkkinen J, Hegardt C, Saal LH, Kimbung S, Hedenfalk I, et al.
+#' Staaf J, Hakkinen J, Hegardt C, Saal LH, Kimbung S, Hedenfalk I, et al.
 #' RNA sequencing-based single sample predictors of molecular subtype and risk of
 #' recurrence for clinical assessment of early-stage breast cancer.
-#' \emph{NPJ Breast Cancer}. 2022;8(1):27. https://doi.org/10.1038/s41523-022-00465-3
+#' \emph{npj Breast Cancer}. 2022;8:94. https://doi.org/10.1038/s41523-022-00465-3
 #'
 #' @examples
 #' library(BreastSubtypeR)
@@ -116,7 +116,7 @@
 #' [SIGMA.txt at commit 9ba84eb](https://github.com/perou-lab/PAM50_ER_HER2_normalization/blob/9ba84ebc131a58a18446e235c9422d9802f56671/SIGMA.txt).
 #'
 #' @references
-#' Parker JS, Mullins M, Cheung MCU, Leung S, Voduc D, et al.
+#' Parker JS, Mullins M, Cheang MCU, Leung S, Voduc D, et al.
 #' Supervised risk predictor of breast cancer based on intrinsic subtypes.
 #' \emph{J Clin Oncol}. 2009;27(8):1160–1167. https://doi.org/10.1200/JCO.2008.18.1370
 #'
@@ -153,17 +153,20 @@
 #' classifier (via \pkg{e1071}) as described by Paquet & Hallett (2015).
 #'
 #' @details
-#' The 100 rules are of the form “EntrezID gene A < EntrezID gene B”. A subset
-#' of \code{k} rules (typically 20) is used within a Naive Bayes classifier to
-#' assign subtypes (Basal-like, HER2-enriched, LumA, LumB, Normal-like) on a
-#' per-sample basis.
+#' The 100 rules are of the form \code{EntrezID gene A < EntrezID gene B}.
+#' The bundled \code{k = 20} identifies the fitted-model setting; its
+#' \code{all.pairs} vector and fitted naive Bayes tables contain all 100
+#' rule predictors, involving 151 unique genes. Thus \code{k} is not the
+#' total rule denominator. The model assigns Basal-like, HER2-enriched,
+#' LumA, LumB and Normal-like subtypes independently for each sample.
+#' See \code{\link{InputCoverage}} for descriptive input reporting.
 #'
 #' @docType data
 #' @usage data("AIMSmodel")
 #'
 #' @return
 #' \item{all.pairs}{Character vector of the 100 AIMS rules (EntrezID comparisons).}
-#' \item{k}{Integer; number of optimal rules (commonly 20).}
+#' \item{k}{Integer fitted-model setting (20 in the bundled model), not the total rule count.}
 #' \item{one.vs.all.tsp}{Naive Bayes classifier object used with the rules.}
 #' \item{selected.pairs.list}{Rules ranked by discriminative power per subtype.}
 #'
@@ -195,10 +198,10 @@
 #' \item{sspbc.models}{Named list of 11 SSP models used by \code{sspbc}.}
 #'
 #' @references
-#' Staaf J, Häkkinen J, Hegardt C, Saal LH, Kimbung S, Hedenfalk I, et al.
+#' Staaf J, Hakkinen J, Hegardt C, Saal LH, Kimbung S, Hedenfalk I, et al.
 #' RNA sequencing-based single sample predictors of molecular subtype and risk of
 #' recurrence for clinical assessment of early-stage breast cancer.
-#' \emph{NPJ Breast Cancer}. 2022;8(1):27. https://doi.org/10.1038/s41523-022-00465-3
+#' \emph{npj Breast Cancer}. 2022;8:94. https://doi.org/10.1038/s41523-022-00465-3
 #'
 #' @examples
 #' library(BreastSubtypeR)
@@ -221,10 +224,10 @@
 #' \item{sspbc.models.fullname}{Named list of 11 SSP models used by \code{sspbc}.}
 #'
 #' @references
-#' Staaf J, Häkkinen J, Hegardt C, Saal LH, Kimbung S, Hedenfalk I, et al.
+#' Staaf J, Hakkinen J, Hegardt C, Saal LH, Kimbung S, Hedenfalk I, et al.
 #' RNA sequencing-based single sample predictors of molecular subtype and risk of
 #' recurrence for clinical assessment of early-stage breast cancer.
-#' \emph{NPJ Breast Cancer}. 2022;8(1):27. https://doi.org/10.1038/s41523-022-00465-3
+#' \emph{npj Breast Cancer}. 2022;8:94. https://doi.org/10.1038/s41523-022-00465-3
 #'
 #' @examples
 #' library(BreastSubtypeR)
@@ -250,10 +253,10 @@
 #' \item{Gene.ID.ann}{Data frame of annotations for GENCODE v27 genes.}
 #'
 #' @references
-#' Staaf J, Häkkinen J, Hegardt C, Saal LH, Kimbung S, Hedenfalk I, et al.
+#' Staaf J, Hakkinen J, Hegardt C, Saal LH, Kimbung S, Hedenfalk I, et al.
 #' RNA sequencing-based single sample predictors of molecular subtype and risk of
 #' recurrence for clinical assessment of early-stage breast cancer.
-#' \emph{NPJ Breast Cancer}. 2022;8(1):27. https://doi.org/10.1038/s41523-022-00465-3
+#' \emph{npj Breast Cancer}. 2022;8:94. https://doi.org/10.1038/s41523-022-00465-3
 #'
 #' @examples
 #' library(BreastSubtypeR)

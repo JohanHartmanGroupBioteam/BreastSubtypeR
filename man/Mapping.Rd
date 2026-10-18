@@ -124,11 +124,15 @@ receive high risk; the other categories use different score cutoffs.
 In the R API, an \code{NA} value in \code{NODE} makes only this additional group
 missing. An \code{NA} value in \code{TSIZE} makes all clinical ROR scores and groups
 missing; ROR-S and ROR-P remain available. These are missing values within
-required columns, not permission to omit the columns. Exact-cutoff behavior
-is tracked separately in
-\href{https://github.com/JohanHartmanGroupBioteam/BreastSubtypeR/issues/154}{issue #154}.
+required columns, not permission to omit the columns. The additional
+subtype-specific ROR-PC group uses inclusive upper boundaries: NODE = 0
+has low <= 40, intermediate > 40 and <= 60, high > 60; NODE = 1--3 has
+low <= 15, intermediate > 15 and <= 40, high > 40. Scores are not rounded
+before grouping. This resolves
+\href{https://github.com/JohanHartmanGroupBioteam/BreastSubtypeR/issues/154}{issue #154};
+the original Parker risk groups are unchanged.
 
-\strong{Phenodata normalization.} #' If receptor fields are present, they are coerced to canonical encodings
+\strong{Phenodata normalization.} If receptor fields are present, they are coerced to canonical encodings
 (\code{ER -> \{ER+, ER-\}}, \code{HER2 -> \{HER2+, HER2-\}},
 \code{TN -> \{TN, nonTN\}}). Ambiguous values (e.g., \code{HER2 == "2+"})
 are left unchanged and emit a warning.

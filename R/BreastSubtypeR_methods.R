@@ -29,15 +29,18 @@ NULL
 #' **BreastSubtypeR** is an R/Bioconductor package that unifies multiple
 #' published intrinsic subtyping (IS) methods for breast cancer into a single,
 #' reproducible framework. It supports both nearest-centroid (NC-based) and
-#' single-sample predictor (SSP-based) classifiers and introduces an
-#' assumption-aware **AUTO mode** that dynamically selects methods compatible
-#' with the input cohort.
+#' single-sample predictor (SSP-based) classifiers. **AUTO mode** selects
+#' methods using implemented receptor-annotation and subgroup-size rules
+#' and returns per-method calls without a consensus prediction.
 #'
 #' By standardizing input handling, applying method-specific normalization,
-#' and providing optimised probe-to-gene mapping, BreastSubtypeR reduces
-#' inconsistencies across platforms and improves reproducibility in translational
-#' research. A companion Shiny app (**iBreastSubtypeR**) offers an intuitive GUI
-#' for non-programmers while preserving data privacy.
+#' and providing probe-to-gene mapping, BreastSubtypeR offers a common
+#' workflow for comparing published classifiers. A companion Shiny app
+#' (**iBreastSubtypeR**) runs in the user's local R session.
+#' Outputs are for research use and do not replace validated clinical
+#' diagnostics. AUTO selection does not establish complete input adequacy
+#' or clinical validity. [InputCoverage()] provides descriptive reporting
+#' of processed inputs without changing method eligibility.
 #'
 #' ## Workflow
 #' 1. **Data Input**: Supply a gene expression dataset as a `SummarizedExperiment`.
@@ -48,24 +51,31 @@ NULL
 #' 3. **Subtyping**: Apply multiple classifiers simultaneously using
 #'    \code{\link{BS_Multi}}, or enable **AUTO mode** for
 #'    cohort-aware method selection.
-#' 4. **visualization**: Summarise and interpret subtyping results with
+#' 4. **Visualization**: Summarize and interpret subtyping results with
 #'    \code{\link{Vis_Multi}}.
 #'
 #'
 #' ## Key Features
-#' - **Multi-method framework**: Ten published NC- and SSP-based classifiers,
-#'   harmonised under one interface.
-#' - **AUTO mode**: Evaluates cohort composition (e.g., ER/HER2 prevalence,
-#'   subtype purity, subgroup sizes) and disables classifiers with violated
-#'   assumptions; improves accuracy, Cohen’s kappa, and IHC concordance.
+#' - **Multi-method framework**: Ten published NC-based and SSP-based
+#'   method IDs under one interface.
+#' - **AUTO mode**: Uses implemented cohort rules based on receptor
+#'   annotations and subgroup sizes; returns separate method calls.
 #' - **standardized normalization**: Upper-quartile log2-CPM for NC-based
 #'   methods; FPKM for SSP-based methods.
-#' - **Optimised gene mapping**: Entrez ID-based mapping with conflict resolution.
+#' - **Gene mapping**: Entrez ID-based mapping with conflict resolution.
 #' - **Dual accessibility**: A Bioconductor-compliant R API and a local Shiny app
 #'   (iBreastSubtypeR).
 #'
 #' @seealso \code{\link{Mapping}}, \code{\link{BS_Multi}}, \code{\link{Vis_Multi}}
 #'
+#' @author
+#' \strong{Maintainer}: Emmanouil G. Sifakis \email{emmanouil.sifakis@ki.se} (\href{https://orcid.org/0000-0001-9919-4471}{ORCID})
+#'
+#' Authors:
+#' \itemize{
+#'   \item Qiao Yang \email{yq.kiuo@gmail.com} (\href{https://orcid.org/0000-0002-4098-3246}{ORCID})
+#'   \item Emmanouil G. Sifakis \email{emmanouil.sifakis@ki.se} (\href{https://orcid.org/0000-0001-9919-4471}{ORCID})
+#' }
 #'
 "_PACKAGE"
 
@@ -170,11 +180,15 @@ NULL
 #' In the R API, an `NA` value in `NODE` makes only this additional group
 #' missing. An `NA` value in `TSIZE` makes all clinical ROR scores and groups
 #' missing; ROR-S and ROR-P remain available. These are missing values within
-#' required columns, not permission to omit the columns. Exact-cutoff behavior
-#' is tracked separately in
-#' \href{https://github.com/JohanHartmanGroupBioteam/BreastSubtypeR/issues/154}{issue #154}.
+#' required columns, not permission to omit the columns. The additional
+#' subtype-specific ROR-PC group uses inclusive upper boundaries: NODE = 0
+#' has low <= 40, intermediate > 40 and <= 60, high > 60; NODE = 1--3 has
+#' low <= 15, intermediate > 15 and <= 40, high > 40. Scores are not rounded
+#' before grouping. This resolves
+#' \href{https://github.com/JohanHartmanGroupBioteam/BreastSubtypeR/issues/154}{issue #154};
+#' the original Parker risk groups are unchanged.
 #'
-#' **Phenodata normalization.** #' If receptor fields are present, they are coerced to canonical encodings
+#' **Phenodata normalization.** If receptor fields are present, they are coerced to canonical encodings
 #' (\code{ER -> \{ER+, ER-\}}, \code{HER2 -> \{HER2+, HER2-\}},
 #' \code{TN -> \{TN, nonTN\}}). Ambiguous values (e.g., \code{HER2 == "2+"})
 #' are left unchanged and emit a warning.
@@ -308,9 +322,17 @@ Mapping <- function(se_obj,
 #' @return A list containing PAM50 intrinsic subtype calls using the Parker
 #'   classifier and selected calibration strategy.
 #'
+#' @details
+#' The `Confidence` column is `round(1 - p, 2)`, where `p` is the Spearman
+#' correlation-test p-value for the processed sample and its assigned centroid
+#' over matched, complete gene pairs. It is `NA` when a valid test cannot be
+#' computed, including insufficient or constant values. This is a test-based
+#' summary, not a calibrated subtype probability or clinical reliability.
+#' It differs from [InputCoverage()], multi-method entropy and SSP model
+#' probabilities. No score or classifier is changed by this interpretation.
 #'
 #' @references
-#' - Parker JS, Mullins M, Cheung MCU, Leung S, Voduc D, et al.
+#' - Parker JS, Mullins M, Cheang MCU, Leung S, Voduc D, et al.
 #' *Supervised risk predictor of breast cancer based on intrinsic subtypes*.
 #' Journal of Clinical Oncology. 2009;27(8).
 #' https://doi.org/10.1200/JCO.2008.18.1370
@@ -743,9 +765,10 @@ BS_cIHC.itr <- function(
 #'     (`predictions`, `distances`, `centroids`, ...).
 #'
 #' @references
-#' Raj-Kumar PK, Liu J, Hooke JA, Kovatich AJ, Kvecher L, Shriver CD, et al.
-#' *PCA-PAM50 improves consistency between breast cancer intrinsic and clinical subtyping, reclassifying a subset of luminal A tumors as luminal B.*
-#' Scientific Reports. 2019;9(1):1–12.
+#' Raj-Kumar PK, Liu J, Hooke JA, Kovatich AJ, Kvecher L, Shriver CD, Hu H.
+#' *PCA-PAM50 improves consistency between breast cancer intrinsic and clinical
+#' subtyping reclassifying a subset of luminal A tumors as luminal B.*
+#' Scientific Reports. 2019;9:7956.
 #' https://doi.org/10.1038/s41598-019-44339-4
 #'
 #' @examples
@@ -1048,6 +1071,15 @@ BS_ssBC <- function(
 #'   \item \code{EntrezID.used}: Character vector of Entrez IDs used by AIMS.
 #' }
 #'
+#' @details
+#' The bundled `k = 20` names the fitted-model setting and output column;
+#' its `all.pairs` vector and fitted naive Bayes tables contain 100 rule
+#' predictors. `k` is not the total rule denominator. [InputCoverage()] reports
+#' represented genes and rule evaluability without modifying this model.
+#' The posterior probabilities come from the fitted model and are distinct
+#' from input coverage, multi-method entropy and Parker `Confidence`.
+#' They are not externally calibrated measures of clinical reliability.
+#'
 #' @references
 #' Paquet ER, Hallett MT.
 #' *Absolute assignment of breast cancer intrinsic molecular subtype.*
@@ -1142,10 +1174,16 @@ BS_AIMS <- function(se_obj) {
 #'   \item \code{EntrezID.used}: Character vector of EntrezGene IDs used for rule evaluation.
 #' }
 #'
+#' @details
+#' Posterior probabilities are conditional on the fitted naive Bayes model
+#' and its native handling of the available rule inputs. They differ from
+#' [InputCoverage()], multi-method entropy and Parker `Confidence`; they do
+#' not establish externally validated predictive or clinical reliability.
+#'
 #' @references
-#' Staaf J, Häkkinen J, Hegardt C, Saal LH, Kimbung S, Hedenfalk I, et al.
+#' Staaf J, Hakkinen J, Hegardt C, Saal LH, Kimbung S, Hedenfalk I, et al.
 #' *RNA sequencing-based single sample predictors of molecular subtype and risk of recurrence for clinical assessment of early-stage breast cancer.*
-#' NPJ Breast Cancer. 2022;8(1):27.
+#' npj Breast Cancer. 2022;8:94.
 #' https://doi.org/10.1038/s41523-022-00465-3
 #'
 #' @examples
@@ -1190,13 +1228,13 @@ BS_sspbc <- function(se_obj, ssp.name = "ssp.pam50") {
 #'
 #' @name BS_Multi
 #' @description
-#' Executes multiple intrinsic molecular subtyping methods in parallel.
+#' Executes multiple intrinsic molecular subtyping methods in one call.
 #' Users can either specify a set of classifiers directly, or enable the
-#' **AUTO mode**, which dynamically selects methods based on cohort composition
-#' (e.g., ER/HER2 distribution, subtype purity, subgroup size).
-#' AUTO reduces misclassification in skewed or subtype-specific cohorts by
-#' disabling methods whose assumptions are violated, but does not perform
-#' consensus voting—subtypes are still returned per method.
+#' **AUTO mode**, which selects methods using implemented receptor-annotation
+#' and subgroup-size rules. AUTO returns per-method calls without a consensus
+#' prediction. Selection does not establish complete input adequacy or clinical
+#' validity. [InputCoverage()] reports processed-input coverage separately
+#' and does not change eligibility, calibration or predictions.
 #'
 #' @param data_input The output from the [`Mapping()`] function, containing
 #'   processed gene expression data prepared for subtyping.
@@ -1214,7 +1252,7 @@ BS_sspbc <- function(se_obj, ssp.name = "ssp.pam50") {
 #'     et al., 2020, 2024); see [BS_ssBC()] for quantile provenance.
 #'   - `"AIMS"`: Absolute Intrinsic Molecular Subtyping (Paquet & Hallett, 2015).
 #'   - `"sspbc"`: SSPBC, a large-cohort SSP trained on SCAN-B (Staaf et al., 2022).
-#'   - `"AUTO"`: Cohort-aware selection of compatible methods (must be the only entry).
+#'   - `"AUTO"`: Selection using implemented cohort rules (must be the only entry).
 #'
 #'   **Notes:**
 #'   - If `"AUTO"` is selected, it must be the sole value in `methods`.
@@ -1279,7 +1317,7 @@ BS_sspbc <- function(se_obj, ssp.name = "ssp.pam50") {
 #' *BreastSubtypeR: A Unified R/Bioconductor Package for Intrinsic Molecular Subtyping in Breast Cancer Research.*
 #' NAR Genomics and Bioinformatics. 2025. https://doi.org/10.1093/nargab/lqaf131. Selected as Editor’s Choice.
 #'
-#' Parker JS, Mullins M, Cheung MCU, Leung S, Voduc D, et al.
+#' Parker JS, Mullins M, Cheang MCU, Leung S, Voduc D, et al.
 #' *Supervised risk predictor of breast cancer based on intrinsic subtypes.*
 #' J Clin Oncol. 2009;27(8):1160-1167. https://doi.org/10.1200/JCO.2008.18.1370
 #'
@@ -1315,9 +1353,9 @@ BS_sspbc <- function(se_obj, ssp.name = "ssp.pam50") {
 #' *Absolute assignment of breast cancer intrinsic molecular subtype.*
 #' J Natl Cancer Inst. 2015;107(1):dju357. https://doi.org/10.1093/jnci/dju357
 #'
-#' Staaf J, Häkkinen J, Hegardt C, Saal LH, Kimbung S, Hedenfalk I, et al.
+#' Staaf J, Hakkinen J, Hegardt C, Saal LH, Kimbung S, Hedenfalk I, et al.
 #' *RNA sequencing-based single sample predictors of molecular subtype and risk of recurrence for clinical assessment of early-stage breast cancer.*
-#' NPJ Breast Cancer. 2022;8(1):27. https://doi.org/10.1038/s41523-022-00465-3
+#' npj Breast Cancer. 2022;8:94. https://doi.org/10.1038/s41523-022-00465-3
 #'
 #' @examples
 #' ## Example: run multiple methods

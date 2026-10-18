@@ -82,6 +82,15 @@ Parker et al. (2009), along with supported calibration strategies and
 variations. This function assigns intrinsic breast cancer subtypes
 (Luminal A, Luminal B, HER2-enriched, Basal-like, and optionally Normal-like).
 }
+\details{
+The \code{Confidence} column is \code{round(1 - p, 2)}, where \code{p} is the Spearman
+correlation-test p-value for the processed sample and its assigned centroid
+over matched, complete gene pairs. It is \code{NA} when a valid test cannot be
+computed, including insufficient or constant values. This is a test-based
+summary, not a calibrated subtype probability or clinical reliability.
+It differs from \code{\link[=InputCoverage]{InputCoverage()}}, multi-method entropy and SSP model
+probabilities. No score or classifier is changed by this interpretation.
+}
 \examples{
 data("OSLO2EMIT0obj")
 res <- BS_parker(
@@ -95,7 +104,7 @@ res <- BS_parker(
 }
 \references{
 \itemize{
-\item Parker JS, Mullins M, Cheung MCU, Leung S, Voduc D, et al.
+\item Parker JS, Mullins M, Cheang MCU, Leung S, Voduc D, et al.
 \emph{Supervised risk predictor of breast cancer based on intrinsic subtypes}.
 Journal of Clinical Oncology. 2009;27(8).
 https://doi.org/10.1200/JCO.2008.18.1370

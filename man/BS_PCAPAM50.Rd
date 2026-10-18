@@ -83,8 +83,9 @@ res <- BS_PCAPAM50(
 
 }
 \references{
-Raj-Kumar PK, Liu J, Hooke JA, Kovatich AJ, Kvecher L, Shriver CD, et al.
-\emph{PCA-PAM50 improves consistency between breast cancer intrinsic and clinical subtyping, reclassifying a subset of luminal A tumors as luminal B.}
-Scientific Reports. 2019;9(1):1–12.
+Raj-Kumar PK, Liu J, Hooke JA, Kovatich AJ, Kvecher L, Shriver CD, Hu H.
+\emph{PCA-PAM50 improves consistency between breast cancer intrinsic and clinical
+subtyping reclassifying a subset of luminal A tumors as luminal B.}
+Scientific Reports. 2019;9:7956.
 https://doi.org/10.1038/s41598-019-44339-4
 }

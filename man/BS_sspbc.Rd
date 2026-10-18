@@ -46,6 +46,12 @@ population-based SCAN-B RNA-seq cohort. SSPBC provides robust
 single-sample predictions, independent of cohort composition, and supports
 multiple model variants for different applications.
 }
+\details{
+Posterior probabilities are conditional on the fitted naive Bayes model
+and its native handling of the available rule inputs. They differ from
+\code{\link[=InputCoverage]{InputCoverage()}}, multi-method entropy and Parker \code{Confidence}; they do
+not establish externally validated predictive or clinical reliability.
+}
 \examples{
 ## Example using SSPBC with the PAM50 model
 data("OSLO2EMIT0obj")
@@ -56,8 +62,8 @@ res <- BS_sspbc(
 
 }
 \references{
-Staaf J, Häkkinen J, Hegardt C, Saal LH, Kimbung S, Hedenfalk I, et al.
+Staaf J, Hakkinen J, Hegardt C, Saal LH, Kimbung S, Hedenfalk I, et al.
 \emph{RNA sequencing-based single sample predictors of molecular subtype and risk of recurrence for clinical assessment of early-stage breast cancer.}
-NPJ Breast Cancer. 2022;8(1):27.
+npj Breast Cancer. 2022;8:94.
 https://doi.org/10.1038/s41523-022-00465-3
 }

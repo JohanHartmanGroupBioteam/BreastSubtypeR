@@ -50,7 +50,7 @@ library(BreastSubtypeR)
 data("BreastSubtypeRobj")
 }
 \references{
-Parker JS, Mullins M, Cheung MCU, Leung S, Voduc D, et al.
+Parker JS, Mullins M, Cheang MCU, Leung S, Voduc D, et al.
 Supervised risk predictor of breast cancer based on intrinsic subtypes.
 \emph{J Clin Oncol}. 2009;27(8):1160–1167. https://doi.org/10.1200/JCO.2008.18.1370
 

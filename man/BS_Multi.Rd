@@ -30,7 +30,7 @@ Available options include:
 et al., 2020, 2024); see \code{\link[=BS_ssBC]{BS_ssBC()}} for quantile provenance.
 \item \code{"AIMS"}: Absolute Intrinsic Molecular Subtyping (Paquet & Hallett, 2015).
 \item \code{"sspbc"}: SSPBC, a large-cohort SSP trained on SCAN-B (Staaf et al., 2022).
-\item \code{"AUTO"}: Cohort-aware selection of compatible methods (must be the only entry).
+\item \code{"AUTO"}: Selection using implemented cohort rules (must be the only entry).
 }
 
 \strong{Notes:}
@@ -80,13 +80,13 @@ When \code{Subtype = TRUE}, \code{res_subtypes.Subtype} has the same orientation
 and its entropy is calculated from the available four-class calls.
 }
 \description{
-Executes multiple intrinsic molecular subtyping methods in parallel.
+Executes multiple intrinsic molecular subtyping methods in one call.
 Users can either specify a set of classifiers directly, or enable the
-\strong{AUTO mode}, which dynamically selects methods based on cohort composition
-(e.g., ER/HER2 distribution, subtype purity, subgroup size).
-AUTO reduces misclassification in skewed or subtype-specific cohorts by
-disabling methods whose assumptions are violated, but does not perform
-consensus voting—subtypes are still returned per method.
+\strong{AUTO mode}, which selects methods using implemented receptor-annotation
+and subgroup-size rules. AUTO returns per-method calls without a consensus
+prediction. Selection does not establish complete input adequacy or clinical
+validity. \code{\link[=InputCoverage]{InputCoverage()}} reports processed-input coverage separately
+and does not change eligibility, calibration or predictions.
 }
 \details{
 With the default AUTO routing thresholds, an eligible mixed cohort is
@@ -122,7 +122,7 @@ Yang Q, Hartman J, Sifakis EG.
 \emph{BreastSubtypeR: A Unified R/Bioconductor Package for Intrinsic Molecular Subtyping in Breast Cancer Research.}
 NAR Genomics and Bioinformatics. 2025. https://doi.org/10.1093/nargab/lqaf131. Selected as Editor’s Choice.
 
-Parker JS, Mullins M, Cheung MCU, Leung S, Voduc D, et al.
+Parker JS, Mullins M, Cheang MCU, Leung S, Voduc D, et al.
 \emph{Supervised risk predictor of breast cancer based on intrinsic subtypes.}
 J Clin Oncol. 2009;27(8):1160-1167. https://doi.org/10.1200/JCO.2008.18.1370
 
@@ -158,7 +158,7 @@ Paquet ER, Hallett MT.
 \emph{Absolute assignment of breast cancer intrinsic molecular subtype.}
 J Natl Cancer Inst. 2015;107(1):dju357. https://doi.org/10.1093/jnci/dju357
 
-Staaf J, Häkkinen J, Hegardt C, Saal LH, Kimbung S, Hedenfalk I, et al.
+Staaf J, Hakkinen J, Hegardt C, Saal LH, Kimbung S, Hedenfalk I, et al.
 \emph{RNA sequencing-based single sample predictors of molecular subtype and risk of recurrence for clinical assessment of early-stage breast cancer.}
-NPJ Breast Cancer. 2022;8(1):27. https://doi.org/10.1038/s41523-022-00465-3
+npj Breast Cancer. 2022;8:94. https://doi.org/10.1038/s41523-022-00465-3
 }

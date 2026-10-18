@@ -26,9 +26,9 @@ library(BreastSubtypeR)
 data("sspbc.models")
 }
 \references{
-Staaf J, Häkkinen J, Hegardt C, Saal LH, Kimbung S, Hedenfalk I, et al.
+Staaf J, Hakkinen J, Hegardt C, Saal LH, Kimbung S, Hedenfalk I, et al.
 RNA sequencing-based single sample predictors of molecular subtype and risk of
 recurrence for clinical assessment of early-stage breast cancer.
-\emph{NPJ Breast Cancer}. 2022;8(1):27. https://doi.org/10.1038/s41523-022-00465-3
+\emph{npj Breast Cancer}. 2022;8:94. https://doi.org/10.1038/s41523-022-00465-3
 }
 \keyword{datasets}
