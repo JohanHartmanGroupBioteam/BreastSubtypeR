@@ -606,3 +606,256 @@ test_that("a second live session cannot clear or inherit the first prediction", 
     }
     check_sessions()
 })
+
+test_that("the presentation preserves controls, defaults and conditional settings", {
+    env <- shiny_app_env()
+    app_dir <- system.file("ShinyBreastSubtypeR", package = "BreastSubtypeR")
+    withr::local_dir(app_dir)
+    sys.source(file.path(app_dir, "ui.R"), env)
+    html <- as.character(env$ui)
+    for (id in c("load_example_step1", "about", "GEX", "is_raw_counts", "clinic",
+                 "anno", "map", "BSmethod", "k_subtypes", "hasClinical", "calibration",
+                 "external", "medians", "internal", "iteration", "ratio", "s", "run",
+                 "auto_chip", "gex_help", "clin_help", "anno_help", "input_coverage",
+                 "auto_preflight", "method_help", "calib_help", "analysis_error",
+                 "plotSection", "export_selector", "download_control")) {
+        expect_equal(length(gregexpr(paste0('id="', id, '"'), html, fixed = TRUE)[[1L]]),
+                     1L, info = id)
+        expect_match(html, paste0('id="', id, '"'), fixed = TRUE)
+    }
+    select_contract <- list(
+        BSmethod = c("AUTO Mode", "PAM50", "cIHC", "cIHC.itr", "PCAPAM50", "ssBC", "AIMS", "sspbc"),
+        calibration = c("None", "External", "Internal"),
+        external = c("Given.mdns", "nCounter", "RNAseq.Freeze.20120907", "totalRNA.FFPE.20151111",
+                     "RNAseq.V2", "RNAseq.V1", "GC.4x44Kcustom", "Agilent_244K",
+                     "commercial_1x44k_postMeanCollapse_WashU",
+                     "commercial_4x44k_postMeanCollapse_WashU_v2",
+                     "htp1.5_WU_update", "arrayTrain_postMeanCollapse"),
+        internal = c("medianCtr", "meanCtr", "qCtr"), s = c("ER", "ER.v2", "TN", "TN.v2"))
+    defaults <- c(BSmethod = "AUTO Mode", calibration = "Internal", external = "Given.mdns",
+                  internal = "medianCtr", s = "ER.v2")
+    for (id in names(select_contract)) {
+        block <- regmatches(html, regexpr(paste0('(?s)<select[^>]*id="', id,
+                                                 '"[^>]*>.*?</select>'), html, perl = TRUE))
+        options <- regmatches(block, gregexpr("<option[^>]*>", block))[[1L]]
+        expect_identical(sub('.*value="([^"]*)".*', "\\1", options), select_contract[[id]])
+        expect_match(options[grepl(" selected", options, fixed = TRUE)],
+                     paste0('value="', defaults[[id]], '"'), fixed = TRUE)
+    }
+    for (id in c("is_raw_counts", "k_subtypes")) {
+        controls <- regmatches(html, gregexpr(paste0('<input[^>]*name="', id, '"[^>]*>'), html))[[1L]]
+        expect_identical(sub('.*value="([^"]*)".*', "\\1", controls),
+                         if (id == "is_raw_counts") c("norm", "raw") else c("5", "4"))
+        expect_match(controls[grepl("checked=", controls, fixed = TRUE)],
+                     if (id == "is_raw_counts") 'value="norm"' else 'value="5"', fixed = TRUE)
+    }
+    clinical <- regmatches(html, regexpr('<input[^>]*id="hasClinical"[^>]*>', html))
+    expect_false(grepl("checked", clinical, fixed = TRUE))
+    ratio <- regmatches(html, regexpr('<input[^>]*id="ratio"[^>]*>', html))
+    expect_match(ratio, 'value="0.84375"', fixed = TRUE)
+    expect_match(ratio, 'step="any"', fixed = TRUE)
+    for (id in c("GEX", "clinic", "anno", "medians")) {
+        upload <- regmatches(html, regexpr(paste0('<input[^>]*id="', id, '"[^>]*>'), html))
+        expect_match(upload, 'type="file"', fixed = TRUE)
+        expect_match(upload, '.csv,.txt"', fixed = TRUE)
+    }
+    conditions <- regmatches(html, gregexpr('data-display-if="[^"]*"', html))[[1L]]
+    conditions <- gsub("&#39;", "'", sub('data-display-if="([^"]*)"', "\\1", conditions), fixed = TRUE)
+    expect_setequal(conditions, c(
+        "input.BSmethod == 'PAM50' || input.BSmethod == 'cIHC' || input.BSmethod == 'cIHC.itr' || input.BSmethod == 'PCAPAM50' || input.BSmethod == 'ssBC'",
+        "input.BSmethod == 'PAM50'", "input.calibration == 'External'",
+        "input.external == 'Given.mdns'", "input.calibration == 'Internal'",
+        "input.BSmethod == 'cIHC.itr'", "input.BSmethod == 'ssBC'"))
+})
+
+test_that("the interface identifies its workflow and provides accessible scientific help", {
+    env <- shiny_app_env()
+    app_dir <- system.file("ShinyBreastSubtypeR", package = "BreastSubtypeR")
+    withr::local_dir(app_dir)
+    sys.source(file.path(app_dir, "ui.R"), env)
+    html <- as.character(env$ui)
+    for (text in c("iBreastSubtypeR", "For research use", "About &amp; Citation",
+                   "The application runs locally in your R session.", "1. Data and preprocessing",
+                   "2. Analysis settings", "Results and downloads", "tab-separated text (TSV)",
+                   "AUTO - select methods for this cohort", "Required: PatientID.",
+                   "Required: probe and ENTREZID.", "gene Length in base pairs.")) {
+        expect_match(html, text, fixed = TRUE)
+    }
+    expect_match(html, 'alt="BreastSubtypeR logo"', fixed = TRUE)
+    expect_match(html, 'aria-label="Workflow"', fixed = TRUE)
+    for (help in c("Expression format and processing", "Clinical fields and research ROR",
+                   "Annotation format", "Method guide")) {
+        expect_match(html, paste0("<summary>", help, "</summary>"), fixed = TRUE)
+    }
+    expect_false(grepl("reduces bias", html, fixed = TRUE))
+    expect_false(grepl("Bioconductor-ready", html, fixed = TRUE))
+    expect_match(html, paste("selects methods according to implemented receptor-annotation",
+                            "and subgroup-size rules."), fixed = TRUE)
+    expect_match(html, paste("It does not establish complete model-input adequacy",
+                            "or clinical validity."), fixed = TRUE)
+    expect_false(grepl("cohort composition and method requirements", html, fixed = TRUE))
+    expect_false(grepl("Editor's Choice", html, fixed = TRUE))
+})
+
+test_that("the citation modal retains the publication and links its distinction", {
+    env <- shiny_app_env()
+    modal_html <- NULL
+    env$showModal <- function(ui, ...) modal_html <<- as.character(ui)
+    shiny::testServer(env$server, {
+        session$setInputs(BSmethod = "AUTO Mode", k_subtypes = "5", about = 1)
+    })
+    expect_match(modal_html, "Please cite:", fixed = TRUE)
+    expect_match(modal_html, "Yang Q., Hartman J., Sifakis E.G.", fixed = TRUE)
+    expect_match(modal_html, ">Editor's Choice (2025)</a> - ", fixed = TRUE)
+    expect_match(modal_html, "https://academic.oup.com/nargab/pages/editors-choice-articles",
+                 fixed = TRUE)
+    expect_match(modal_html, "https://doi.org/10.1093/nargab/lqaf131", fixed = TRUE)
+    expect_match(modal_html, ">NAR Genomics and Bioinformatics</a>.</p>", fixed = TRUE)
+})
+
+test_that("AUTO awaits current preprocessing without a false preflight error", {
+    env <- shiny_app_env()
+    shiny::testServer(env$server, {
+        session$setInputs(BSmethod = "AUTO Mode", k_subtypes = "5",
+                          is_raw_counts = "norm")
+        expect_false(mapping_current())
+        expect_false(auto_requirements()$ready)
+        expect_match(output$auto_chip$html, 'class="chip auto pending"', fixed = TRUE)
+        expect_match(output$auto_chip$html, "AUTO: awaiting preprocessing", fixed = TRUE)
+        expect_match(output$auto_chip$html, "Run Step 1", fixed = TRUE)
+        expect_false(grepl("blocked|alert-danger|auto ready", output$auto_chip$html))
+        expect_null(output$auto_preflight)
+        expect_null(output$method_help)
+        expect_null(output$analysis_error)
+
+        shiny_defaults(session, "AUTO Mode")
+        expect_true(mapping_current())
+        expect_true(auto_requirements()$ready)
+        expect_match(output$auto_chip$html, 'class="chip auto ready"', fixed = TRUE)
+        expect_match(output$auto_preflight$html, "AUTO preflight: ready", fixed = TRUE)
+        expect_match(output$auto_preflight$html, "ER+: 84", fixed = TRUE)
+        expect_match(output$auto_preflight$html, "ER-: 18", fixed = TRUE)
+        expect_match(output$auto_preflight$html, "HER2+: 8", fixed = TRUE)
+        expect_match(output$auto_preflight$html, "HER2-: 94", fixed = TRUE)
+        expect_null(output$method_help)
+
+        session$setInputs(clinic = shiny_upload("OSLO2EMIT0_clinical.txt"))
+        expect_false(mapping_current())
+        expect_match(output$auto_chip$html, "AUTO: awaiting preprocessing", fixed = TRUE)
+        expect_false(grepl("ER\\+|HER2|auto ready", output$auto_chip$html))
+        expect_null(output$auto_preflight)
+        expect_null(current_input_coverage())
+        expect_null(current_prediction())
+        session$setInputs(load_example_step1 = 2)
+        session$setInputs(map = 2)
+        expect_true(mapping_current())
+        expect_match(output$auto_preflight$html, "AUTO preflight: ready", fixed = TRUE)
+    })
+})
+
+test_that("mapped AUTO annotation failures retain blocking and recover after replacement", {
+    env <- shiny_app_env()
+    clinical <- shiny_upload("OSLO2EMIT0_clinical.txt")
+    ph <- read.delim(clinical$datapath, check.names = FALSE)
+    ph$HER2 <- NULL
+    path <- tempfile(fileext = ".txt")
+    withr::defer(unlink(path))
+    write.table(ph, path, sep = "\t", quote = FALSE, row.names = FALSE)
+    incomplete <- clinical
+    incomplete$name <- "clinical-without-HER2.txt"
+    incomplete$datapath <- path
+    incomplete$size <- file.info(path)$size
+    shiny::testServer(env$server, {
+        shiny_defaults(session, "AUTO Mode")
+        session$setInputs(GEX = shiny_upload("OSLO2EMIT0_GEX_log2.FPKM.txt"),
+                          clinic = incomplete, anno = shiny_upload("OSLO2EMIT0_anno.txt"))
+        expect_match(output$auto_chip$html, "AUTO: awaiting preprocessing", fixed = TRUE)
+        expect_null(output$auto_preflight)
+        session$setInputs(map = 2)
+        expect_true(mapping_current())
+        expect_null(reactive_files$error)
+        expect_false(auto_requirements()$ready)
+        expect_match(output$auto_chip$html, 'class="chip auto blocked"', fixed = TRUE)
+        expect_match(output$auto_preflight$html, "AUTO preflight: action needed", fixed = TRUE)
+        expect_match(output$auto_preflight$html, "missing: HER2", fixed = TRUE)
+        session$setInputs(run = 1)
+        expect_match(reactive_files$error, "AUTO needs ER and HER2", fixed = TRUE)
+        expect_null(current_prediction())
+
+        session$setInputs(clinic = clinical)
+        expect_false(mapping_current())
+        expect_match(output$auto_chip$html, "AUTO: awaiting preprocessing", fixed = TRUE)
+        expect_null(output$auto_preflight)
+        session$setInputs(map = 3)
+        expect_true(mapping_current())
+        expect_true(auto_requirements()$ready)
+        expect_null(reactive_files$error)
+        expect_match(output$auto_preflight$html, "AUTO preflight: ready", fixed = TRUE)
+    })
+})
+
+test_that("pending AUTO presentation preserves mapping errors and recovery", {
+    env <- shiny_app_env()
+    shiny::testServer(env$server, {
+        shiny_defaults(session, "AUTO Mode")
+        session$setInputs(GEX = shiny_upload("OSLO2EMIT0_GEX_log2.FPKM.txt"),
+                          clinic = shiny_upload("OSLO2EMIT0_clinical.txt"),
+                          anno = shiny_upload("OSLO2EMIT0_anno.txt"))
+        session$setInputs(is_raw_counts = "raw")
+        expect_null(output$auto_preflight)
+        session$setInputs(map = 2)
+        expect_false(mapping_current())
+        expect_match(reactive_files$error, "annotation lacks", fixed = TRUE)
+        expect_match(reactive_files$error, "Length", fixed = TRUE)
+        expect_match(output$analysis_error$html, "Analysis needs attention", fixed = TRUE)
+        expect_match(output$analysis_error$html, "annotation lacks", fixed = TRUE)
+        expect_match(output$auto_chip$html, "AUTO: awaiting preprocessing", fixed = TRUE)
+        expect_null(output$auto_preflight)
+        expect_null(current_prediction())
+        session$setInputs(is_raw_counts = "norm")
+        session$setInputs(map = 3)
+        expect_true(mapping_current())
+        expect_true(auto_requirements()$ready)
+        expect_null(reactive_files$error)
+        expect_null(output$analysis_error)
+        expect_match(output$auto_preflight$html, "AUTO preflight: ready", fixed = TRUE)
+    })
+})
+
+test_that("removing generic AUTO help preserves other classifier help", {
+    env <- shiny_app_env()
+    shiny::testServer(env$server, {
+        for (method in c("PAM50", "AIMS", "sspbc")) {
+            session$setInputs(BSmethod = method, k_subtypes = "5")
+            expect_match(output$method_help$html,
+                         if (method == "sspbc") "SSPBC" else method, fixed = TRUE)
+            expect_null(output$auto_chip)
+            expect_null(output$auto_preflight)
+        }
+        session$setInputs(BSmethod = "AUTO Mode")
+        expect_null(output$method_help)
+    })
+})
+
+test_that("scroll hints accompany wide figures only and are narrow-screen scoped", {
+    env <- shiny_app_env()
+    app_dir <- system.file("ShinyBreastSubtypeR", package = "BreastSubtypeR")
+    withr::local_dir(app_dir)
+    sys.source(file.path(app_dir, "ui.R"), env)
+    html <- as.character(env$ui)
+    css <- htmltools::renderTags(env$ui)$head
+    expect_match(css, ".plot-scroll-hint { display: none;", fixed = TRUE)
+    expect_match(css, "@media (max-width: 575px) {\n      .plot-scroll-hint { display: block; }",
+                 fixed = TRUE)
+    expect_match(css, "#multi_plot, #heat2 { min-width: 760px; }", fixed = TRUE)
+    expect_false(grepl("Swipe horizontally", html, fixed = TRUE))
+    shiny::testServer(env$server, {
+        shiny_defaults(session)
+        expect_null(output$plotSection)
+        session$setInputs(run = 1)
+        plot_html <- output$plotSection$html
+        expect_equal(length(gregexpr("Swipe horizontally", plot_html, fixed = TRUE)[[1L]]), 1L)
+        expect_match(plot_html, "Expression and subtype calls", fixed = TRUE)
+        expect_match(plot_html, "Swipe horizontally to view the full plot.", fixed = TRUE)
+    })
+})
