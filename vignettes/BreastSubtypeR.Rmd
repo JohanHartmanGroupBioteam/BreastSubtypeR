@@ -31,7 +31,9 @@ knitr::opts_chunk$set(
 
 # Installation
 
-Install the package from the Bioconductor release compatible with your R installation:
+Install from the Bioconductor release compatible with your R installation.
+Consult the [package page](https://bioconductor.org/packages/BreastSubtypeR/)
+for the requirements of your selected channel:
 
 ```{r installation, eval = FALSE}
 if (!require("BiocManager", quietly = TRUE)) install.packages("BiocManager")
@@ -46,8 +48,11 @@ and [devel package page](https://bioconductor.org/packages/devel/bioc/html/Breas
 for available versions and their R requirements. Use the R version compatible
 with your selected Bioconductor release or devel environment; the package's
 minimum R requirement does not replace that channel's requirements.
-After installing from any channel, check your installed version with
-`packageVersion("BreastSubtypeR")`.
+Matching version numbers do not guarantee matching source. After installing,
+record `packageVersion("BreastSubtypeR")`, the installation channel and source
+revision, and retain `sessionInfo()`.
+This vignette describes its own built package; use `browseVignettes()` for
+documentation matching an installed channel.
 
 Use a separate R library and the R version required by
 [Bioconductor devel](https://bioconductor.org/packages/devel/bioc/html/BreastSubtypeR.html)
@@ -58,7 +63,8 @@ BiocManager::install(version = "devel")
 BiocManager::install("BreastSubtypeR")
 ```
 
-Alternatively, install the development source from GitHub and inspect the
+Alternatively, use a separate library configured for the GitHub source's
+Bioconductor dependencies, install the development source, and inspect the
 installed package version:
 
 ```{r installation-github, eval = FALSE}
@@ -92,10 +98,10 @@ Breast cancer (BC) is a biologically heterogeneous disease with intrinsic molecu
 
 -   **Unified interface for published methods:** consolidates PAM50 variants, AIMS, ssBC/sspbc, and others under one consistent API.
 -   **Run multiple methods at once (`BS_Multi`):** execute several classifiers in a single call and compare results side by side.
--   **AUTO (cohort-aware selection):** checks ER/HER2 distribution, subtype purity, and subgroup sizes; disables incompatible classifiers.
+-   **AUTO (cohort-aware selection):** selects methods using implemented receptor-annotation and subgroup-size rules; returns per-method calls.
 -   **Method-specific pre-processing:** routes raw RNA-seq counts, or log2-normalized RNA-seq/microarray/nCounter expression with `RawCounts = FALSE`.
 -   **Robust mapping:** Entrez ID–based gene mapping with conflict resolution.
--   **Local Shiny app (`iBreastSubtypeR`):** point-and-click analysis; data stay on your machine.
+-   **Local Shiny app (`iBreastSubtypeR`):** point-and-click analysis in your local R session.
 -   **Reproducibility:** Bioconductor distribution, unit tests, vignettes, and `SummarizedExperiment` compatibility.
 
 ## Implemented approaches
@@ -124,6 +130,9 @@ associated with Fernandez-Martinez et al. (2024). Across the 50 PAM50 genes,
 `HER2pos_ERpos`; `TN.v2` uses `TNBC`. The original `ER` and `TN` quantiles
 remain separate. See `?BreastSubtypeRobj` for the pinned numerical reference.
 
+
+**For research use.** Package outputs are not clinical assay results and do
+not replace validated clinical diagnostics.
 
 # Quick start
 
@@ -164,6 +173,45 @@ data_input <- Mapping(
     -   and returning a packaged object ready for `BS_Multi` or single-method callers.
 -   See `?Mapping` for the full parameter list (e.g., `RawCounts`, `method`, `impute`, `verbose`) and [Methods (Sections 2.3–2.4) in the paper](https://doi.org/10.1093/nargab/lqaf131) for a complete description of the input/normalization pipeline.
 
+## Descriptive input coverage
+
+`InputCoverage()` reports the current processed inputs independently of which
+methods are selected or run. It uses the same calculation as the current
+GitHub Shiny coverage table. Current GitHub source contains `InputCoverage()`;
+older Bioconductor builds may not. Consult your selected channel's
+[package page](https://bioconductor.org/packages/BreastSubtypeR/) before running
+this additional example.
+
+```{r input-coverage, eval=TRUE}
+coverage <- InputCoverage(data_input)
+coverage
+```
+
+The four rows are **NC-based (PAM50)**, **AIMS**, **SSPBC (ssp.subtype)** and
+**SSPBC (ssp.pam50)**. Denominators are derived from the bundled references
+and fitted models: respectively 50, 151, 153 and 216 unique genes; rule
+counts are not applicable, 100, 84 and 120. All three NC rule columns are `NA`.
+
+Represented genes have matching identifiers even when their expression is
+zero or missing. An evaluable rule is a native gene-pair comparison with a
+nonmissing TRUE or FALSE result; a false rule is still evaluable. Missing
+genes and NA/NaN comparisons can make rules unavailable. Native zero, tie,
+infinity and duplicate-handling behavior is preserved. The minimum and
+maximum evaluable counts form a range across samples when they differ.
+
+These are **processed-input** diagnostics. `Mapping(impute = TRUE)` may have
+already imputed values, and coverage cannot reconstruct which measurements
+were originally observed. Coverage is not prediction reliability, does not
+impose thresholds or exclude methods, and does not assess calibration
+feasibility. NC coverage concerns the shared PAM50 subtype reference, not
+every gene or component used in ROR calculations. See `?InputCoverage`.
+
+The bundled AIMS setting `k = 20` identifies its fitted-model setting and
+output column. Its complete `all.pairs` vector and fitted naive Bayes tables
+contain 100 rule predictors involving 151 unique genes. Thus `k` is not the
+total rule denominator. SSPBC uses `k = 21` for its 84-rule four-class model
+and `k = 24` for its 120-rule five-class model. No model is altered by reporting.
+
 **2) Multi-method run (user-defined)**
 
 ```{r multi-method run, eval=TRUE}
@@ -182,7 +230,9 @@ head(res$res_subtypes, 5)
 
 **3) AUTO mode (cohort-aware selection) + visualize**
 
-AUTO evaluates cohort diagnostics (for example, ER/HER2 distribution, subtype purity, and subgroup sizes) and selects methods compatible with the cohort. It disables classifiers whose distributional assumptions would likely be violated.
+AUTO selects a set of methods using implemented receptor-annotation and
+subgroup-size rules. It returns per-method calls, not a consensus prediction.
+Selection does not establish complete input adequacy or clinical validity.
 
 ```{r auto mode and visualization, eval=TRUE}
 res_auto <- BS_Multi(
@@ -213,7 +263,7 @@ Vis_Multi(res_auto$res_subtypes)
 
 **Notes.** Thresholds are *selection gates* for method eligibility; they do not force a consensus call.
 
-**Provenance & future updates.** The ER+ (15) and ER− (18) cohort minimums are simulation-based defaults. ER/HER2 subgroup thresholds (approx. half of each ER total) are heuristic and may be updated as additional simulation studies are completed. For TNBC, we currently use the ER− minimum (18) as the cohort cutoff; TN-specific thresholds may likewise refined in future releases.
+**Provenance & future updates.** The ER+ (15) and ER- (18) cohort minimums are simulation-based defaults. ER/HER2 subgroup thresholds (approx. half of each ER total) are heuristic and may be updated as additional simulation studies are completed. For TNBC, we currently use the ER- minimum (18) as the cohort cutoff; TN-specific thresholds may likewise be refined in future releases.
 
 **4) Single-method run**
 
@@ -319,8 +369,12 @@ checks numeric type without enforcing nonnegative integer counts.
 In the R API, `NA` in `NODE` makes only this additional risk group missing.
 `NA` in `TSIZE` makes all clinical ROR scores and groups missing, while ROR-S
 and ROR-P remain available. These are missing values within required columns;
-the columns themselves must still be supplied. Exact-cutoff behavior is tracked
-separately in [issue #154](https://github.com/JohanHartmanGroupBioteam/BreastSubtypeR/issues/154).
+the columns themselves must still be supplied. The additional subtype-specific
+ROR-PC group now uses inclusive upper boundaries: for NODE = 0, scores <= 40
+are low, > 40 through 60 are intermediate, and > 60 are high; for 1--3 nodes,
+the corresponding boundaries are 15 and 40. Raw scores are not rounded before
+grouping. This resolves [issue #154](https://github.com/JohanHartmanGroupBioteam/BreastSubtypeR/issues/154)
+and leaves the original Parker risk groups unchanged.
 Method-specific return components are documented in their
 help pages. These are research-use outputs, not a clinical assay result.
 
@@ -345,13 +399,33 @@ help pages. These are research-use outputs, not a clinical assay result.
 ## When to use `AUTO`
 
 - Use `methods = "AUTO"` (i.e. `BS_Multi(methods = "AUTO", ...)`) for exploratory datasets or cohorts of unknown / skewed composition.
-- Use `AUTO` when you want the package to **select only classifiers compatible with the cohort** (it disables methods whose assumptions appear violated).
-- For validation against a single published method or a clinical assay (e.g., Prosigna®), 
-run the corresponding **single-method** implementation directly (e.g., `BS_parker()`).
+- AUTO applies its documented cohort-selection rules; it does not validate
+  model-wide gene/rule adequacy or clinical applicability.
+- To study a published method, run the corresponding single-method
+  implementation directly (for example, `BS_parker()`). Clinical validation
+  requires paired clinical-assay data; calling a function alone is insufficient.
 
 ## Interpretation
 
-- `AUTO` is designed to **avoid misapplication** of NC-based classifiers when cohort assumptions are violated; it **does not** produce a forced consensus label.
+These outputs answer different questions:
+
+| Output | Meaning in this implementation | Limitation |
+| --- | --- | --- |
+| Input coverage | Identifier representation and native rule evaluability in processed matrices | Does not establish reliability, calibration feasibility or measured-versus-imputed provenance |
+| Entropy | Raw Shannon entropy in bits, `-sum(p * log2(p))`, over available per-method calls | Measures disagreement, not predictive confidence or accuracy |
+| Parker `Confidence` | `round(1 - p, 2)`, where `p` is the Spearman correlation-test p-value between the processed sample and its assigned centroid over matched, complete gene pairs | A correlation-test summary, not a calibrated subtype probability |
+| SSP model probabilities | Fitted naive Bayes `predict(..., type = "raw")` values; `prob` is the assigned class probability and `all.probs` retains class probabilities | Conditional on the fitted model and native handling of available rule inputs; not clinical reliability |
+
+Missing calls are excluded from entropy. Zero means agreement among the
+contributing calls, including a single available call; `NA` means no calls
+contributed. Low entropy from a small contributing set is weak evidence of
+agreement across methods. Five- and four-class summaries use their own calls.
+
+Parker `Confidence` is missing when a valid test cannot be computed (for
+example, insufficient or constant matched values). It differs from centroid
+correlation itself and from AIMS/SSPBC posterior probabilities. None of these
+quantities substitutes for external predictive or clinical validation.
+AUTO continues to return separate method calls without consensus voting.
 
 # Shiny app
 
@@ -369,7 +443,9 @@ If needed, install UI dependencies and re-run:
 install.packages(c("shiny", "bslib"))
 ```
 
-The app runs locally; **no data leave your machine**.
+The launcher runs the Shiny application locally in your R session. Uploaded
+inputs are processed by that local application; remotely hosting Shiny is a
+separate deployment with different data-handling responsibilities.
 
 **What you can do**:\
 - Upload expression, clinical, and feature-annotation tables (clinical lives in `colData`).\
@@ -386,7 +462,12 @@ with `probe` and `ENTREZID`. The application aligns overlapping sample and
 feature identifiers. Choose normalized **log2** expression or raw RNA-seq
 counts; raw-count annotation must also contain gene lengths in `Length` (bp).
 Alternatively, load the bundled example below. Click **Preprocess & map**,
-select a method and its settings, then run subtyping.
+select a method and its settings, then run subtyping. In current GitHub main,
+the **Input coverage** table appears after successful mapping and describes
+the current processed inputs, including possible imputation. It reports all
+four input models independently of method selection. Replacing or invalidating
+mapped inputs hides the table; a coverage-reporting error is informative and
+does not change prediction state.
 
 Replacing any expression, clinical or annotation file, reloading the example,
 or changing the data type clears the mapped inputs, predictions, plots and
@@ -432,12 +513,13 @@ file.exists(anno)
 
 # Limitations
 
-BreastSubtypeR harmonises many published, signature-based classifiers but has known limitations:\
+BreastSubtypeR harmonizes many published, signature-based classifiers but has known limitations:\
 
 - It is not a clinical-grade replacement for assays like Prosigna; 
 clinical validation requires paired clinical assay data.\
 
-- AUTO selects compatible methods; it does not perform consensus voting by default.
+- AUTO selects methods using implemented cohort rules and returns per-method
+  calls without a consensus prediction.
 
 
 
@@ -462,7 +544,7 @@ clinical validation requires paired clinical assay data.\
 
 -  Curtis C, Shah SP, Chin S-F, Turashvili G, Rueda OM, Dunning MJ, *et al.* (2012). The genomic and transcriptomic architecture of 2,000 breast tumors reveals novel subgroups. *Nature*, 486:346–352. <https://doi.org/10.1038/nature10983>
 
-- Raj-Kumar PK, Liu J, Hooke JA, Kovatich AJ, Kvecher L, Shriver CD, Hu H. (2019). PCA-PAM50 improves subtype assignment in ER-positive breast cancer. *Sci Rep*, 9:14386. <https://doi.org/10.1038/s41598-019-44339-4>
+- Raj-Kumar PK, Liu J, Hooke JA, Kovatich AJ, Kvecher L, Shriver CD, Hu H. (2019). PCA-PAM50 improves consistency between breast cancer intrinsic and clinical subtyping reclassifying a subset of luminal A tumors as luminal B. *Sci Rep*, 9:7956. <https://doi.org/10.1038/s41598-019-44339-4>
 
 - Zhao X, Rødland EA, Tibshirani R, Plevritis S. (2015). Molecular subtyping for clinically defined breast cancer subgroups. *Breast Cancer Res*, 17:29. <https://doi.org/10.1186/s13058-015-0520-4>
 
@@ -470,9 +552,9 @@ clinical validation requires paired clinical assay data.\
 
 - Fernandez-Martinez A, Rediti M, Tang G, *et al.* (2024). Tumor Intrinsic Subtypes and Gene Expression Signatures in Early-Stage ERBB2/HER2-Positive Breast Cancer: A Pooled Analysis of CALGB 40601, NeoALTTO, and NSABP B-41 Trials. *JAMA Oncol*, 10(5):603-611. <https://doi.org/10.1001/jamaoncol.2023.7304>
 
-- Paquet ER, Hallett MT. (2015). Absolute assignment of breast cancer intrinsic molecular subtype. *J Natl Cancer Inst*, 107(1):357. <https://doi.org/10.1093/jnci/dju357>
+- Paquet ER, Hallett MT. (2015). Absolute assignment of breast cancer intrinsic molecular subtype. *J Natl Cancer Inst*, 107(1):dju357. <https://doi.org/10.1093/jnci/dju357>
 
-- Staaf J, Ringnér M, Vallon-Christersson J. (2022). Simple single-sample predictors for breast cancer subtype identification using gene expression data. *npj Breast Cancer*, 8:104. <https://doi.org/10.1038/s41523-022-00465-3>
+- Staaf J, Hakkinen J, Hegardt C, Saal LH, Kimbung S, Hedenfalk I, *et al.* (2022). RNA sequencing-based single sample predictors of molecular subtype and risk of recurrence for clinical assessment of early-stage breast cancer. *npj Breast Cancer*, 8:94. <https://doi.org/10.1038/s41523-022-00465-3>
 
 
 ## Session information
