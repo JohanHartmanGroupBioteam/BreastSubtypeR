@@ -344,6 +344,7 @@ test_that("bad ratios are visible recoverable errors and valid values above one 
         expect_identical(p$calls$PatientID, colnames(mapped$se_NC))
         expect_match(output$plotSection$html, "pie1")
         expect_match(output$plotSection$html, "heat2")
+        expect_match(output$plotSection$html, "height:720px", fixed = TRUE)
         expect_match(output$download_control$html, 'id="download"', fixed = TRUE)
         session$setInputs(export_kind = "full")
         expect_true(file.exists(output$download))

@@ -16,13 +16,28 @@ identifiers, and the \code{"Subtype"} column should specify the assigned subtype
 for each patient.}
 }
 \value{
-A \code{ggplot} or \code{heatmap} object (depending on implementation)
-representing the heatmap of gene expression across different subtypes.
+A \code{ComplexHeatmap::Heatmap} object representing gene expression
+across the subtype-specific sample slices.
 }
 \description{
 This function generates a heatmap to visualize gene expression
 patterns across breast cancer subtypes, based on the provided gene expression
 matrix and subtype information.
+}
+\details{
+Genes are scaled with \code{t(scale(t(x[, out$PatientID])))}. The blue, white
+and red expression scale is anchored at the observed minimum, zero and
+maximum gene z-score, respectively; the scale is not clipped or made
+symmetric. Subtype annotations retain the standard subtype colors.
+Missing subtype calls are grey and keep their expression measurements.
+
+Gene and within-slice sample clustering use Spearman distance and average
+linkage. The existing dendrogram reordering and ComplexHeatmap clustering
+of column-slice means are retained. Both gene and sample dendrograms are
+displayed. Horizontal legends occupy a reserved footer, without changing
+the returned class. For 50 genes, a device around 10 by 7.4 inches is
+recommended; use RStudio's Zoom view for a small plot pane, PDF for
+vector output or PNG at 300 dpi.
 }
 \examples{
 library(SummarizedExperiment)

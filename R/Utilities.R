@@ -800,6 +800,12 @@ get_average_subtype <- function(res_ihc_iterative, consensus_subtypes) {
 #' @return A `ggplot` object representing the boxplot visualization of the
 #'   correlation distributions across the different subtypes.
 #'
+#' @details
+#' Each plotted value is the maximum across one row of `correlations`.
+#' Rows are paired positionally with `out$Subtype`; keep the two inputs in
+#' the same sample order. Neutral boxes retain the usual quartiles, median,
+#' whiskers and outliers. The maximum correlation is not a probability.
+#'
 #' @examples
 #' data("OSLO2EMIT0obj")
 #' res <- OSLO2EMIT0obj$res
@@ -826,9 +832,8 @@ Vis_boxplot <- function(out, correlations) {
 
     plot <- ggplot(df, aes(x = .data$predictions, y = .data$cor)) +
         geom_boxplot() +
-        labs(x = "", y = "Correlation") +
-        theme_classic() +
-        theme(axis.text = element_text(size = 12))
+        labs(x = "", y = "Maximum centroid correlation") +
+        .bsr_plot_theme()
 
     return(plot)
 }
@@ -848,8 +853,23 @@ Vis_boxplot <- function(out, correlations) {
 #'   identifiers, and the `"Subtype"` column should specify the assigned subtype
 #'   for each patient.
 #'
-#' @return A `ggplot` or `heatmap` object (depending on implementation)
-#'   representing the heatmap of gene expression across different subtypes.
+#' @return A `ComplexHeatmap::Heatmap` object representing gene expression
+#'   across the subtype-specific sample slices.
+#'
+#' @details
+#' Genes are scaled with `t(scale(t(x[, out$PatientID])))`. The blue, white
+#' and red expression scale is anchored at the observed minimum, zero and
+#' maximum gene z-score, respectively; the scale is not clipped or made
+#' symmetric. Subtype annotations retain the standard subtype colors.
+#' Missing subtype calls are grey and keep their expression measurements.
+#'
+#' Gene and within-slice sample clustering use Spearman distance and average
+#' linkage. The existing dendrogram reordering and ComplexHeatmap clustering
+#' of column-slice means are retained. Both gene and sample dendrograms are
+#' displayed. Horizontal legends occupy a reserved footer, without changing
+#' the returned class. For 50 genes, a device around 10 by 7.4 inches is
+#' recommended; use RStudio's Zoom view for a small plot pane, PDF for
+#' vector output or PNG at 300 dpi.
 #'
 #' @examples
 #' library(SummarizedExperiment)
@@ -874,7 +894,8 @@ Vis_heatmap <- function(x, out) {
 
     ## color
     scaled_dat <- c(min(scaled_mat), 0, max(scaled_mat))
-    col_fun <- circlize::colorRamp2(scaled_dat, c("green", "black", "red"))
+    col_fun <- circlize::colorRamp2(
+        scaled_dat, c("#2166AC", "#FFFFFF", "#B2182B"))
 
     ## column annotation
     col_anno <- data.frame(
@@ -884,6 +905,7 @@ Vis_heatmap <- function(x, out) {
     anno_col <- ComplexHeatmap::HeatmapAnnotation(
         df = col_anno,
         show_legend = FALSE,
+        annotation_name_gp = grid::gpar(fontsize = 10),
         col = list(
             Subtype = c(
                 "Basal" = "red",
@@ -895,18 +917,36 @@ Vis_heatmap <- function(x, out) {
         )
     )
 
+    subtype_colors <- c(Basal = "red", Her2 = "hotpink", LumA = "darkblue",
+                        LumB = "skyblue", Normal = "green")
+    present <- names(subtype_colors) %in% out$Subtype
+    legends <- if (any(present)) list(.bsr_legend_style(
+        "Intrinsic subtype", labels = names(subtype_colors)[present], nrow = 1,
+        legend_gp = grid::gpar(fill = subtype_colors[present]))) else list()
+    legends[[length(legends) + 1L]] <- .bsr_legend_style(
+        "Expression: gene z-score", col_fun = col_fun, at = scaled_dat,
+        labels = sprintf("%.2f", scaled_dat), direction = "horizontal",
+        legend_width = grid::unit(55, "mm"))
+    if (anyNA(out$Subtype)) legends[[length(legends) + 1L]] <- .bsr_missing_key()
+    footer <- .bsr_legend_footer("expression_keys", legends)
+
     heatmap <- ComplexHeatmap::Heatmap(
         scaled_mat,
         name = "Expr",
         col = col_fun,
         ## annotation
         top_annotation = anno_col,
+        bottom_annotation = footer$annotation,
+        post_fun = footer$draw,
 
         ## clustering
         ## as original heatmap plot
         clustering_distance_rows = "spearman",
         clustering_method_rows = "average",
-        show_row_dend = FALSE,
+        show_row_dend = TRUE,
+        row_dend_width = grid::unit(15, "mm"),
+        row_dend_gp = grid::gpar(col = "#4B5563", lwd = 0.65),
+        column_dend_gp = grid::gpar(col = "#4B5563", lwd = 0.7),
         cluster_column_slices = TRUE,
         column_split = col_anno$Subtype,
         clustering_distance_columns = "spearman",
@@ -914,8 +954,9 @@ Vis_heatmap <- function(x, out) {
 
         ## general
         show_column_names = FALSE,
-        show_heatmap_legend = TRUE,
-        row_names_gp = grid::gpar(fontsize = 6)
+        show_heatmap_legend = FALSE,
+        column_title_gp = grid::gpar(fontsize = 11, fontface = "bold"),
+        row_names_gp = grid::gpar(fontsize = 8, fontfamily = "sans")
     )
 
     return(heatmap)
@@ -941,8 +982,13 @@ Vis_heatmap <- function(x, out) {
 #' @param Eigen Logical. If `TRUE`, the function will display a scree plot
 #'   showing the eigenvalues of the principal components.
 #'
-#' @return A `ggplot` object representing the PCA plot, colored by subtype. If
-#'   `Eigen` is set to `TRUE`, a scree plot of the eigenvalues is also included.
+#' @return A `ggplot` object representing the PCA plot, colored by subtype.
+#'   If `Eigen = TRUE`, returns only the scree plot.
+#'
+#' @details
+#' The scatter plot uses a shared sans-serif theme and a bottom subtype
+#' legend. PCA centering, scaling, scores, joins, explained variance and
+#' reference lines are unchanged; no confidence ellipses or tests are added.
 #'
 #' @examples
 #' library(SummarizedExperiment)
@@ -1033,12 +1079,11 @@ Vis_PCA <- function(x, out, Eigen = FALSE) {
                 x = paste0("PC1 (", pc1_var, "% variance)"),
                 y = paste0("PC2 (", pc2_var, "% variance)")
             ) +
-            theme_minimal() +
+            .bsr_plot_theme() +
             theme(
-                axis.text = element_text(size = 12),
-                axis.title = element_text(size = 14),
-                legend.title = element_text(size = 14),
-                legend.text = element_text(size = 12)
+                legend.position = "bottom",
+                panel.grid.major = ggplot2::element_line(
+                    colour = "#ECEFF2", linewidth = 0.25)
             )
 
         return(pcaplot)
@@ -1059,6 +1104,13 @@ Vis_PCA <- function(x, out, Eigen = FALSE) {
 #'
 #' @return A `ggplot` object representing a pie chart showing the proportion of
 #'   each subtype in the dataset.
+#'
+#' @details
+#' The legend reports subtype counts and percentages. As with `table()`,
+#' missing subtype calls are excluded from the assigned-call denominator;
+#' the caption reports both counts. Percentages are rounded to two decimals
+#' before drawing the slices, preserving the existing slice geometry and
+#' subtype order. Missing calls are not added as an extra slice.
 #'
 #' @examples
 #' data("OSLO2EMIT0obj")
@@ -1097,20 +1149,28 @@ Vis_pie <- function(out) {
 
     plot <- ggplot(data, aes(x = "", y = .data$perc, fill = .data$Var1)) +
         geom_bar(stat = "identity") +
-        scale_fill_manual(name = "Subtype", values = Subtype.color) +
-        geom_text_repel(
-            data = data,
-            aes(y = .data$pos, label = paste0(.data$Freq, " (", .data$perc, "%", ")")),
-            size = 4.5,
-            nudge_x = 0.6,
-            show.legend = FALSE,
-            segment.color = NA
+        scale_fill_manual(
+            name = "Subtype   n (%)", values = Subtype.color,
+            breaks = as.character(data$Var1),
+            labels = sprintf("%s   %d (%.2f%%)", data$Var1, data$Freq, data$perc)
         ) +
         coord_polar("y", direction = -1) +
-        theme_void() +
+        labs(
+            title = "Subtype distribution",
+            subtitle = sprintf("%d samples", nrow(out)),
+            caption = sprintf(paste0(
+                "Denominator: %d assigned calls; %d missing calls excluded.\n",
+                "Percentages retain the baseline two-decimal rounding."),
+                sum(data$Freq), sum(is.na(out$Subtype)))
+        ) +
+        theme_void(base_size = 11, base_family = "sans") +
+        .bsr_plot_theme() +
         theme(
-            legend.title = element_text(size = 14),
-            legend.text = element_text(size = 12)
+            axis.line = ggplot2::element_blank(),
+            axis.text = ggplot2::element_blank(),
+            axis.title = ggplot2::element_blank(),
+            axis.ticks = ggplot2::element_blank(),
+            legend.position = "right"
         )
 
 
@@ -1128,6 +1188,15 @@ Vis_pie <- function(out) {
 #' @param data Output of the \code{\link{BS_Multi}} function.
 #'
 #' @return Returns a heatmap visualizing the subtype classifications across multiple methods.
+#'
+#' @details
+#' Returns a `ComplexHeatmap::Heatmap` with separate subtype, method-family
+#' and (when needed) missing-call keys in a horizontal footer. The method
+#' rows, sample sorting rules, subtype colors and grey missing cells are
+#' preserved. The entropy annotation displays the supplied raw Shannon
+#' entropy in bits: disagreement among available method calls, not calibrated
+#' confidence. No entropy values are recomputed or normalized by this plot.
+#' A device around 10 by 4.6 inches leaves room for labels and legends.
 #'
 #' @examples
 #' data("OSLO2EMIT0obj")
@@ -1181,39 +1250,38 @@ Vis_Multi <- function(data) {
         row.names = colnames(mat)
     )
     row_anno <- HeatmapAnnotation(
-        df = row_anno,
-        which = c("row"),
-        col = list(Category = col_cat),
-        annotation_legend_param = list(
-            title_gp = grid::gpar(fontsize = 10, fontface = "bold"),
-            gap = unit(2, "points"),
-            labels_gp = grid::gpar(fontsize = 10),
-            border = "white"
-        )
+        df = row_anno, which = "row", col = list(Category = col_cat),
+        show_legend = FALSE, show_annotation_name = FALSE,
+        simple_anno_size = grid::unit(4, "mm")
     )
-    # ## column annotation
     col_anno <- HeatmapAnnotation(
-        which = c("column"),
-        Entropy = anno_barplot(data[rownames(data), ncol(data)], bar_width = 1)
+        which = "column",
+        Entropy = anno_barplot(
+            data[rownames(data), ncol(data)], bar_width = 1,
+            gp = grid::gpar(fill = "#4B5563", col = NA),
+            height = grid::unit(20, "mm"),
+            axis_param = list(gp = grid::gpar(fontsize = 9))),
+        annotation_label = "Entropy\n(bits)",
+        annotation_name_gp = grid::gpar(fontsize = 10)
     )
 
     Subtype.color <- Subtype.color[names(Subtype.color) %in% Labels]
+    legends <- if (length(Subtype.color)) list(.bsr_legend_style(
+        "Intrinsic subtype", labels = names(Subtype.color), nrow = 1,
+        legend_gp = grid::gpar(fill = Subtype.color))) else list()
+    category_colors <- col_cat[names(col_cat) %in% ctg[colnames(mat), "Cat"]]
+    if (length(category_colors)) legends[[length(legends) + 1L]] <-
+        .bsr_legend_style("Method family", labels = names(category_colors),
+                          nrow = 1, legend_gp = grid::gpar(fill = category_colors))
+    if (anyNA(mat)) legends[[length(legends) + 1L]] <- .bsr_missing_key()
+    footer <- .bsr_legend_footer("method_keys", legends)
     p <- ComplexHeatmap::Heatmap(
         t(as.matrix(mat)),
-        name = "Subtypes",
-        col = Subtype.color,
-        row_names_gp = grid::gpar(fontsize = 10, fontface = "bold"),
-        right_annotation = row_anno,
-        top_annotation = col_anno,
-        show_column_names = FALSE,
-        heatmap_legend_param = list(
-            title = "Intrinsic Subtype",
-            labels = Labels[match(names(Subtype.color), Labels)],
-            title_gp = grid::gpar(fontsize = 10, fontface = "bold"),
-            gap = unit(2, "points"),
-            labels_gp = grid::gpar(fontsize = 10),
-            border = "white"
-        )
+        name = "Subtypes", col = Subtype.color,
+        row_names_gp = grid::gpar(fontsize = 10, fontfamily = "sans"),
+        right_annotation = row_anno, top_annotation = col_anno,
+        bottom_annotation = footer$annotation, post_fun = footer$draw,
+        show_column_names = FALSE, show_heatmap_legend = FALSE
     )
 
     return(p)

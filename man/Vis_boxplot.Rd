@@ -24,6 +24,12 @@ This function generates a boxplot to visualize the correlation
 distribution between different subtypes of breast cancer, based on the
 provided correlation table and subtype information.
 }
+\details{
+Each plotted value is the maximum across one row of \code{correlations}.
+Rows are paired positionally with \code{out$Subtype}; keep the two inputs in
+the same sample order. Neutral boxes retain the usual quartiles, median,
+whiskers and outliers. The maximum correlation is not a probability.
+}
 \examples{
 data("OSLO2EMIT0obj")
 res <- OSLO2EMIT0obj$res

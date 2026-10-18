@@ -379,7 +379,7 @@ server <- function(input, output, session) {
           tags$p(class = "plot-scroll-hint", "Swipe horizontally to view the full plot."),
           tags$div(class = "plot-scroll", tabindex = "0", role = "region",
             `aria-label` = "Expression heatmap; scroll horizontally on narrow screens",
-            plotOutput("heat2"))))
+            plotOutput("heat2", height = 720))))
     }
   })
   output$multi_plot <- renderPlot({

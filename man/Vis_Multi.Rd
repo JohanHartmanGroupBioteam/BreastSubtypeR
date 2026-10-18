@@ -17,6 +17,15 @@ This function generates a heatmap to visualize breast cancer subtypes
 classified by multiple subtyping methods. It helps users compare how different methods
 assign subtypes to the same set of samples.
 }
+\details{
+Returns a \code{ComplexHeatmap::Heatmap} with separate subtype, method-family
+and (when needed) missing-call keys in a horizontal footer. The method
+rows, sample sorting rules, subtype colors and grey missing cells are
+preserved. The entropy annotation displays the supplied raw Shannon
+entropy in bits: disagreement among available method calls, not calibrated
+confidence. No entropy values are recomputed or normalized by this plot.
+A device around 10 by 4.6 inches leaves room for labels and legends.
+}
 \examples{
 data("OSLO2EMIT0obj")
 
