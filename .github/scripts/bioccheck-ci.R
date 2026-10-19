@@ -24,6 +24,9 @@
 EXIT_FINDINGS <- 1L
 EXIT_INCOMPLETE <- 2L
 EXPECTED_BIOC <- "3.24"
+# GitHub CI only: account requirements must be verified separately.
+# https://bioconductor.org/packages/devel/bioc/vignettes/BiocCheck/inst/doc/BiocCheck.html
+BIOCCHECK_CI_OPTIONS <- list(`no-check-bioc-help` = TRUE)
 
 abort <- function(...) stop(paste0(...), call. = FALSE)
 
@@ -342,7 +345,8 @@ run_rcmdcheck <- function(rcheck_dir, out_dir) {
 
 run_bioccheck <- function(tarball, rcheck_dir, build_output, out_dir) {
     out <- file.path(out_dir, "bioccheck-result.json")
-    write_result(list(stage = "BiocCheck", completed = FALSE), out)
+    write_result(list(stage = "BiocCheck", completed = FALSE,
+        options = BIOCCHECK_CI_OPTIONS), out)
     tarball <- require_file(tarball, "source tarball")
     rcheck_dir <- normalizePath(rcheck_dir, winslash = "/", mustWork = TRUE)
     build_output <- require_file(build_output, "R CMD build output")
@@ -385,13 +389,13 @@ run_bioccheck <- function(tarball, rcheck_dir, build_output, out_dir) {
     # copy of <file> into the .BiocCheck folder is lost to a later on.exit(),
     # so 00install.out is preserved here instead.
     file.copy(install_out, file.path(out_dir, "00install.out"), overwrite = TRUE)
-    args <- list(
+    args <- c(list(
         package = tarball,
         debug = TRUE,
         install = paste0("check:", install_out),
         libloc = rcheck_dir,
         `build-output-file` = build_output
-    )
+    ), BIOCCHECK_CI_OPTIONS)
     log_command(".libPaths(", deparse(.libPaths()), ")")
     log_command(paste(deparse(as.call(c(
         quote(BiocCheck::BiocCheck), args
@@ -413,6 +417,7 @@ run_bioccheck <- function(tarball, rcheck_dir, build_output, out_dir) {
         stage = "BiocCheck",
         completed = TRUE,
         mode = "existing package (new-package not set); debug = TRUE",
+        options = BIOCCHECK_CI_OPTIONS,
         package = unname(pkg),
         version = unname(version),
         tarball = tarball,
@@ -468,9 +473,13 @@ counts_text <- function(result) {
         result$counts$error, result$counts$warning, result$counts$note)
 }
 
-# Account checks run inside BiocCheck(); outcomes reported only as console
-# messages (not counted) are read from the step transcript.
+# The CI option excludes all three account checks, even if BiocCheck fails.
+# For older evidence without the option, read outcomes from the transcript.
 account_checks <- function(result, console) {
+    if (isTRUE(result$options[["no-check-bioc-help"]])) {
+        skipped <- "NOT CHECKED - disabled in GitHub CI by no-check-bioc-help = TRUE; verify separately"
+        return(list(devel = skipped, support = skipped, tag = skipped))
+    }
     text <- one_line(console)
     has <- function(p) grepl(p, text, fixed = TRUE)
     if (is.null(result) || !isTRUE(result$completed)) {
@@ -553,6 +562,8 @@ run_summary <- function(evidence) {
     }
     claim("BUILD", file.exists(sha_file) && file.exists(build_log),
         "build step succeeded without tarball hash and build log")
+    claim("BIOCCHECK", identical(bioc$options, BIOCCHECK_CI_OPTIONS),
+        "BiocCheck step succeeded without the recorded CI account-check exclusion")
     if (identical(outcome("RCMDCHECK"), "success"))
         for (f in c("00check.log", "00install.out"))
             claim("RCMDCHECK", file.exists(file.path(rcheck$rcheck_dir %||% "", f)),
@@ -591,6 +602,11 @@ run_summary <- function(evidence) {
         "",
         "Advisory job: not a required status check. ERRORs and WARNINGs still fail it; NOTEs are listed and do not.",
         "",
+        if (isTRUE(bioc$completed))
+            "Package BiocCheck validation was performed; its result is shown below."
+        else
+            "Package BiocCheck validation did not complete; no package validation success is claimed.",
+        "",
         "| Stage | Status | Result |",
         "|---|---|---|",
         sprintf("| Environment setup | %s | %s |", status[["environment"]],
@@ -606,7 +622,7 @@ run_summary <- function(evidence) {
         sprintf("| BiocCheck (existing package) | %s | %s |", status[["bioccheck"]], counts_text(bioc)),
         sprintf("| Account: Bioc-devel subscription | %s | |", accounts$devel),
         sprintf("| Account: Support Site registration | %s | |", accounts$support),
-        sprintf("| Account: Support Site watched tag | %s | |", accounts$tag),
+        sprintf("| Account: BreastSubtypeR watched-tag registration | %s | |", accounts$tag),
         sprintf("| Source checkout unmodified | %s | |", status[["pristine"]]),
         "",
         "### Identity",
@@ -637,8 +653,14 @@ run_summary <- function(evidence) {
         findings_table(rcheck$findings, with_check = FALSE),
         "### Not verified by this job",
         "",
-        "- Bioc-devel mailing-list subscription: needs Bioconductor admin credentials. A passing job does not verify it.",
-        "- Anything marked NOT VERIFIED or NOT EXECUTED above.",
+        "GitHub CI uses `no-check-bioc-help = TRUE`. These account requirements must be verified separately; a passing package check does not verify them:",
+        "",
+        "- Bioconductor (bioc-devel) mailing-list subscription: NOT checked.",
+        "- Support Site registration: NOT checked.",
+        "- BreastSubtypeR watched-tag registration: NOT checked.",
+        "",
+        "The maintainer must separately verify subscription and Support Site registration with the DESCRIPTION maintainer email, and that BreastSubtypeR is a watched tag.",
+        "Anything marked NOT VERIFIED or NOT EXECUTED above also remains unverified.",
         "",
         sprintf("Evidence: artifact `BiocCheck-evidence-attempt-%s` (commands, logs, results, tarball and hash).",
             gh$run_attempt %||% Sys.getenv("GITHUB_RUN_ATTEMPT"))
@@ -689,6 +711,9 @@ synthetic_result <- function(kind) {
             raise("Note", "synthetic note")
         },
         warning = raise("Warning", "synthetic warning"),
+        `support-warning` = raise("Warning", paste(
+            "Unable to retrieve email info from the Support Site:",
+            "Connection timed out after 15001 milliseconds")),
         malformed = return(list(error = list(), warning = list(), note = list())),
         fatal = abort("synthetic fatal execution error"),
         abort("unknown fixture kind: ", kind)
@@ -698,9 +723,11 @@ synthetic_result <- function(kind) {
 
 run_fixture <- function(kind, out_dir) {
     out <- file.path(out_dir, "fixture-result.json")
-    write_result(list(stage = paste("fixture", kind), completed = FALSE), out)
+    write_result(list(stage = paste("fixture", kind), completed = FALSE,
+        options = BIOCCHECK_CI_OPTIONS), out)
     found <- bioccheck_findings(synthetic_result(kind))
-    write_result(c(list(stage = paste("fixture", kind), completed = TRUE), found), out)
+    write_result(c(list(stage = paste("fixture", kind), completed = TRUE,
+        options = BIOCCHECK_CI_OPTIONS), found), out)
     print_counts(paste("fixture", kind), found$counts)
     # A producer that fails after writing a clean result: the exit status,
     # not the file, must decide.
@@ -773,7 +800,8 @@ run_selftest <- function(out_dir) {
 
     for (fx in list(
         list("clean", 0L, c(0, 0, 0)), list("notes", 0L, c(0, 0, 2)),
-        list("error", 1L, c(1, 0, 1)), list("warning", 1L, c(0, 1, 0)))) {
+        list("error", 1L, c(1, 0, 1)), list("warning", 1L, c(0, 1, 0)),
+        list("support-warning", 1L, c(0, 1, 0)))) {
         name <- paste0("bioccheck-", fx[[1L]])
         st <- child(name, "fixture", fx[[1L]], "{dir}")
         expect(name, fx[[2L]], st, do.call(counts_are, c(list(result_of(name)), as.list(fx[[3L]]))))
@@ -826,7 +854,8 @@ run_selftest <- function(out_dir) {
     st <- child("summary-after-failure", "summary", sum_dir)
     md <- file.path(sum_dir, "summary.md")
     expect("summary-after-failure", 0L, st, file.exists(md) &&
-        any(grepl("BiocCheck (existing package) | FAIL", readLines(md), fixed = TRUE)))
+        any(grepl("BiocCheck (existing package) | FAIL", readLines(md), fixed = TRUE)) &&
+        sum(grepl("| NOT CHECKED - disabled", readLines(md), fixed = TRUE)) == 3L)
     # A clean result file next to a failed step is displayed as FAIL.
     sum_dir <- file.path(out_dir, "summary-clean-result-failed-step")
     dir.create(file.path(sum_dir, "bioccheck"), recursive = TRUE, showWarnings = FALSE)
@@ -852,7 +881,53 @@ run_selftest <- function(out_dir) {
     dir.create(sum_dir, showWarnings = FALSE)
     Sys.setenv(OUTCOME_BIOCCHECK = "success")
     st <- child("summary-missing-result", "summary", sum_dir)
-    expect("summary-missing-result", 2L, st, file.exists(file.path(sum_dir, "summary.md")))
+    md <- file.path(sum_dir, "summary.md")
+    expect("summary-missing-result", 2L, st, file.exists(md) &&
+        any(grepl("Package BiocCheck validation did not complete", readLines(md), fixed = TRUE)))
+
+    # A complete clean package result must disclose all account exclusions,
+    # even if a stale transcript contains messages claiming account success.
+    sum_dir <- file.path(out_dir, "summary-account-exclusions")
+    bioc_dir <- file.path(sum_dir, "bioccheck")
+    dir.create(bioc_dir, recursive = TRUE, showWarnings = FALSE)
+    r <- result_of("bioccheck-clean")
+    write_result(r, file.path(bioc_dir, "bioccheck-result.json"))
+    for (f in c("00BiocCheck.log", "00install.out", "bioccheck-console.log"))
+        writeLines(c("synthetic evidence", "Maintainer is registered at support site",
+            "BreastSubtypeR is already in your 'Watched Tags'"), file.path(bioc_dir, f))
+    st <- child("summary-account-exclusions", "summary", sum_dir)
+    md <- readLines(file.path(sum_dir, "summary.md"))
+    expect("summary-account-exclusions", 0L, st,
+        any(grepl("Package BiocCheck validation was performed", md, fixed = TRUE)) &&
+        any(grepl("BiocCheck (existing package) | PASS", md, fixed = TRUE)) &&
+        sum(grepl("| NOT CHECKED - disabled", md, fixed = TRUE)) == 3L &&
+        sum(grepl(": NOT checked.", md, fixed = TRUE)) == 3L &&
+        any(grepl("must be verified separately", md, fixed = TRUE)) &&
+        !any(grepl("^\\| Account:.*\\| PASS", md)))
+
+    # Missing policy evidence cannot silently become a passing CI result.
+    sum_dir <- file.path(out_dir, "summary-missing-ci-options")
+    missing_dir <- file.path(sum_dir, "bioccheck")
+    dir.create(missing_dir, recursive = TRUE, showWarnings = FALSE)
+    for (f in c("00BiocCheck.log", "00install.out", "bioccheck-console.log"))
+        file.copy(file.path(bioc_dir, f), file.path(missing_dir, f))
+    r$options <- NULL
+    write_result(r, file.path(missing_dir, "bioccheck-result.json"))
+    expect("summary-missing-ci-options", 2L,
+        child("summary-missing-ci-options", "summary", sum_dir))
+
+    # An interrupted package check is never described as performed/passing.
+    sum_dir <- file.path(out_dir, "summary-incomplete-account-exclusions")
+    dir.create(file.path(sum_dir, "bioccheck"), recursive = TRUE, showWarnings = FALSE)
+    file.copy(file.path(out_dir, "bioccheck-fatal", "fixture-result.json"),
+        file.path(sum_dir, "bioccheck", "bioccheck-result.json"))
+    Sys.setenv(OUTCOME_BIOCCHECK = "failure")
+    st <- child("summary-incomplete-account-exclusions", "summary", sum_dir)
+    md <- readLines(file.path(sum_dir, "summary.md"))
+    expect("summary-incomplete-account-exclusions", 0L, st,
+        any(grepl("Package BiocCheck validation did not complete", md, fixed = TRUE)) &&
+        sum(grepl("| NOT CHECKED - disabled", md, fixed = TRUE)) == 3L &&
+        !any(grepl("| PASS", md, fixed = TRUE)))
     Sys.unsetenv("OUTCOME_BIOCCHECK")
 
     passed <- vapply(controls, `[[`, logical(1L), "passed")
