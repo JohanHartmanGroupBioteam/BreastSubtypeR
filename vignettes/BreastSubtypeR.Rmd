@@ -390,6 +390,30 @@ and leaves the original Parker risk groups unchanged.
 Method-specific return components are documented in their
 help pages. These are research-use outputs, not a clinical assay result.
 
+The research ROR outputs use **Spearman** centroid correlations
+([Parker et al., 2009](https://doi.org/10.1200/JCO.2008.18.1370);
+[Buus et al., 2021](https://doi.org/10.1038/s41523-021-00216-w)). The additional
+`ROR-PC (Subtype + Clinic + Prolif.Subtype)` score uses a PAM50 subset
+excluding BIRC5, CCNB1, GRB7 and MYBL2, an 18-gene proliferation component
+and binary tumor size. Commercial Prosigna uses **Pearson** correlations
+within its validated assay workflow
+([Wallden et al., 2015](https://doi.org/10.1186/s12920-015-0129-6)). Shared
+coefficients do not establish equivalent preprocessing, calibration or
+clinical validation. These research scores and groups are not clinical
+Prosigna results; version 1.5.8 does not change these calculations.
+
+**Known exact-equality limitation.** The original Parker-derived ROR-S,
+ROR-P, ROR-C and `ROR-PC (Subtype + Clinic + Prolif)` groups retain strict
+comparisons. At an exact unscaled cutoff, the group can contain numeric
+text instead of `low`, `med` or `high`. The unscaled pairs are -0.15/0.10,
+-0.25/0.10, -0.10/0.20 and -0.20/0.20, respectively, before
+`100 * (score + 0.35) / 0.85`. They are not cutoffs on the displayed scaled
+scores. Numeric-text labels are invalid categories, not an additional risk
+group; do not infer an assignment by rounding. Version 1.5.8 temporarily
+defers this known defect pending scientific review of exact-equality
+assignments. The corrected NODE-dependent additional ROR-PC grouping from
+issue #154 remains unchanged.
+
 # Guidance & best practices
 
 ## Input types

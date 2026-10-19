@@ -139,6 +139,19 @@ complete input adequacy or clinical validity. Method assumptions, exact
 AUTO rules and threshold provenance remain in the
 [development vignette source](vignettes/BreastSubtypeR.Rmd#quick-start).
 
+### Research ROR interpretation
+
+Research ROR outputs use Spearman centroid correlations. Commercial
+Prosigna uses Pearson correlations within its validated assay workflow;
+BreastSubtypeR scores and groups are not clinical Prosigna results.
+Version 1.5.8 preserves the original Parker-derived grouping comparisons:
+exact equality at an unscaled cutoff can return numeric text instead of a
+valid risk category. This known defect is temporarily deferred for separate
+scientific review, not endorsed as a valid category. The corrected
+NODE-dependent additional ROR-PC grouping remains unchanged. See
+[the ROR guide](vignettes/BreastSubtypeR.Rmd#four--versus-five-class-results-and-ror)
+and `?BS_parker` for the exact cutoffs and methodological references.
+
 ## Local Shiny application
 
 ```r
