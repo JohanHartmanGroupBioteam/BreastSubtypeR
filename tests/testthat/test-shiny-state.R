@@ -3,7 +3,6 @@ shiny_app_env <- function() {
     skip_if_not_installed("shiny")
     skip_if_not_installed("bslib")
     env <- new.env(parent = asNamespace("shiny"))
-    env$Mapping <- BreastSubtypeR::Mapping
     sys.source(system.file("ShinyBreastSubtypeR/server.R",
                            package = "BreastSubtypeR"), env)
     env
@@ -22,6 +21,98 @@ shiny_upload <- function(name) {
     data.frame(name = name, size = file.info(path)$size,
                type = "text/plain", datapath = path)
 }
+
+test_that("mapping resolves from the installed namespace without injection", {
+    skip_if_not_installed("shiny")
+    skip_if_not_installed("bslib")
+    ## test_package() attaches BreastSubtypeR. Use a separate vanilla process
+    ## so its search path cannot mask an unqualified app function.
+    script <- tempfile(fileext = ".R")
+    log <- tempfile(fileext = ".log")
+    on.exit(unlink(c(script, log)), add = TRUE)
+    writeLines(c(
+        paste0(".libPaths(", paste(deparse(.libPaths()), collapse = ""), ")"),
+        paste0("defaults <- ", paste(deparse(shiny_defaults), collapse = "\n")),
+        'stopifnot(!"package:BreastSubtypeR" %in% search(),',
+        '    !exists("Mapping", .GlobalEnv, inherits = TRUE))',
+        'env <- new.env(parent = asNamespace("shiny"))',
+        'sys.source(system.file("ShinyBreastSubtypeR/server.R",',
+        '    package = "BreastSubtypeR"), env)',
+        'stopifnot(!exists("Mapping", env, inherits = FALSE))',
+        'shiny::testServer(env$server, {',
+        '    defaults(session)',
+        '    stopifnot(mapping_current(), is.null(reactive_files$error),',
+        '        ncol(reactive_files$data_input$se_NC) == 102L)',
+        '})'
+    ), script)
+    rscript <- file.path(R.home("bin"),
+        if (.Platform$OS.type == "windows") "Rscript.exe" else "Rscript")
+    status <- system2(rscript, c("--vanilla", shQuote(script)),
+        stdout = log, stderr = log)
+    expect_identical(status, 0L, info = paste(readLines(log), collapse = "\n"))
+})
+
+test_that("silent aborts clear stale results but preserve meaningful errors", {
+    env <- shiny_app_env()
+    shiny::testServer(env$server, {
+        shiny_defaults(session)
+        session$setInputs(run = 1)
+        expect_false(is.null(current_prediction()))
+        ## Inject conditions into the mapping/prediction error handler.
+        ## This isolates Shiny semantics; it is not a normal upload workflow.
+        silent <- tryCatch(shiny::req(NULL), error = identity)
+        expect_s3_class(silent, "shiny.silent.error")
+        report_error(silent)
+        expect_null(reactive_files$error)
+        expect_null(output$analysis_error)
+        expect_null(current_prediction())
+        expect_error(export_result("calls"), "No current prediction")
+
+        validation <- tryCatch(shiny::validate(shiny::need(FALSE,
+            "Annotation IDs do not overlap.")), error = identity)
+        expect_s3_class(validation, "shiny.silent.error")
+        report_error(validation)
+        session$flushReact()
+        expect_identical(reactive_files$error, "Annotation IDs do not overlap.")
+        expect_match(output$analysis_error$html, "Annotation IDs do not overlap.",
+            fixed = TRUE)
+        expect_null(current_prediction())
+        expect_error(export_result("calls"), "No current prediction")
+
+        report_error(simpleError("Ordinary prediction error."))
+        expect_identical(reactive_files$error, "Ordinary prediction error.")
+        session$setInputs(run = 2)
+        expect_null(reactive_files$error)
+        expect_false(is.null(current_prediction()))
+        expect_equal(nrow(export_result("calls")$calls), 102L)
+    })
+})
+
+test_that("a req abort inside prediction clears the result and can recover", {
+    env <- shiny_app_env()
+    shiny::testServer(env$server, {
+        shiny_defaults(session, method = "AIMS")
+        session$setInputs(run = 1)
+        previous <- current_prediction()$calls
+        mapped <- reactive_files$data_input
+        ## Deliberately corrupt internal mapped state to reach req(se_SSP).
+        ## Successful Mapping() does not normally produce this state.
+        missing <- mapped
+        missing$se_SSP <- NULL
+        missing$x_SSP <- NULL
+        reactive_files$data_input <- missing
+        session$setInputs(run = 2)
+        expect_null(reactive_files$error)
+        expect_null(output$analysis_error)
+        expect_null(current_prediction())
+        expect_error(output$download, "No current prediction")
+        reactive_files$data_input <- mapped
+        session$setInputs(run = 3)
+        expect_null(reactive_files$error)
+        expect_identical(current_prediction()$calls, previous)
+        expect_true(file.exists(output$download))
+    })
+})
 
 test_that("input coverage uses the shared report for the current mapped inputs", {
     env <- shiny_app_env()

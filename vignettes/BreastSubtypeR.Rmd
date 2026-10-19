@@ -144,6 +144,11 @@ library-protocol-adjusted FPKM. Clinical metadata are stored in `colData`,
 and feature annotations in `rowData`. The source is
 `OSLO2EMIT0.103.genematrix_noNeg.Rdata` in Mendeley Data, version 3
 ([Vallon-Christersson, 2023](https://doi.org/10.17632/yzxtxn4nmd.3)).
+That source matrix has 19,675 features and 103 sample identifiers. The
+packaged subset retains source-relative order and omits `OSLO2EMIT0.073`.
+The historical sample-omission reason, feature-selection rationale and exact
+generating script are not established; the transformation is verified by
+matching source identifiers and numerical values.
 See `?OSLO2EMIT0obj` for the packaged example's source and structure.
 
 ```{r pkgs-and-data, message=FALSE}
@@ -323,6 +328,9 @@ Its `ratio = 54 / 64` is the target number of ER-positive samples per
 ER-negative sample, not the ER-positive fraction used by AUTO. The ratio must
 be one finite, strictly positive number. Values above 1 are allowed in target
 mode. Write `54 / 64`, not the R sequence `54:64`.
+Extreme positive ratios can retain very few samples from one ER group,
+making the calibration subset poorly representative. Acceptance of a ratio
+does not establish calibration adequacy for a particular cohort.
 
 Each iteration subsamples the group over-represented relative to the target,
 without replacement, to `ceiling(ratio * n_ERneg)` ER+ samples or
@@ -461,6 +469,14 @@ Parker `Confidence` is missing when a valid test cannot be computed (for
 example, insufficient or constant matched values). It differs from centroid
 correlation itself and from AIMS/SSPBC posterior probabilities. None of these
 quantities substitutes for external predictive or clinical validation.
+
+Earlier affected builds could return false-zero Confidence values after
+losing centroid gene names during data.frame extraction. The defect is
+verified in the Bioconductor 3.23 version 1.4.1 and 3.24 version 1.5.7 source
+archives; GitHub revisions with the same version can differ. Users of those
+affected builds should recompute Confidence summaries and their downstream
+uses. Legitimate computed zeros remain possible; this finding alone does not
+invalidate subtype calls or numerical ROR scores. See the 1.5.8 NEWS entry.
 AUTO continues to return separate method calls without consensus voting.
 
 # Shiny app
@@ -518,7 +534,7 @@ subgroup-size selection rules without guaranteeing complete model-input
 adequacy or clinical validity.
 
 **Results and downloads.** Inspect the plots and download current results as
-tab-separated text (TSV), using **Calls only** or **Full metrics** where
+tab-separated text (TSV), saved with a `.txt` extension, using **Calls only** or **Full metrics** where
 supported. AUTO reports separate method predictions and raw Shannon entropy,
 not consensus calls or calibrated confidence. Research ROR outputs are not
 clinical Prosigna results.

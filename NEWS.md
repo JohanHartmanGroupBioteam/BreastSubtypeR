@@ -3,17 +3,35 @@
 ## Bug fixes
 
 * Correct PAM50 `Confidence` gene alignment, Spearman-test handling and
-  two-decimal rounding; undefined values remain missing. This intentionally
-  corrects earlier confidence outputs without changing subtype calls or ROR
-  scores. Confidence is not a calibrated subtype probability.
+  two-decimal rounding; undefined values remain missing. Earlier code could
+  lose centroid gene names when extracting a data.frame column, fail to pair
+  genes and return false zeros. This defect is verified in the Bioconductor
+  3.23 version 1.4.1 and 3.24 version 1.5.7 source archives. GitHub revisions
+  sharing a version number can differ: the Confidence fix was already in
+  GitHub commit 6f68e09 (version 1.5.7). Users of affected builds should
+  recompute Confidence summaries and downstream uses of those summaries.
+  A legitimately computed Confidence can still be zero. This finding alone
+  does not invalidate subtype calls or numerical ROR scores, which the fix
+  does not change. Confidence is not a calibrated subtype probability.
 * Correct the additional NODE-dependent
   `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)` boundaries (#154):
   NODE = 0 uses <= 40 / > 40 through 60 / > 60, and NODE = 1--3 uses
   <= 15 / > 15 through 40 / > 40; at least four positive nodes remain high
   risk with nonmissing tumor size. Scores are not rounded for grouping.
+* Represent an undefined numerical `NaN` score as an actual missing category
+  in the additional NODE-dependent ROR-PC group for NODE = 0 or 1--3,
+  instead of the literal text `"NaN"`. Numerical scores, finite/infinite
+  categories, clinical missing-value handling and the independent NODE >= 4
+  high-risk rule are unchanged. Original Parker grouping is unaffected.
 
 ## Reporting and presentation
 
+* Resolve Shiny preprocessing through the installed package namespace when
+  launched with `BreastSubtypeR::iBreastSubtypeR()`. Empty intentional Shiny
+  aborts clear stale results without blank error callouts; meaningful
+  validation and ordinary error messages remain visible.
+* Remove the unused ggrepel import without changing plot geometry. Clarify
+  NODE error wording, OSLO sample-subset provenance and `.txt` TSV exports.
 * Add descriptive `InputCoverage()` and Shiny coverage reporting for PAM50,
   AIMS and SSPBC, using bundled-model gene/rule denominators. Reporting does
   not change method eligibility, imputation, predictions or scientific
