@@ -246,6 +246,9 @@ server <- function(input, output, session) {
   }
   report_error <- function(e) {
     invalidate_prediction()
+    # req() and need(..., FALSE) abort silently; named validation stays visible.
+    if (inherits(e, "shiny.silent.error") && !nzchar(conditionMessage(e)))
+      return(invisible(NULL))
     reactive_files$error <- conditionMessage(e)
     showNotification(reactive_files$error, type = "error", duration = NULL,
                      id = "analysis-error")
@@ -753,7 +756,7 @@ server <- function(input, output, session) {
       tryCatch({
         output_text <- capture.output({
           message("Mapping() -> RawCounts = ", reactive_files$RawCounts)
-          data_input <- Mapping(se_obj = se_obj, RawCounts = reactive_files$RawCounts,
+          data_input <- BreastSubtypeR::Mapping(se_obj = se_obj, RawCounts = reactive_files$RawCounts,
                                 impute = TRUE, verbose = TRUE)
           cat("Step 1 is complete.\nYou may now proceed to Step 2.\n")
         })
