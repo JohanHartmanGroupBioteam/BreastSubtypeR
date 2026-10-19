@@ -188,6 +188,38 @@ NULL
 #' \href{https://github.com/JohanHartmanGroupBioteam/BreastSubtypeR/issues/154}{issue #154};
 #' the original Parker risk groups are unchanged.
 #'
+#' @section Research ROR interpretation:
+#' The research ROR outputs use Spearman centroid correlations, following
+#' the research implementations (Parker et al., 2009,
+#' <https://doi.org/10.1200/JCO.2008.18.1370>; Buus et al., 2021,
+#' <https://doi.org/10.1038/s41523-021-00216-w>).
+#' The additional `ROR-PC (Subtype + Clinic + Prolif.Subtype)` score uses
+#' a PAM50 subset excluding BIRC5, CCNB1, GRB7 and MYBL2, an 18-gene
+#' proliferation component and binary tumor size. Commercial Prosigna uses
+#' Pearson correlations within its validated assay workflow (Wallden et al.,
+#' 2015, <https://doi.org/10.1186/s12920-015-0129-6>). Shared coefficients
+#' do not establish equivalence of preprocessing, calibration or clinical
+#' validation. These scores and groups are research outputs, not clinical
+#' Prosigna results. No correlation calculation is changed in version 1.5.8.
+#'
+#' @section Known original ROR boundary limitation:
+#' The original Parker-derived ROR-S, ROR-P, ROR-C and
+#' `ROR-PC (Subtype + Clinic + Prolif)` grouping retains strict comparisons.
+#' At exact equality to either unscaled cutoff, a group can contain the
+#' numeric score as text instead of `low`, `med` or `high`.
+#' The unscaled cutoff pairs are ROR-S: -0.15/0.10; ROR-P: -0.25/0.10;
+#' ROR-C: -0.10/0.20; and original ROR-PC: -0.20/0.20. These apply before
+#' `100 * (score + 0.35) / 0.85`, not directly to displayed scaled scores.
+#' Numeric-text values are invalid risk categories; do not interpret them
+#' as an additional category or infer an assignment by rounding.
+#' Version 1.5.8 temporarily defers this known categorical-output defect
+#' pending scientific review of the intended equality convention. Scores,
+#' coefficients and thresholds are preserved. This limitation is separate
+#' from the corrected NODE-dependent
+#' `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)` boundaries described
+#' in [Mapping()], which remain unchanged.
+#'
+#' @details
 #' **Phenodata normalization.** If receptor fields are present, they are coerced to canonical encodings
 #' (\code{ER -> \{ER+, ER-\}}, \code{HER2 -> \{HER2+, HER2-\}},
 #' \code{TN -> \{TN, nonTN\}}). Ambiguous values (e.g., \code{HER2 == "2+"})
@@ -269,6 +301,8 @@ Mapping <- function(se_obj,
 #' Original Parker Intrinsic Subtyping (BS_parker)
 #'
 #' @name BS_parker
+#' @inheritSection Mapping Research ROR interpretation
+#' @inheritSection Mapping Known original ROR boundary limitation
 #' @description
 #' Implements the original PAM50 nearest-centroid classifier as described by
 #' Parker et al. (2009), along with supported calibration strategies and
@@ -433,6 +467,8 @@ BS_parker <- function(se_obj,
 #' Conventional IHC Intrinsic Subtyping (BS_cIHC)
 #'
 #' @name BS_cIHC
+#' @inheritSection Mapping Research ROR interpretation
+#' @inheritSection Mapping Known original ROR boundary limitation
 #' @description
 #' Implements the conventional immunohistochemistry-based (cIHC) intrinsic
 #' subtyping approach, which balances cohorts by estrogen receptor (ER) status
@@ -541,6 +577,8 @@ BS_cIHC <- function(
 #' Iterative Conventional IHC Intrinsic Subtyping (BS_cIHC.itr)
 #'
 #' @name BS_cIHC.itr
+#' @inheritSection Mapping Research ROR interpretation
+#' @inheritSection Mapping Known original ROR boundary limitation
 #' @description
 #' Implements an **iterative** version of the conventional IHC-based intrinsic
 #' subtyping approach. This method repeatedly balances samples by estrogen
@@ -707,6 +745,8 @@ BS_cIHC.itr <- function(
 #' PCA-PAM50 Intrinsic Subtyping (BS_PCAPAM50)
 #'
 #' @name BS_PCAPAM50
+#' @inheritSection Mapping Research ROR interpretation
+#' @inheritSection Mapping Known original ROR boundary limitation
 #' @description
 #' Implements the PCA-PAM50 method, which integrates **Principal Component
 #' Analysis (PCA)** of ESR1 expression to adjust for estrogen receptor (ER)
@@ -881,6 +921,8 @@ BS_PCAPAM50 <- function(
 #' Subgroup-Specific Gene-Centering Intrinsic Subtyping (BS_ssBC)
 #'
 #' @name BS_ssBC
+#' @inheritSection Mapping Research ROR interpretation
+#' @inheritSection Mapping Known original ROR boundary limitation
 #' @description
 #' Implements the **subgroup-specific gene-centering (ssBC)** method for breast
 #' cancer intrinsic subtyping. The ssBC approach applies precomputed,
@@ -1228,6 +1270,8 @@ BS_sspbc <- function(se_obj, ssp.name = "ssp.pam50") {
 #' Intrinsic Subtyping with Multiple Approaches (BS_Multi)
 #'
 #' @name BS_Multi
+#' @inheritSection Mapping Research ROR interpretation
+#' @inheritSection Mapping Known original ROR boundary limitation
 #' @description
 #' Executes multiple intrinsic molecular subtyping methods in one call.
 #' Users can either specify a set of classifiers directly, or enable the

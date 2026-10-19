@@ -1,3 +1,54 @@
+# BreastSubtypeR 1.5.8
+
+## Bug fixes
+
+* Correct PAM50 `Confidence` gene alignment, Spearman-test handling and
+  two-decimal rounding; undefined values remain missing. This intentionally
+  corrects earlier confidence outputs without changing subtype calls or ROR
+  scores. Confidence is not a calibrated subtype probability.
+* Correct the additional NODE-dependent
+  `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)` boundaries (#154):
+  NODE = 0 uses <= 40 / > 40 through 60 / > 60, and NODE = 1--3 uses
+  <= 15 / > 15 through 40 / > 40; at least four positive nodes remain high
+  risk with nonmissing tumor size. Scores are not rounded for grouping.
+
+## Reporting and presentation
+
+* Add descriptive `InputCoverage()` and Shiny coverage reporting for PAM50,
+  AIMS and SSPBC, using bundled-model gene/rule denominators. Reporting does
+  not change method eligibility, imputation, predictions or scientific
+  reliability, and does not assess every ROR component.
+* Refresh the five visualization functions' typography, spacing, legends
+  and annotations while retaining the established subtype colors. Display
+  the already calculated heatmap row dendrogram. These are presentation
+  changes: scaling, clustering, displayed order, calls, counts, PCA values,
+  boxplot statistics and raw entropy remain unchanged.
+* Update the local Shiny presentation, public OSLO2-EMIT0 README screenshot,
+  installation/channel guidance, input and export documentation, and
+  Editor's Choice links. Clarify ssBC.v2 reference-quantile provenance.
+* Keep strict package-error/warning CI gates while excluding account checks
+  only from the GitHub CI BiocCheck invocation. Mailing-list subscription,
+  Support Site registration and watched-tag registration require separate
+  maintainer verification; skipped checks are not reported as successful.
+
+## Scientific clarification and known limitation
+
+* Clarify research Spearman correlations versus commercial Prosigna Pearson
+  correlations (#156). Shared coefficients do not establish equivalent
+  preprocessing, calibration or clinical validation. Calculations are
+  unchanged; these are research outputs, not clinical Prosigna results.
+* Temporarily defer the known original Parker-derived ROR-S, ROR-P, ROR-C
+  and `ROR-PC (Subtype + Clinic + Prolif)` categorical-output defect at exact
+  equality to unscaled cutoffs. Strict comparisons can leave numeric text
+  instead of `low`, `med` or `high`. The unscaled cutoff pairs are
+  -0.15/0.10, -0.25/0.10, -0.10/0.20 and -0.20/0.20, respectively, before
+  `100 * (score + 0.35) / 0.85`. Numeric-text labels are invalid categories,
+  not scientifically accepted assignments. Primary evidence does not
+  conclusively define equality assignments; a separate scientific review
+  is required. Preserve all four grouping implementations, scores,
+  coefficients and thresholds. The separate NODE-dependent correction
+  above remains in place.
+
 # BreastSubtypeR 1.5.7
 
 ## Bug fixes and documentation

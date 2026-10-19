@@ -84,6 +84,41 @@ For the 50 PAM50 genes, \code{ER.v2} uses \code{ERneg_HER2neg}, \code{ERpos_HER2
 The original \code{ER} and \code{TN} reference quantiles remain separate.
 See \link{BreastSubtypeRobj} for the pinned numerical reference.
 }
+\section{Research ROR interpretation}{
+
+The research ROR outputs use Spearman centroid correlations, following
+the research implementations (Parker et al., 2009,
+\url{https://doi.org/10.1200/JCO.2008.18.1370}; Buus et al., 2021,
+\url{https://doi.org/10.1038/s41523-021-00216-w}).
+The additional \code{ROR-PC (Subtype + Clinic + Prolif.Subtype)} score uses
+a PAM50 subset excluding BIRC5, CCNB1, GRB7 and MYBL2, an 18-gene
+proliferation component and binary tumor size. Commercial Prosigna uses
+Pearson correlations within its validated assay workflow (Wallden et al.,
+2015, \url{https://doi.org/10.1186/s12920-015-0129-6}). Shared coefficients
+do not establish equivalence of preprocessing, calibration or clinical
+validation. These scores and groups are research outputs, not clinical
+Prosigna results. No correlation calculation is changed in version 1.5.8.
+}
+
+\section{Known original ROR boundary limitation}{
+
+The original Parker-derived ROR-S, ROR-P, ROR-C and
+\code{ROR-PC (Subtype + Clinic + Prolif)} grouping retains strict comparisons.
+At exact equality to either unscaled cutoff, a group can contain the
+numeric score as text instead of \code{low}, \code{med} or \code{high}.
+The unscaled cutoff pairs are ROR-S: -0.15/0.10; ROR-P: -0.25/0.10;
+ROR-C: -0.10/0.20; and original ROR-PC: -0.20/0.20. These apply before
+\code{100 * (score + 0.35) / 0.85}, not directly to displayed scaled scores.
+Numeric-text values are invalid risk categories; do not interpret them
+as an additional category or infer an assignment by rounding.
+Version 1.5.8 temporarily defers this known categorical-output defect
+pending scientific review of the intended equality convention. Scores,
+coefficients and thresholds are preserved. This limitation is separate
+from the corrected NODE-dependent
+\verb{ROR-PC Group (Subtype + Clinic + Prolif.Subtype)} boundaries described
+in \code{\link[=Mapping]{Mapping()}}, which remain unchanged.
+}
+
 \examples{
 ## Example: Updated subgroup-specific quantiles (ER.v2)
 data("OSLO2EMIT0obj")
