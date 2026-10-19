@@ -13,9 +13,11 @@
 # kept under $RUNNER_TEMP and uploaded as an artifact, also on failure. The
 # logic is in .github/scripts/bioccheck-ci.R (CI only; not in the package).
 #
-# No secrets are used. Without Bioconductor admin credentials BiocCheck cannot
-# check the Bioc-devel mailing-list subscription; the summary reports it as
-# NOT VERIFIED.
+# No secrets are used. Only this GitHub CI invocation sets the documented
+# no-check-bioc-help = TRUE option: mailing-list subscription, Support Site
+# registration and BreastSubtypeR watched-tag registration are NOT CHECKED.
+# The summary discloses that these account requirements need separate
+# maintainer verification. All package ERROR/WARNING gates remain strict.
 #
 # Third-party actions are pinned to full commit SHAs; the comment after each
 # SHA gives the release tag it corresponds to.
@@ -174,7 +176,7 @@ jobs:
           Rscript "$BIOCCHECK_CI" rcmdcheck "$RCHECK" "$EVIDENCE_DIR/check"
           2>&1 | tee "$EVIDENCE_DIR/check/assess-console.log"
 
-      - name: BiocCheck of the same tarball
+      - name: BiocCheck of the same tarball (account checks excluded)
         id: bioccheck
         if: ${{ !cancelled() && steps.rcmdcheck_run.outcome == 'success' && steps.rcmdcheck.outcome == 'success' }}
         working-directory: ${{ runner.temp }}
@@ -213,6 +215,10 @@ jobs:
           if [ -z "${EVIDENCE_DIR:-}" ] || ! command -v Rscript > /dev/null; then
             echo "## BiocCheck (R 4.6, Bioc 3.24)" >> "$GITHUB_STEP_SUMMARY"
             echo "Setup did not complete (no R or no evidence directory); no check ran." >> "$GITHUB_STEP_SUMMARY"
+            echo "Bioconductor mailing-list subscription: NOT checked." >> "$GITHUB_STEP_SUMMARY"
+            echo "Support Site registration: NOT checked." >> "$GITHUB_STEP_SUMMARY"
+            echo "BreastSubtypeR watched-tag registration: NOT checked." >> "$GITHUB_STEP_SUMMARY"
+            echo "These account requirements must be verified separately." >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
           Rscript "$BIOCCHECK_CI" summary "$EVIDENCE_DIR"
