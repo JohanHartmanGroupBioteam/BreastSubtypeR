@@ -352,6 +352,10 @@ Mapping <- function(se_obj,
 #' `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)`, using categories
 #' 0, 1--3 and 4 or more. It does not enter any numerical ROR score.
 #' The current R API does not enforce nonnegative integer values for `NODE`.
+#' For NODE = 0 or 1--3, an undefined numerical `NA` or `NaN` additional
+#' ROR-PC score has an actual missing risk category, not the text `"NaN"`.
+#' The numerical score is unchanged. The independent NODE >= 4 high-risk
+#' rule still applies with nonmissing tumor size, even if the score is missing.
 #' See [Mapping()] for clinical missing-value behavior.
 #'
 #' @return A list containing PAM50 intrinsic subtype calls using the Parker

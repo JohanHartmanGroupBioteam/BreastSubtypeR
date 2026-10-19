@@ -416,8 +416,6 @@ sspPredict <- function(x, y, std = FALSE, distm = "spearman", Subtype = TRUE) {
 # or otherwise transforming scores. This is separate from the Parker groups.
 .ror_pc_subtype_labels <- function(score, low, high) {
     group <- setNames(rep(NA_character_, length(score)), names(score))
-    # Preserve the existing representation of an undefined numerical score.
-    group[is.nan(score)] <- "NaN"
     group[!is.na(score) & score <= low] <- "low"
     group[!is.na(score) & score > low & score <= high] <- "med"
     group[!is.na(score) & score > high] <- "high"

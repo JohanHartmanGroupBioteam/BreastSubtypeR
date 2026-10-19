@@ -11,6 +11,11 @@
   NODE = 0 uses <= 40 / > 40 through 60 / > 60, and NODE = 1--3 uses
   <= 15 / > 15 through 40 / > 40; at least four positive nodes remain high
   risk with nonmissing tumor size. Scores are not rounded for grouping.
+* Represent an undefined numerical `NaN` score as an actual missing category
+  in the additional NODE-dependent ROR-PC group for NODE = 0 or 1--3,
+  instead of the literal text `"NaN"`. Numerical scores, finite/infinite
+  categories, clinical missing-value handling and the independent NODE >= 4
+  high-risk rule are unchanged. Original Parker grouping is unaffected.
 
 ## Reporting and presentation
 

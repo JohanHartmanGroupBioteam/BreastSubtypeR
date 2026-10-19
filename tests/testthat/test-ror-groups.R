@@ -224,7 +224,53 @@ test_that("subtype-specific ROR-PC endpoints include the upper cutoff", {
         setNames(expected_n1_3, names(score)))
     expect_identical(BreastSubtypeR:::.ror_pc_subtype_labels(
         c(NA_real_, NaN, -Inf, Inf), 15, 40),
-        c(NA_character_, "NaN", "low", "high"))
+        c(NA_character_, NA_character_, "low", "high"))
+})
+
+test_that("undefined additional ROR-PC scores have missing categories", {
+    input <- make_node_ror_input()
+    score <- "ROR-PC (Subtype + Clinic + Prolif.Subtype)"
+    group <- "ROR-PC Group (Subtype + Clinic + Prolif.Subtype)"
+    for (node in c(0, 1, 2, 3, 4, NA_real_)) {
+        input$df.cln$NODE <- node
+        for (tsize in c(0, NA_real_)) {
+            input$df.cln$TSIZE <- tsize
+            reference <- suppressMessages(BreastSubtypeR:::RORgroup(
+                input$out, input$df.cln, hasClinical = TRUE))
+            undefined <- input$out
+            undefined$dist.RORSubtype[1, 1] <- NaN
+            undefined$dist.RORSubtype[2, 1] <- NA_real_
+            actual <- suppressMessages(BreastSubtypeR:::RORgroup(
+                undefined, input$df.cln, hasClinical = TRUE))
+            info <- paste("NODE", node, "TSIZE", tsize)
+            other <- setdiff(names(actual), c(score, group))
+            expect_identical(actual[, other], reference[, other], info = info)
+            expect_identical(actual[3:4, c(score, group)],
+                reference[3:4, c(score, group)], info = info)
+            if (!is.na(tsize)) {
+                expect_true(is.nan(actual[[score]][1]), info = info)
+                expect_true(is.na(actual[[score]][2]), info = info)
+                expect_false(is.nan(actual[[score]][2]), info = info)
+            }
+            if (!is.na(node) && node >= 4 && !is.na(tsize)) {
+                ## The independent NODE >= 4 rule is deliberately unchanged.
+                expect_identical(unname(actual[[group]][1:2]),
+                    c("high", "high"), info = info)
+            } else {
+                expect_true(all(is.na(actual[[group]][1:2])), info = info)
+                expect_false(any(actual[[group]][1:2] %in% c("NA", "NaN")),
+                    info = info)
+            }
+            path <- tempfile(fileext = ".txt")
+            utils::write.table(actual, path, sep = "\t", quote = FALSE,
+                row.names = FALSE)
+            restored <- utils::read.delim(path, check.names = FALSE)
+            unlink(path)
+            expect_identical(is.na(restored[[group]]), is.na(actual[[group]]),
+                info = info)
+            expect_false(any(restored[[group]] %in% c("NA", "NaN")), info = info)
+        }
+    }
 })
 
 make_boundary_ror_input <- function() {
