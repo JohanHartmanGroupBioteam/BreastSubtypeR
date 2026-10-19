@@ -19,14 +19,19 @@ for each patient.}
 showing the eigenvalues of the principal components.}
 }
 \value{
-A \code{ggplot} object representing the PCA plot, colored by subtype. If
-\code{Eigen} is set to \code{TRUE}, a scree plot of the eigenvalues is also included.
+A \code{ggplot} object representing the PCA plot, colored by subtype.
+If \code{Eigen = TRUE}, returns only the scree plot.
 }
 \description{
 This function generates a PCA plot to visualize the principal
 components of gene expression data, colored by the assigned subtypes.
 Optionally, it can display a scree plot of eigenvalues to evaluate the
 explained variance.
+}
+\details{
+The scatter plot uses a shared sans-serif theme and a bottom subtype
+legend. PCA centering, scaling, scores, joins, explained variance and
+reference lines are unchanged; no confidence ellipses or tests are added.
 }
 \examples{
 library(SummarizedExperiment)

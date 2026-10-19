@@ -21,6 +21,13 @@ This function generates a pie chart to visualize the
 distribution of breast cancer subtypes in a cohort, based on the provided
 \code{Subtype} data.
 }
+\details{
+The legend reports subtype counts and percentages. As with \code{table()},
+missing subtype calls are excluded from the assigned-call denominator;
+the caption reports both counts. Percentages are rounded to two decimals
+before drawing the slices, preserving the existing slice geometry and
+subtype order. Missing calls are not added as an extra slice.
+}
 \examples{
 data("OSLO2EMIT0obj")
 res <- OSLO2EMIT0obj$res
