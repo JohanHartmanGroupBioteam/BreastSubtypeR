@@ -624,7 +624,7 @@ server <- function(input, output, session) {
         "Yang Q., Hartman J., Sifakis E.G. <em>BreastSubtypeR</em>. ",
         "<em>NAR Genomics and Bioinformatics</em> (2025). ",
         "<a href='https://doi.org/10.1093/nargab/lqaf131' target='_blank' rel='noopener noreferrer'>https://doi.org/10.1093/nargab/lqaf131</a></p>",
-        "<p><a href='https://academic.oup.com/nargab/pages/editors-choice-articles' target='_blank' rel='noopener noreferrer'>Editor's Choice (2025)</a> - ",
+        "<p><a href='https://academic.oup.com/nargab/pages/editors-choice-articles?login=false#:~:text=BreastSubtypeR' target='_blank' rel='noopener noreferrer'>Editor's Choice (2025)</a> - ",
         "<a href='https://doi.org/10.1093/nargab/lqaf131' target='_blank' rel='noopener noreferrer'>NAR Genomics and Bioinformatics</a>.</p>"
       ))
     ))

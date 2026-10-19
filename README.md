@@ -1,4 +1,4 @@
-# BreastSubtypeR <img src="inst/ShinyBreastSubtypeR/logo.svg" alt="BreastSubtypeR logo" align="right" height="100"/>
+# BreastSubtypeR <img src="inst/ShinyBreastSubtypeR/logo.svg" alt="BreastSubtypeR logo" align="right" height="120"/>
 
 Release&nbsp;[![Bioconductor release package build status](https://bioconductor.org/shields/build/release/bioc/BreastSubtypeR.svg)](https://bioconductor.org/checkResults/release/bioc-LATEST/BreastSubtypeR/) Devel&nbsp;[![Bioconductor development package build status](https://bioconductor.org/shields/build/devel/bioc/BreastSubtypeR.svg)](https://bioconductor.org/checkResults/devel/bioc-LATEST/BreastSubtypeR/) [![License: GPL-3](https://img.shields.io/badge/license-GPL--3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.html) [![NAR Genomics and Bioinformatics: Editor's Choice](https://img.shields.io/badge/NAR_Genomics_and_Bioinformatics-Editor%27s_Choice-1f6feb)](https://doi.org/10.1093/nargab/lqaf131)
 
@@ -192,14 +192,14 @@ and `sessionInfo()`.
 
 ## Citation and license
 
-<a href="https://academic.oup.com/nargab/pages/editors-choice-articles"><img src="man/figures/editors-choice-2025.svg" width="156" alt="BreastSubtypeR article in NAR Genomics and Bioinformatics: Editor's Choice, 2025"/></a>
+<a href="https://academic.oup.com/nargab/pages/editors-choice-articles?login=false#:~:text=BreastSubtypeR"><img src="man/figures/editors-choice-2025.svg" width="156" alt="BreastSubtypeR article in NAR Genomics and Bioinformatics: Editor's Choice, 2025"/></a>
 
 Yang Q, Hartman J, Sifakis EG (2025). BreastSubtypeR: a unified R/Bioconductor
 package for intrinsic molecular subtyping in breast cancer research.
 *NAR Genomics and Bioinformatics*, 7(4), lqaf131.
 [doi:10.1093/nargab/lqaf131](https://doi.org/10.1093/nargab/lqaf131).
 
-The article was selected as [Editor's Choice, 2025](https://academic.oup.com/nargab/pages/editors-choice-articles)
+The article was selected as [Editor's Choice, 2025](https://academic.oup.com/nargab/pages/editors-choice-articles?login=false#:~:text=BreastSubtypeR)
 in *NAR Genomics and Bioinformatics*.
 
 Use `citation("BreastSubtypeR")` for the installed package citation.
