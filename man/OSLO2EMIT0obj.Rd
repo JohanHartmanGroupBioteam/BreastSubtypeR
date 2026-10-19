@@ -19,6 +19,12 @@ are stored in \code{colData}, and feature annotations in \code{rowData}.}
 \code{OSLO2EMIT0.103.genematrix_noNeg.Rdata}, Mendeley Data, version 3,
 from the library-protocol-adjusted FPKM collection.
 \doi{10.17632/yzxtxn4nmd.3}
+The source matrix contains 19,675 features and 103 sample identifiers.
+The packaged subset retains 356 features and 102 samples in source-relative
+order; source sample \code{OSLO2EMIT0.073} is absent. The historical reason
+for that omission, the feature-selection rationale and the exact generating
+script are not established. The expression transformation was verified by
+matching source feature and sample identifiers, not inferred from the filename.
 }
 \usage{
 data("OSLO2EMIT0obj")

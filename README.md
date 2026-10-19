@@ -177,7 +177,8 @@ have an older interface.
    **AUTO: awaiting preprocessing**. After mapping, it shows readiness
    counts or guidance for genuinely blocked annotations.
 3. **Results and downloads:** inspect the current results and download
-   tab-separated text (TSV). AUTO exports separate method calls and entropy;
+   tab-separated text (TSV), saved with a `.txt` extension. AUTO exports
+   separate method calls and entropy;
    **Full metrics** are available for supported single NC methods.
 
 Changing inputs or relevant settings clears stale predictions and downloads.

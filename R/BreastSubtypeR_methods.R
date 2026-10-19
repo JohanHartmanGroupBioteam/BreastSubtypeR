@@ -187,6 +187,9 @@ NULL
 #' before grouping. This resolves
 #' \href{https://github.com/JohanHartmanGroupBioteam/BreastSubtypeR/issues/154}{issue #154};
 #' the original Parker risk groups are unchanged.
+#' For NODE = 0 or 1--3, an undefined numerical `NA` or `NaN` additional
+#' ROR-PC score has an actual missing category. The independent NODE >= 4
+#' high-risk rule still applies with nonmissing `TSIZE`.
 #'
 #' @section Research ROR interpretation:
 #' The research ROR outputs use Spearman centroid correlations, following
@@ -443,7 +446,7 @@ BS_parker <- function(se_obj,
             )
         }
         if (!is.numeric(pheno$NODE)) {
-            stop("colData(se_obj)$NODE must be numeric (0 for negative, >=1 for positive).")
+            stop("colData(se_obj)$NODE must be numeric.")
         }
         rownames(pheno) <- pheno$PatientID
     } else {
@@ -627,6 +630,9 @@ BS_cIHC <- function(
 #'   Write `54 / 64`, not `54:64`: in R, `54:64` is the sequence 54, 55, ...,
 #'   64 and gives an error. Values above one are permitted in target mode;
 #'   legacy mode retains the feasibility limit described above.
+#'   Extreme positive ratios can retain very few samples from one ER group,
+#'   making the calibration subset poorly representative. Acceptance of a
+#'   ratio does not establish calibration adequacy for a particular cohort.
 #'
 #' @param Subtype Logical. If `TRUE`, also returns four-class consensus
 #'   calls (Luminal A, Luminal B, HER2-enriched, Basal-like) in `BS.Subtype`.

@@ -4,7 +4,6 @@
 #' @import ComplexHeatmap
 #' @import RColorBrewer
 #' @import circlize
-#' @import ggrepel
 #' @import magrittr
 #' @import impute
 #' @importFrom dplyr mutate across everything

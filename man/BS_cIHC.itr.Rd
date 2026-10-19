@@ -54,7 +54,10 @@ ER+ samples are at least as many as ER- samples.
 
 Write \code{54 / 64}, not \code{54:64}: in R, \code{54:64} is the sequence 54, 55, ...,
 64 and gives an error. Values above one are permitted in target mode;
-legacy mode retains the feasibility limit described above.}
+legacy mode retains the feasibility limit described above.
+Extreme positive ratios can retain very few samples from one ER group,
+making the calibration subset poorly representative. Acceptance of a
+ratio does not establish calibration adequacy for a particular cohort.}
 
 \item{Subtype}{Logical. If \code{TRUE}, also returns four-class consensus
 calls (Luminal A, Luminal B, HER2-enriched, Basal-like) in \code{BS.Subtype}.

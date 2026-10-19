@@ -150,8 +150,9 @@ test_that("NODE changes only the subtype-specific ROR-PC risk group", {
         c("high", "high", "high", "high")
     ))
 
-    ## Scores are away from all cutoffs: exact-cutoff handling is tracked
-    ## separately in issue #154 and is not an accepted result in these tests.
+    ## These scores are away from cutoffs. Resolved NODE boundaries (#154,
+    ## implemented in #157) are tested below. The original Parker equality
+    ## limitation remains separately deferred in #172.
     nodes <- c(0, 1, 3, 4, NA)
     expected_groups <- list(
         c("low", "low", "med", "high"),

@@ -131,6 +131,9 @@ low <= 15, intermediate > 15 and <= 40, high > 40. Scores are not rounded
 before grouping. This resolves
 \href{https://github.com/JohanHartmanGroupBioteam/BreastSubtypeR/issues/154}{issue #154};
 the original Parker risk groups are unchanged.
+For NODE = 0 or 1--3, an undefined numerical \code{NA} or \code{NaN} additional
+ROR-PC score has an actual missing category. The independent NODE >= 4
+high-risk rule still applies with nonmissing \code{TSIZE}.
 
 \strong{Phenodata normalization.} If receptor fields are present, they are coerced to canonical encodings
 (\code{ER -> \{ER+, ER-\}}, \code{HER2 -> \{HER2+, HER2-\}},
