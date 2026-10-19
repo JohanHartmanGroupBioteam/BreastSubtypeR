@@ -708,8 +708,9 @@ test_that("the citation modal retains the publication and links its distinction"
     expect_match(modal_html, "Please cite:", fixed = TRUE)
     expect_match(modal_html, "Yang Q., Hartman J., Sifakis E.G.", fixed = TRUE)
     expect_match(modal_html, ">Editor's Choice (2025)</a> - ", fixed = TRUE)
-    expect_match(modal_html, "https://academic.oup.com/nargab/pages/editors-choice-articles",
-                 fixed = TRUE)
+    expect_match(modal_html, paste0(
+        "href='https://academic.oup.com/nargab/pages/editors-choice-articles",
+        "?login=false#:~:text=BreastSubtypeR'"), fixed = TRUE)
     expect_match(modal_html, "https://doi.org/10.1093/nargab/lqaf131", fixed = TRUE)
     expect_match(modal_html, ">NAR Genomics and Bioinformatics</a>.</p>", fixed = TRUE)
 })
