@@ -1,4 +1,4 @@
-# BreastSubtypeR (development)
+# BreastSubtypeR 1.5.9
 
 ## Bug fixes
 
