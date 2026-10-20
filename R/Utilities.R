@@ -74,7 +74,13 @@ duplicate_genes <- function(x, y, method) {
         switch(method,
             "mean" = apply(mat, 2, mean, na.rm = TRUE),
             "median" = apply(mat, 2, median, na.rm = TRUE),
-            "max" = mat[which.max(rowSums(mat)), ],
+            "max" = {
+                if (nrow(mat) == 1L) {
+                    mat[1L, ]
+                } else {
+                    mat[which.max(rowSums(mat)), ]
+                }
+            },
             "stdev" = {
                 temp <- mat
                 stdevs <- apply(mat, 1, sd, na.rm = TRUE)
