@@ -2,7 +2,7 @@
 % Please edit documentation in R/BreastSubtypeR_methods.R
 \name{BS_sspbc}
 \alias{BS_sspbc}
-\title{Intrinsic Subtyping using SSPBC (BS_sspbc)}
+\title{Intrinsic Subtyping and ROR Bins using SSPBC (BS_sspbc)}
 \usage{
 BS_sspbc(se_obj, ssp.name = "ssp.pam50")
 }
@@ -21,23 +21,38 @@ and samples as columns.
 \itemize{
 \item \code{"ssp.pam50"}: Predicts PAM50-based intrinsic subtypes.
 \item \code{"ssp.subtype"}: Predicts Prosigna-like subtypes (four subtypes, excluding Normal-like).
+\item \code{"ssp.ror"}: Predicts native categorical ROR bins for research use.
+The fitted model has 18 labels, \code{"c005"}, \code{"c010"}, ..., \code{"c090"}.
 }}
 }
 \value{
 A \strong{list} with the following elements:
 \itemize{
-\item \code{cl}: Molecular class identified by the sspbc models for each sample
-(one of \code{"Basal"}, \code{"Her2"}, \code{"LumA"}, \code{"LumB"}, with or without \code{"Normal"}).
-\item \code{prob}: Numeric vector of posterior probabilities corresponding
-to the assigned subtype in \code{cl} (one value per sample).
-\item \code{all.probs}: Matrix of posterior probability values for all samples
-and all subtypes (rows = samples, columns = subtypes).
-\item \code{rules.matrix}: Binary (0/1) matrix of the pairwise gene-expression
+\item \code{cl}: Character matrix of predicted classes, with one row per
+sample (named by sample ID) and one column named by the fitted
+model's \code{k} setting: \code{"24"} for \code{ssp.pam50},
+\code{"21"} for \code{ssp.subtype} and \code{ssp.ror}.
+Subtype calls are \code{"Basal"}, \code{"Her2"}, \code{"LumA"},
+\code{"LumB"}, with \code{"Normal"} also possible for
+\code{ssp.pam50}. ROR calls are the native bin labels above.
+\item \code{prob}: Numeric matrix of posterior probabilities for the
+assigned classes, with the same dimensions and dimnames as \code{cl}.
+\item \code{all.probs}: Named list with one element named by \code{k},
+containing a numeric posterior-probability matrix (rows = samples
+in input order, columns = class labels). Native row names are absent;
+sample IDs are available from \code{rownames(cl)}.
+\item \code{rules.matrix}: Numeric (0/1, or \code{NA} for unavailable rules)
+matrix of the pairwise gene-expression
 rules (\emph{gene A < gene B}) used for assignment (rows = rules, columns = samples);
 \code{1} indicates the rule evaluated to TRUE for that sample.
-\item \code{data.used}: Expression values actually used to evaluate the simple rules.
-\item \code{EntrezID.used}: Character vector of EntrezGene IDs used for rule evaluation.
+Columns retain input sample order but have no native column names.
+\item \code{data.used}: Numeric matrix of expression values used for
+rule evaluation, with sample IDs as column names.
+\item \code{EntrezID.used}: Character vector of EntrezGene IDs with the
+native \code{"e"} prefix, aligned to the rows of \code{data.used}.
 }
+Matrix dimensions are retained for a single sample. The native return
+structure and calculations are passed through unchanged.
 }
 \description{
 Implements \strong{SSPBC (Single Sample Predictor for Breast Cancer)}, a
@@ -47,10 +62,20 @@ single-sample predictions, independent of cohort composition, and supports
 multiple model variants for different applications.
 }
 \details{
+The bundled SSP-ROR model uses \code{k = 21} and 361 gene-pair rules.
+Its \code{cl} values are categorical ROR-bin predictions from the fitted
+model described by Staaf et al. (2022). They are not continuous ROR scores,
+tumor-size-adjusted ROR values, nodal-status-specific risk categories or
+clinical Prosigna outputs. This wrapper does not convert bins to numbers,
+apply clinical cutoffs or use tumor size or nodal status.
+
 Posterior probabilities are conditional on the fitted naive Bayes model
 and its native handling of the available rule inputs. They differ from
 \code{\link[=InputCoverage]{InputCoverage()}}, multi-method entropy and Parker \code{Confidence}; they do
 not establish externally validated predictive or clinical reliability.
+For \code{ssp.ror}, they describe bin membership, not recurrence probability.
+Missing rules retain the native handling; successful prediction alone
+does not establish adequate input coverage.
 }
 \examples{
 ## Example using SSPBC with the PAM50 model
@@ -59,6 +84,19 @@ res <- BS_sspbc(
     se_obj = OSLO2EMIT0obj$data_input$se_SSP,
     ssp.name = "ssp.pam50"
 )
+
+## Native ROR-bin predictions for research use
+## This compact example lacks many SSP-ROR rules; it illustrates the API.
+ror <- BS_sspbc(
+    se_obj = OSLO2EMIT0obj$data_input$se_SSP,
+    ssp.name = "ssp.ror"
+)
+head(data.frame(
+    SampleID = rownames(ror$cl),
+    ROR_bin = ror$cl[, "21"],
+    Bin_probability = ror$prob[, "21"],
+    row.names = NULL
+))
 
 }
 \references{
