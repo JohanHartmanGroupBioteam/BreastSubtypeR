@@ -81,7 +81,8 @@ the probes into one row).
 (short-oligo arrays, e.g., Affymetrix).
 \item \code{"stdev"}: keeps the single probe with the highest standard deviation.
 \item \code{"max"}: keeps the single probe with the largest row sum across samples
-(often used for RNA-seq).
+(often used for RNA-seq). A group with one row is retained without
+ranking, including any remaining \code{NA} or \code{NaN} measurements.
 }}
 
 \item{impute}{Logical. If \code{TRUE}, applies KNN-based imputation to missing values.}
