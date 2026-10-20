@@ -1,3 +1,16 @@
+# BreastSubtypeR development
+
+## Documentation and regression coverage
+
+* Document the already available `BS_sspbc(..., ssp.name = "ssp.ror")`
+  pathway (#131), its native categorical ROR-bin labels and model posterior
+  probabilities. Correct the documented matrix/list return types and sample
+  alignment, and add a research-use vignette example with CSV export.
+* Add regression coverage for packaged SSP-ROR model availability, single
+  and multiple samples, sample identity/order, native-output parity, invalid
+  model names and preservation of both SSPBC subtype models. Prediction
+  code, fitted models and native missing-rule handling are unchanged.
+
 # BreastSubtypeR 1.5.8
 
 ## Bug fixes

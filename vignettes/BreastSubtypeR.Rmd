@@ -422,6 +422,55 @@ defers this known defect pending scientific review of exact-equality
 assignments. The corrected NODE-dependent additional ROR-PC grouping from
 issue #154 remains unchanged.
 
+## Native SSP-ROR bins for research use
+
+`BS_sspbc(se_obj, ssp.name = "ssp.ror")` already exposes the bundled SSP-ROR
+model from [Staaf et al. (2022)](https://doi.org/10.1038/s41523-022-00465-3).
+It returns categorical bin labels (`c005`, `c010`, ..., `c090`), with 18
+classes in the fitted model. These are distinct from the NC-method ROR
+scores above, continuous ROR scores, tumor-size-adjusted values,
+nodal-status-specific risk categories and clinical Prosigna outputs.
+`BS_sspbc()` preserves the native model calculations and does not perform
+numerical bin conversion or clinical adjustment.
+
+The public OSLO2-EMIT0 object below illustrates the API and sample alignment.
+Its compact gene set lacks many SSP-ROR gene pairs. Unavailable rules remain
+`NA` under native handling; obtaining predictions does not establish adequate
+input coverage or clinical validity. Use appropriate expression inputs for
+the full model in a research analysis.
+
+```{r ssp-ror, eval=TRUE}
+data("OSLO2EMIT0obj")
+ssp_ror <- BS_sspbc(
+    OSLO2EMIT0obj$data_input$se_SSP,
+    ssp.name = "ssp.ror"
+)
+ror_bins <- data.frame(
+    SampleID = rownames(ssp_ror$cl),
+    ROR_bin = ssp_ror$cl[, "21"],
+    Bin_probability = ssp_ror$prob[, "21"],
+    row.names = NULL
+)
+head(ror_bins)
+```
+
+`cl` is a character matrix and `prob` a numeric matrix, each with one row per
+sample and one column named `"21"` (the fitted model's `k` setting).
+`all.probs[["21"]]` is a numeric matrix with one row per sample and 18
+columns named by bin label. These are model posterior probabilities of bin
+membership, not probabilities of recurrence. `rules.matrix` has 361 rows
+and one column per sample; `k` is not the total rule count. Matrices retain
+their dimensions for a single sample.
+
+All sample axes preserve input order. Native `all.probs[["21"]]` row names
+and `rules.matrix` column names are absent; associate them with
+`rownames(ssp_ror$cl)`. `data.used` retains sample IDs as column names, and
+`EntrezID.used` identifies its rows. To export the labelled research table:
+
+```{r export-ssp-ror, eval=FALSE}
+write.csv(ror_bins, "ssp-ror-bins.csv", row.names = FALSE)
+```
+
 # Guidance & best practices
 
 ## Input types
