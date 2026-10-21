@@ -19,6 +19,11 @@
   ranking them (#178). In the nonraw `impute = FALSE` path, remaining `NA`
   and `NaN` measurements are retained instead of causing a dimension error.
   Selection among multiple probes and all other mapping methods are unchanged.
+* Reject mixed AUTO/manual selections and duplicate method names in
+  `BS_Multi()` before accessing input data or executing classifiers (#188).
+  AUTO must be the only entry; manual selections must contain at least two
+  distinct methods. Valid method selections and their execution order are
+  unchanged.
 
 # BreastSubtypeR 1.5.8
 
