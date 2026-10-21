@@ -433,7 +433,8 @@ server <- function(input, output, session) {
               Shiny attempts numeric conversion; all values in both columns must be finite to enable clinical ROR.
               If validation fails, Shiny displays a warning and proceeds without clinical ROR; subtype analysis can still proceed.</li>
               <li><b>Clinical coding:</b> <code>TSIZE</code> is 0 (at most 2 cm) or 1 (more than 2 cm).
-              <code>NODE</code> is the number of positive lymph nodes; actual nonnegative integer counts are recommended when available but are not enforced.
+              <code>NODE</code> is the number of positive lymph nodes. The additional subtype-specific ROR-PC risk group requires finite nonnegative integer counts;
+              negative or fractional values give a warning and a missing group for that sample, while numerical ROR scores remain available.
               Binary 0/1 is accepted but cannot distinguish 1&ndash;3 from 4 or more nodes for the additional subtype-specific ROR-PC risk group.
               NODE does not enter numerical ROR scores.</li>
             </ul>"))

@@ -2,6 +2,14 @@
 
 ## Bug fixes
 
+* `RORgroup()` now requires finite nonnegative integer-valued `NODE` counts
+  for `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)` (#187). Negative,
+  fractional or infinite numeric values previously left the unscaled score
+  as numeric text in the group column or were silently classified; they now
+  give one warning per call and a missing group. The column is consistently
+  character, including all-missing batches. `NA`/`NaN` `NODE`, all numerical
+  ROR scores, the original Parker groups and the valid-count rules from #157
+  are unchanged. The exact-equality limitation in #172 remains deferred.
 * Preserve singleton gene rows under `Mapping(method = "max")` without
   ranking them (#178). In the nonraw `impute = FALSE` path, remaining `NA`
   and `NaN` measurements are retained instead of causing a dimension error.

@@ -47,7 +47,10 @@ but cannot distinguish 1--3 from 4 or more positive nodes.
 \code{NODE} affects only the additional subtype-specific risk group,
 \verb{ROR-PC Group (Subtype + Clinic + Prolif.Subtype)}, using categories
 0, 1--3 and 4 or more. It does not enter any numerical ROR score.
-The current R API does not enforce nonnegative integer values for \code{NODE}.
+This group requires finite nonnegative integer-valued counts. Negative,
+fractional or infinite numeric \code{NODE} values give a warning and a missing
+additional group; numerical ROR scores remain available. Missing \code{NODE}
+(\code{NA}/\code{NaN}) gives a missing additional group without a warning.
 See \code{\link[=Mapping]{Mapping()}} for clinical missing-value behavior.}
 }
 \value{

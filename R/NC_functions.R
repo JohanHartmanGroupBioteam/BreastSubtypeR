@@ -432,7 +432,9 @@ sspPredict <- function(x, y, std = FALSE, distm = "spearman", Subtype = TRUE) {
 #' - "NODE": Numeric number of positive lymph nodes; use actual nonnegative
 #'   integer counts when available. Binary 0/1 cannot distinguish 1--3 from
 #'   4 or more positive nodes for the additional subtype-specific ROR-PC group.
-#'   Integer counts are not validated; see [Mapping()] for details.
+#'   Finite nonnegative integer-valued counts are required for that group:
+#'   negative, fractional or infinite values give a warning and a missing
+#'   group, while NA and NaN give a missing group silently. See [Mapping()].
 #' @return ROR, ROR risk group and other indications
 #' @noRd
 
@@ -648,23 +650,46 @@ RORgroup <- function(
             if ("NODE" %in% colnames(Clinical)) {
                 Clinical$NODE <- as.numeric(Clinical$NODE)
 
-                cprskg.Subtype <- cmbWprolif.Subtype
+                ## The additional group starts as a genuine missing category
+                ## with the score's length and sample names, so a sample that
+                ## matches no nodal branch never retains its numeric score.
+                cprskg.Subtype <- setNames(
+                    rep(NA_character_, length(cmbWprolif.Subtype)),
+                    names(cmbWprolif.Subtype)
+                )
 
-                patients.NODE <- rownames(Clinical)[!is.na(Clinical$NODE)]
+                ## Valid positive-node counts are finite, nonnegative and
+                ## integer-valued doubles or integers (e.g. 2 or 2.0). NA and
+                ## NaN remain ordinary missing values. The supplied count is
+                ## never rounded, truncated or otherwise replaced.
+                node <- Clinical$NODE
+                node.valid <- !is.na(node) & is.finite(node) & node >= 0 &
+                    node == trunc(node)
+                node.invalid <- !is.na(node) & !node.valid
 
-                if (length(patients.NODE) > 0) {
+                if (any(node.invalid)) {
+                    warning(
+                        "NODE must give the number of positive lymph nodes ",
+                        "as finite nonnegative integer values; ",
+                        sum(node.invalid), " sample(s) with negative, ",
+                        "fractional or infinite NODE values receive a ",
+                        "missing 'ROR-PC Group (Subtype + Clinic + ",
+                        "Prolif.Subtype)'. Numerical ROR scores are unaffected.",
+                        call. = FALSE
+                    )
+                }
+
+                if (any(node.valid)) {
                     ## NODE >= 4
-                    patients.NODE.4 <- rownames(Clinical)[Clinical$NODE >= 4 &
-                        !is.na(Clinical$NODE)]
+                    patients.NODE.4 <- rownames(Clinical)[node.valid & node >= 4]
 
                     if (length(patients.NODE.4) > 0) {
                         cprskg.Subtype[patients.NODE.4] <- "high"
                     }
 
                     ## NODE < 4 & >0
-                    pts.NODE.3 <- rownames(Clinical)[Clinical$NODE < 4 &
-                        Clinical$NODE > 0 &
-                        !is.na(Clinical$NODE)]
+                    pts.NODE.3 <- rownames(Clinical)[node.valid & node < 4 &
+                        node > 0]
 
                     if (length(pts.NODE.3) > 0) {
                         temp <- cmbWprolif.Subtype[pts.NODE.3]
@@ -674,8 +699,7 @@ RORgroup <- function(
                     }
 
                     ## negative node
-                    pts.NODE.0 <- rownames(Clinical)[Clinical$NODE == 0 &
-                        !is.na(Clinical$NODE)]
+                    pts.NODE.0 <- rownames(Clinical)[node.valid & node == 0]
 
                     if (length(pts.NODE.0) > 0) {
                         tmp <- cmbWprolif.Subtype[pts.NODE.0]
@@ -691,7 +715,7 @@ RORgroup <- function(
                     is.na(Clinical$TSIZE)]
 
                 if (length(patients.NA) > 0) {
-                    cprskg.Subtype[patients.NA] <- NA
+                    cprskg.Subtype[patients.NA] <- NA_character_
                 }
 
                 ROR.combined.Subtype <- data.frame(
@@ -905,7 +929,8 @@ makeCalls.parker <- function(
 #' - "NODE": Numeric number of positive lymph nodes; use actual nonnegative
 #'   integer counts when available. Binary 0/1 cannot distinguish 1--3 from
 #'   4 or more positive nodes for the additional subtype-specific ROR-PC group.
-#'   Integer counts are not validated; see [Mapping()] for details.
+#'   `RORgroup()` requires finite nonnegative integer-valued counts for that
+#'   group; see [Mapping()] for details.
 #' @param seed An integer value is used to set the random seed.
 #' @noRd
 
@@ -1373,7 +1398,8 @@ makeCalls_ihc.iterative <- function(
 #' - "NODE": Numeric number of positive lymph nodes; use actual nonnegative
 #'   integer counts when available. Binary 0/1 cannot distinguish 1--3 from
 #'   4 or more positive nodes for the additional subtype-specific ROR-PC group.
-#'   Integer counts are not validated; see [Mapping()] for details.
+#'   `RORgroup()` requires finite nonnegative integer-valued counts for that
+#'   group; see [Mapping()] for details.
 #' @param seed An integer value is used to set the random seed.
 #' @noRd
 
@@ -1604,7 +1630,8 @@ makeCalls.PC1ihc <- function(mat,
 #' - "NODE": Numeric number of positive lymph nodes; use actual nonnegative
 #'   integer counts when available. Binary 0/1 cannot distinguish 1--3 from
 #'   4 or more positive nodes for the additional subtype-specific ROR-PC group.
-#'   Integer counts are not validated; see [Mapping()] for details.
+#'   `RORgroup()` requires finite nonnegative integer-valued counts for that
+#'   group; see [Mapping()] for details.
 #' @param seed An integer value is used to set the random seed.
 #' @noRd
 
@@ -1744,7 +1771,8 @@ makeCalls.v1PAM <- function(mat,
 #' - "NODE": Numeric number of positive lymph nodes; use actual nonnegative
 #'   integer counts when available. Binary 0/1 cannot distinguish 1--3 from
 #'   4 or more positive nodes for the additional subtype-specific ROR-PC group.
-#'   Integer counts are not validated; see [Mapping()] for details.
+#'   `RORgroup()` requires finite nonnegative integer-valued counts for that
+#'   group; see [Mapping()] for details.
 #' @noRd
 
 makeCalls.ssBC <- function(mat,
