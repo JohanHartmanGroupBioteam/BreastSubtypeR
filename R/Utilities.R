@@ -83,15 +83,18 @@ duplicate_genes <- function(x, y, method) {
                     ## here instead of failing later with a dimnames error
                     selected <- which.max(rowSums(mat))
                     if (length(selected) == 0L) {
-                        stop(sprintf(paste0(
-                            "Entrez ID %s: all %d candidate probes have an ",
-                            "undefined row total (NA, NaN or Inf - Inf), so ",
-                            "method = \"max\" cannot select one. Resolve the ",
-                            "missing values (for example with impute = TRUE ",
-                            "where imputation is possible), choose another ",
-                            "duplicate-handling method, or remove the ",
-                            "affected probes before mapping."),
-                            id, nrow(mat)), call. = FALSE)
+                        stop(
+                            sprintf("Entrez ID %s: all %d candidate probes ",
+                                id, nrow(mat)),
+                            "have an undefined row total (NA, NaN or ",
+                            "Inf - Inf), so method = \"max\" cannot select ",
+                            "one. Resolve the missing values (for example ",
+                            "with impute = TRUE where imputation is ",
+                            "possible), choose another duplicate-handling ",
+                            "method, or remove the affected probes before ",
+                            "mapping.",
+                            call. = FALSE
+                        )
                     }
                     mat[selected, ]
                 }
