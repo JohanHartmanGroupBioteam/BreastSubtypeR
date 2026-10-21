@@ -134,13 +134,15 @@ test_that("max duplicate-group missingness keeps baseline results and errors", {
     for (missing in list(NA_real_, NaN)) {
         x[,] <- missing
         expect_error(BreastSubtypeR:::duplicate_genes(x, y, "max"),
-            "Entrez ID 100: all 2 candidate probes have an undefined row total",
+            paste0("Cannot resolve Entrez ID 100 with method = \"max\": ",
+                "none of its 2 probes has a defined total across samples"),
             fixed = TRUE)
         with_singleton <- rbind(x, complete = c(1, 2, 3))
         annotation <- mapping178_annotation(with_singleton, c(100L, 100L, 200L))
         expect_error(BreastSubtypeR:::duplicate_genes(
             with_singleton, annotation, "max"),
-            "Entrez ID 100: all 2 candidate probes have an undefined row total",
+            paste0("Cannot resolve Entrez ID 100 with method = \"max\": ",
+                "none of its 2 probes has a defined total across samples"),
             fixed = TRUE)
     }
 })
@@ -188,24 +190,30 @@ test_that("max stops with a gene-specific error when every duplicate total is un
         "equal observed sums" = rbind(a = c(4, NA, 5), b = c(NA, 4, 5)),
         "two samples" = rbind(a = c(1, NA), b = c(NA, 5)),
         "one sample" = rbind(a = NA_real_, b = NA_real_))
-    expected_message <-
-        "Entrez ID 100: all 2 candidate probes have an undefined row total"
+    expected_message <- paste0(
+        "Cannot resolve Entrez ID 100 with method = \"max\": none of its ",
+        "2 probes has a defined total across samples (all row sums are NA/NaN). ",
+        "Review missing or nonfinite measurements and the preprocessing ",
+        "strategy. No probe was selected for this Entrez ID.")
     for (name in names(undefined)) {
         x <- undefined[[name]]
         colnames(x) <- cols[seq_len(ncol(x))]
         y <- mapping178_annotation(x, c(100L, 100L))
         error <- expect_error(BreastSubtypeR:::duplicate_genes(x, y, "max"),
             expected_message, fixed = TRUE, info = name)
+        expect_identical(conditionMessage(error), expected_message, info = name)
         # The diagnostic names no sample.
         expect_false(any(vapply(colnames(x), grepl, logical(1),
             x = conditionMessage(error), fixed = TRUE)), info = name)
     }
     three <- rbind(a = c(NA, 1, 2), b = c(1, NA, 2), c = c(1, 2, NA))
     colnames(three) <- cols
-    expect_error(BreastSubtypeR:::duplicate_genes(three,
+    expected_three_message <- sub("its 2 probes", "its 3 probes",
+        expected_message, fixed = TRUE)
+    error <- expect_error(BreastSubtypeR:::duplicate_genes(three,
         mapping178_annotation(three, rep(100L, 3)), "max"),
-        "Entrez ID 100: all 3 candidate probes have an undefined row total",
-        fixed = TRUE)
+        expected_three_message, fixed = TRUE)
+    expect_identical(conditionMessage(error), expected_three_message)
     # Only the undefined group is reported, in either input order; defined
     # groups and a missing singleton do not change the diagnostic.
     mixed <- rbind(a = c(1, NA, 3), b = c(NA, 5, 4), low = c(10, 1, 1),
@@ -237,7 +245,8 @@ test_that("nonraw Mapping reports an undefined duplicate group and keeps impute 
     SummarizedExperiment::assay(mixed)["alternative_probe", 1] <- NA_real_
     seed <- get0(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
     error <- expect_error(mapping178_map(mixed),
-        "Entrez ID 55165: all 2 candidate probes have an undefined row total",
+        paste0("Cannot resolve Entrez ID 55165 with method = \"max\": ",
+            "none of its 2 probes has a defined total across samples"),
         fixed = TRUE)
     expect_identical(get0(".Random.seed", envir = .GlobalEnv,
         inherits = FALSE), seed)
@@ -254,7 +263,8 @@ test_that("nonraw Mapping reports an undefined duplicate group and keeps impute 
     both <- mixed[, 1]
     SummarizedExperiment::assay(both)[target, 1] <- NA_real_
     expect_error(mapping178_map(both),
-        "Entrez ID 55165: all 2 candidate probes have an undefined row total",
+        paste0("Cannot resolve Entrez ID 55165 with method = \"max\": ",
+            "none of its 2 probes has a defined total across samples"),
         fixed = TRUE)
 })
 
