@@ -91,7 +91,13 @@ citation("BreastSubtypeR")
 
 Breast cancer (BC) is a biologically heterogeneous disease with intrinsic molecular subtypes (e.g., Luminal A, Luminal B, HER2-enriched, Basal-like, Normal-like) that inform biological interpretation and clinical decision-making. While clinical assays such as **Prosigna** provide standardized subtyping in the clinic, research implementations have proliferated and diverge in pre-processing, gene mapping, and algorithmic assumptions—reducing reproducibility and complicating cross-cohort analyses.
 
-**BreastSubtypeR** consolidates multiple published gene-expression signature classifiers into a unified, assumption-aware Bioconductor package with: - a unified multi-method API (run many classifiers in one call), - **AUTO** mode for cohort-aware method selection, - standardized, method-specific pre-processing for multiple input types (raw counts, log2-normalized RNA-seq expression, log2-processed arrays), - Entrez ID–based probe/gene mapping, - and a local Shiny app (`iBreastSubtypeR`) for non-programmers.
+**BreastSubtypeR** consolidates multiple published gene-expression signature classifiers into a unified, assumption-aware Bioconductor package with:
+
+- a unified multi-method API (run many classifiers in one call),
+- **AUTO** mode for cohort-aware method selection,
+- standardized, method-specific pre-processing for multiple input types (raw counts, log2-normalized RNA-seq expression, log2-processed arrays),
+- Entrez ID–based probe/gene mapping,
+- and a local Shiny app (`iBreastSubtypeR`) for non-programmers.
 
 
 ## Features
