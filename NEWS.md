@@ -1,3 +1,16 @@
+# BreastSubtypeR (development)
+
+## Bug fixes
+
+* Report an informative error from `Mapping(method = "max")` when every
+  probe of a multi-probe Entrez ID has an undefined row total (`NA`, `NaN`
+  or `Inf - Inf`), naming the Entrez ID and the number of candidate probes,
+  instead of failing with an unrelated dimnames error. This changes only the
+  diagnostic: no probe is selected, imputed, averaged or dropped for such a
+  group, and selection and results for every group with a defined total are
+  unchanged. Follows the singleton preservation of #178; the duplicate
+  resolution review of #177 remains open.
+
 # BreastSubtypeR 1.5.9
 
 ## Bug fixes

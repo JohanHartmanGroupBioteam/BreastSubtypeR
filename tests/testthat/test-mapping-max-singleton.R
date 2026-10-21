@@ -129,16 +129,133 @@ test_that("max duplicate-group missingness keeps baseline results and errors", {
     expect_identical(BreastSubtypeR:::duplicate_genes(x, y, "max"), expected)
     x["a", ] <- c(Inf, -Inf, 3) # NaN row sum still loses to the finite row.
     expect_identical(BreastSubtypeR:::duplicate_genes(x, y, "max"), expected)
+    # Groups without any defined total are reported by Entrez ID instead of
+    # failing later with a dimnames error; the singleton is not involved.
     for (missing in list(NA_real_, NaN)) {
         x[,] <- missing
         expect_error(BreastSubtypeR:::duplicate_genes(x, y, "max"),
-            "length of 'dimnames' \\[2\\] not equal to array extent")
+            "Entrez ID 100: all 2 candidate probes have an undefined row total",
+            fixed = TRUE)
         with_singleton <- rbind(x, complete = c(1, 2, 3))
         annotation <- mapping178_annotation(with_singleton, c(100L, 100L, 200L))
         expect_error(BreastSubtypeR:::duplicate_genes(
             with_singleton, annotation, "max"),
-            "length of 'dimnames' \\[1\\] not equal to array extent")
+            "Entrez ID 100: all 2 candidate probes have an undefined row total",
+            fixed = TRUE)
     }
+})
+
+test_that("max keeps the existing selection whenever one duplicate total is defined", {
+    cols <- c("sample 3", "s/1", "S.2")
+    expect_row <- function(x, winner) {
+        colnames(x) <- cols[seq_len(ncol(x))]
+        y <- mapping178_annotation(x, rep(100L, nrow(x)))
+        expected <- x[winner, , drop = FALSE]
+        rownames(expected) <- "100"
+        expect_identical(BreastSubtypeR:::duplicate_genes(x, y, "max"), expected)
+    }
+    # A probe with a defined total wins over any probe with an undefined one,
+    # whatever the observed values of the latter would add up to.
+    expect_row(rbind(a = c(1, 1, 1), b = c(NA, 10, 10)), "a")
+    expect_row(rbind(a = c(1, 1, 1), b = c(NaN, 10, 10)), "a")
+    expect_row(rbind(a = c(-1, -2, -3), b = rep(NA_real_, 3)), "a")
+    expect_row(rbind(a = c(-1, -2, -3), b = c(NA, -1, -1)), "a")
+    expect_row(rbind(a = c(NA, 1, 2), b = c(1, NA, 2), c = c(1, 1, 1)), "c")
+    expect_row(rbind(a = -5, b = NA_real_), "a")
+    # Infinite totals remain defined and selectable exactly as before: Inf
+    # wins, -Inf loses to a finite total but beats an undefined one, and equal
+    # infinite totals keep the first probe.
+    expect_row(rbind(a = c(1, 2, 3), b = c(Inf, 1, 1)), "b")
+    expect_row(rbind(a = c(1, 2, 3), b = c(-Inf, 1, 1)), "a")
+    expect_row(rbind(a = c(Inf, 1, 1), b = c(Inf, 2, 2)), "a")
+    expect_row(rbind(a = rep(-Inf, 3), b = c(-Inf, 1, 1)), "a")
+    expect_row(rbind(a = c(-Inf, 5, 5), b = c(NA, 9, 9)), "a")
+    # Finite ties keep the first probe in input order.
+    expect_row(rbind(a = c(1, 2, 3), b = c(3, 2, 1)), "a")
+    expect_row(rbind(b = c(3, 2, 1), a = c(1, 2, 3)), "b")
+})
+
+test_that("max stops with a gene-specific error when every duplicate total is undefined", {
+    cols <- c("sample 3", "s/1", "S.2")
+    undefined <- list(
+        "both partially NA" = rbind(a = c(1, NA, 3), b = c(NA, 5, 4)),
+        "both partially NaN" = rbind(a = c(1, NaN, 3), b = c(NaN, 5, 4)),
+        "both entirely NA" = rbind(a = rep(NA_real_, 3), b = rep(NA_real_, 3)),
+        "both entirely NaN" = rbind(a = rep(NaN, 3), b = rep(NaN, 3)),
+        "entirely and partially NA" = rbind(a = rep(NA_real_, 3), b = c(NA, 5, 4)),
+        "Inf - Inf in both" = rbind(a = c(Inf, -Inf, 5), b = c(-Inf, Inf, 2)),
+        "Inf - Inf and NA" = rbind(a = c(Inf, -Inf, 5), b = rep(NA_real_, 3)),
+        "equal observed sums" = rbind(a = c(4, NA, 5), b = c(NA, 4, 5)),
+        "two samples" = rbind(a = c(1, NA), b = c(NA, 5)),
+        "one sample" = rbind(a = NA_real_, b = NA_real_))
+    expected_message <-
+        "Entrez ID 100: all 2 candidate probes have an undefined row total"
+    for (name in names(undefined)) {
+        x <- undefined[[name]]
+        colnames(x) <- cols[seq_len(ncol(x))]
+        y <- mapping178_annotation(x, c(100L, 100L))
+        error <- expect_error(BreastSubtypeR:::duplicate_genes(x, y, "max"),
+            expected_message, fixed = TRUE, info = name)
+        # The diagnostic names no sample.
+        expect_false(any(vapply(colnames(x), grepl, logical(1),
+            x = conditionMessage(error), fixed = TRUE)), info = name)
+    }
+    three <- rbind(a = c(NA, 1, 2), b = c(1, NA, 2), c = c(1, 2, NA))
+    colnames(three) <- cols
+    expect_error(BreastSubtypeR:::duplicate_genes(three,
+        mapping178_annotation(three, rep(100L, 3)), "max"),
+        "Entrez ID 100: all 3 candidate probes have an undefined row total",
+        fixed = TRUE)
+    # Only the undefined group is reported, in either input order; defined
+    # groups and a missing singleton do not change the diagnostic.
+    mixed <- rbind(a = c(1, NA, 3), b = c(NA, 5, 4), low = c(10, 1, 1),
+        high = c(2, 7, 7), single = c(1, NA, 3))
+    colnames(mixed) <- cols
+    ids <- c(100L, 100L, 200L, 200L, 300L)
+    for (rows in list(seq_len(5), 5:1)) {
+        error <- expect_error(BreastSubtypeR:::duplicate_genes(
+            mixed[rows, , drop = FALSE],
+            mapping178_annotation(mixed, ids)[rows, ], "max"),
+            expected_message, fixed = TRUE)
+        expect_false(grepl("200", conditionMessage(error), fixed = TRUE))
+        expect_false(grepl("300", conditionMessage(error), fixed = TRUE))
+    }
+})
+
+test_that("nonraw Mapping reports an undefined duplicate group and keeps impute = TRUE", {
+    withr::local_seed(178)
+    input <- mapping178_input()
+    se <- input$se
+    SummarizedExperiment::assay(se) <- log2(SummarizedExperiment::assay(se) + 1)
+    target <- match("55165", SummarizedExperiment::rowData(se)$ENTREZID)
+    extra <- se[target, , drop = FALSE]
+    rownames(extra) <- "alternative_probe"
+    SummarizedExperiment::rowData(extra)$probe <- "alternative_probe"
+    SummarizedExperiment::assay(extra) <- SummarizedExperiment::assay(extra) + 1
+    mixed <- rbind(se, extra)
+    SummarizedExperiment::assay(mixed)[target, 2] <- NA_real_
+    SummarizedExperiment::assay(mixed)["alternative_probe", 1] <- NA_real_
+    seed <- get0(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
+    error <- expect_error(mapping178_map(mixed),
+        "Entrez ID 55165: all 2 candidate probes have an undefined row total",
+        fixed = TRUE)
+    expect_identical(get0(".Random.seed", envir = .GlobalEnv,
+        inherits = FALSE), seed)
+    expect_false(any(vapply(colnames(mixed), grepl, logical(1),
+        x = conditionMessage(error), fixed = TRUE)))
+    # With imputation the same input maps as the imputed matrix does without.
+    filled <- mixed
+    SummarizedExperiment::assay(filled) <- BreastSubtypeR:::impute_missing(
+        SummarizedExperiment::assay(mixed), verbose = FALSE)
+    expect_identical(mapping178_map(mixed, impute = TRUE), mapping178_map(filled))
+    # One sample: the probe with a defined value is selected as before, and
+    # a group with no defined value is reported.
+    expect_identical(mapping178_map(mixed[, 1]), mapping178_map(se[, 1]))
+    both <- mixed[, 1]
+    SummarizedExperiment::assay(both)[target, 1] <- NA_real_
+    expect_error(mapping178_map(both),
+        "Entrez ID 55165: all 2 candidate probes have an undefined row total",
+        fixed = TRUE)
 })
 
 test_that("mean median iqr and stdev retain their existing missing-value behavior", {

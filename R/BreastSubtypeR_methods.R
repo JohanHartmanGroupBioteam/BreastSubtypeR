@@ -141,7 +141,10 @@ NULL
 #'   - `"stdev"`: keeps the single probe with the highest standard deviation.
 #'   - `"max"`: keeps the single probe with the largest row sum across samples
 #'     (often used for RNA-seq). A group with one row is retained without
-#'     ranking, including any remaining `NA` or `NaN` measurements.
+#'     ranking, including any remaining `NA` or `NaN` measurements. If every
+#'     probe of a multi-probe group has an undefined row sum (`NA`, `NaN` or
+#'     `Inf - Inf`), `Mapping()` stops with an error naming the Entrez ID
+#'     instead of selecting a probe.
 #'
 #' @param impute Logical. If `TRUE`, applies KNN-based imputation to missing values.
 #'
