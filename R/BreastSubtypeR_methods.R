@@ -127,7 +127,8 @@ NULL
 #'     (short-oligo arrays, e.g., Affymetrix).
 #'   - `"stdev"`: keeps the single probe with the highest standard deviation.
 #'   - `"max"`: keeps the single probe with the largest row sum across samples
-#'     (often used for RNA-seq).
+#'     (often used for RNA-seq). A group with one row is retained without
+#'     ranking, including any remaining `NA` or `NaN` measurements.
 #'
 #' @param impute Logical. If `TRUE`, applies KNN-based imputation to missing values.
 #'
