@@ -70,7 +70,7 @@ duplicate_genes <- function(x, y, method) {
     split_mat <- split.data.frame(as.data.frame(x), entrezid, drop = FALSE)
 
     # function to calculate the desired statistic
-    calculate_stat <- function(mat, method) {
+    calculate_stat <- function(mat, method, id) {
         switch(method,
             "mean" = apply(mat, 2, mean, na.rm = TRUE),
             "median" = apply(mat, 2, median, na.rm = TRUE),
@@ -78,7 +78,25 @@ duplicate_genes <- function(x, y, method) {
                 if (nrow(mat) == 1L) {
                     mat[1L, ]
                 } else {
-                    mat[which.max(rowSums(mat)), ]
+                    ## which.max() skips undefined totals (NA, NaN, Inf - Inf)
+                    ## and returns integer(0) when every probe has one; stop
+                    ## here instead of failing later with a dimnames error
+                    selected <- which.max(rowSums(mat))
+                    if (length(selected) == 0L) {
+                        diagnostic <- sprintf(
+                            paste0(
+                                "Cannot resolve Entrez ID %s with method = ",
+                                "\"max\": none of its %d probes has a defined ",
+                                "total across samples (all row sums are ",
+                                "NA/NaN). Review missing or nonfinite ",
+                                "measurements and the preprocessing strategy. ",
+                                "No probe was selected for this Entrez ID."
+                            ),
+                            id, nrow(mat)
+                        )
+                        stop(diagnostic, call. = FALSE)
+                    }
+                    mat[selected, ]
                 }
             },
             "stdev" = {
@@ -101,8 +119,9 @@ duplicate_genes <- function(x, y, method) {
 
     ## one row per Entrez ID, one column per sample; built explicitly so that
     ## single-sample matrices keep their dimensions
-    collapsed <- lapply(split_mat, function(mat) {
-        as.numeric(unlist(calculate_stat(mat, method), use.names = FALSE))
+    collapsed <- lapply(names(split_mat), function(id) {
+        as.numeric(unlist(calculate_stat(split_mat[[id]], method, id),
+            use.names = FALSE))
     })
     out <- do.call(rbind, collapsed)
     dimnames(out) <- list(names(split_mat), colnames(x))
