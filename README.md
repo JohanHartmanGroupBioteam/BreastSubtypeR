@@ -102,11 +102,8 @@ counts require gene lengths. See the
 ### Input coverage
 
 `InputCoverage()` and the Shiny coverage table are available in current GitHub
-source. As of 18 October 2026, the published source packages for
-[Bioconductor release 3.23](https://bioconductor.org/packages/release/bioc/html/BreastSubtypeR.html)
-(BreastSubtypeR 1.4.1) and
-[Bioconductor devel 3.24](https://bioconductor.org/packages/devel/bioc/html/BreastSubtypeR.html)
-(1.5.7) do not include them. Matching package version numbers do not establish
+source. Availability in installed packages can differ between distribution
+channels and source revisions. Matching package version numbers do not establish
 feature availability. Check your installed version with
 `"InputCoverage" %in% getNamespaceExports("BreastSubtypeR")` before running
 this additional example.
