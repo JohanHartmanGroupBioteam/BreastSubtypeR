@@ -43,8 +43,9 @@ AUTO uses TNBC-specific cohort handling only when all evaluable TN annotations i
 \item \code{TSIZE}: Tumor size (0 = \eqn{\le 2}{<= 2} cm; 1 = \eqn{> 2}{> 2} cm). Must be numeric (0/1).
 \item \code{NODE}: Number of positive lymph nodes. Supply the actual nonnegative
 integer count as a numeric value when available. Binary 0/1 is accepted
-but cannot distinguish 1--3 from 4 or more positive nodes. The current
-R API does not enforce nonnegative integer counts; see Details.
+but cannot distinguish 1--3 from 4 or more positive nodes. The
+additional ROR-PC group requires finite nonnegative integer-valued
+counts; see Details.
 }
 \item \strong{Preferred canonical receptor coding}:
 \itemize{
@@ -117,17 +118,25 @@ This design allows users to supply a single expression format, while
 BreastSubtypeR automatically applies method-specific preprocessing.
 
 \strong{Clinical ROR covariates.} With \code{hasClinical = TRUE}, NC method wrappers
-require both \code{TSIZE} and \code{NODE} columns and check that \code{NODE} is numeric;
-they do not enforce nonnegative integer counts. ROR-S and ROR-P scores and
-groups use neither covariate. ROR-C and both ROR-PC scores use \code{TSIZE},
+require both \code{TSIZE} and \code{NODE} columns and check that \code{NODE} is numeric.
+ROR-S and ROR-P scores and groups use neither covariate. ROR-C and both
+ROR-PC scores use \code{TSIZE},
 but no numerical ROR score uses \code{NODE}. Only the additional risk group
 \verb{ROR-PC Group (Subtype + Clinic + Prolif.Subtype)} uses \code{NODE} categories
 0, 1--3 and 4 or more. With nonmissing \code{TSIZE}, 4 or more positive nodes
 receive high risk; the other categories use different score cutoffs.
 
-In the R API, an \code{NA} value in \code{NODE} makes only this additional group
-missing. An \code{NA} value in \code{TSIZE} makes all clinical ROR scores and groups
-missing; ROR-S and ROR-P remain available. These are missing values within
+\code{NODE} is the number of positive lymph nodes. For this additional group,
+the NC methods accept only finite nonnegative integer-valued counts,
+stored as doubles or integers. Negative, fractional or infinite numeric values
+give one warning per call and a missing additional group, while all
+numerical ROR scores and the other groups remain available. \code{NODE} is
+never rounded, truncated or recoded. \code{Mapping()} itself performs no
+\code{NODE} validation.
+
+In the R API, an \code{NA} or \code{NaN} value in \code{NODE} makes only this additional
+group missing, without a warning. An \code{NA} value in \code{TSIZE} makes all
+clinical ROR scores and groups missing; ROR-S and ROR-P remain available. These are missing values within
 required columns, not permission to omit the columns. The additional
 subtype-specific ROR-PC group uses inclusive upper boundaries: NODE = 0
 has low <= 40, intermediate > 40 and <= 60, high > 60; NODE = 1--3 has

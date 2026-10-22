@@ -107,8 +107,9 @@ NULL
 #'       * `TSIZE`: Tumor size (0 = \eqn{\le 2}{<= 2} cm; 1 = \eqn{> 2}{> 2} cm). Must be numeric (0/1).
 #'       * `NODE`: Number of positive lymph nodes. Supply the actual nonnegative
 #'         integer count as a numeric value when available. Binary 0/1 is accepted
-#'         but cannot distinguish 1--3 from 4 or more positive nodes. The current
-#'         R API does not enforce nonnegative integer counts; see Details.
+#'         but cannot distinguish 1--3 from 4 or more positive nodes. The
+#'         additional ROR-PC group requires finite nonnegative integer-valued
+#'         counts; see Details.
 #'
 #'     - **Preferred canonical receptor coding**:
 #'       * `ER`: `ER+`, `ER-`
@@ -173,17 +174,25 @@ NULL
 #' BreastSubtypeR automatically applies method-specific preprocessing.
 #' 
 #' **Clinical ROR covariates.** With `hasClinical = TRUE`, NC method wrappers
-#' require both `TSIZE` and `NODE` columns and check that `NODE` is numeric;
-#' they do not enforce nonnegative integer counts. ROR-S and ROR-P scores and
-#' groups use neither covariate. ROR-C and both ROR-PC scores use `TSIZE`,
+#' require both `TSIZE` and `NODE` columns and check that `NODE` is numeric.
+#' ROR-S and ROR-P scores and groups use neither covariate. ROR-C and both
+#' ROR-PC scores use `TSIZE`,
 #' but no numerical ROR score uses `NODE`. Only the additional risk group
 #' `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)` uses `NODE` categories
 #' 0, 1--3 and 4 or more. With nonmissing `TSIZE`, 4 or more positive nodes
 #' receive high risk; the other categories use different score cutoffs.
 #'
-#' In the R API, an `NA` value in `NODE` makes only this additional group
-#' missing. An `NA` value in `TSIZE` makes all clinical ROR scores and groups
-#' missing; ROR-S and ROR-P remain available. These are missing values within
+#' `NODE` is the number of positive lymph nodes. For this additional group,
+#' the NC methods accept only finite nonnegative integer-valued counts,
+#' stored as doubles or integers. Negative, fractional or infinite numeric values
+#' give one warning per call and a missing additional group, while all
+#' numerical ROR scores and the other groups remain available. `NODE` is
+#' never rounded, truncated or recoded. `Mapping()` itself performs no
+#' `NODE` validation.
+#'
+#' In the R API, an `NA` or `NaN` value in `NODE` makes only this additional
+#' group missing, without a warning. An `NA` value in `TSIZE` makes all
+#' clinical ROR scores and groups missing; ROR-S and ROR-P remain available. These are missing values within
 #' required columns, not permission to omit the columns. The additional
 #' subtype-specific ROR-PC group uses inclusive upper boundaries: NODE = 0
 #' has low <= 40, intermediate > 40 and <= 60, high > 60; NODE = 1--3 has
@@ -358,7 +367,10 @@ Mapping <- function(se_obj,
 #' `NODE` affects only the additional subtype-specific risk group,
 #' `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)`, using categories
 #' 0, 1--3 and 4 or more. It does not enter any numerical ROR score.
-#' The current R API does not enforce nonnegative integer values for `NODE`.
+#' This group requires finite nonnegative integer-valued counts. Negative,
+#' fractional or infinite numeric `NODE` values give a warning and a missing
+#' additional group; numerical ROR scores remain available. Missing `NODE`
+#' (`NA`/`NaN`) gives a missing additional group without a warning.
 #' For NODE = 0 or 1--3, an undefined numerical `NA` or `NaN` additional
 #' ROR-PC score has an actual missing risk category, not the text `"NaN"`.
 #' The numerical score is unchanged. The independent NODE >= 4 high-risk
@@ -507,7 +519,10 @@ BS_parker <- function(se_obj,
 #' `NODE` affects only the additional subtype-specific risk group,
 #' `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)`, using categories
 #' 0, 1--3 and 4 or more. It does not enter any numerical ROR score.
-#' The current R API does not enforce nonnegative integer values for `NODE`.
+#' This group requires finite nonnegative integer-valued counts. Negative,
+#' fractional or infinite numeric `NODE` values give a warning and a missing
+#' additional group; numerical ROR scores remain available. Missing `NODE`
+#' (`NA`/`NaN`) gives a missing additional group without a warning.
 #' See [Mapping()] for clinical missing-value behavior.
 #'
 #' @param seed Integer. Random seed for reproducibility of ER-balancing.
@@ -652,7 +667,10 @@ BS_cIHC <- function(
 #' `NODE` affects only the additional subtype-specific risk group,
 #' `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)`, using categories
 #' 0, 1--3 and 4 or more. It does not enter any numerical ROR score.
-#' The current R API does not enforce nonnegative integer values for `NODE`.
+#' This group requires finite nonnegative integer-valued counts. Negative,
+#' fractional or infinite numeric `NODE` values give a warning and a missing
+#' additional group; numerical ROR scores remain available. Missing `NODE`
+#' (`NA`/`NaN`) gives a missing additional group without a warning.
 #' See [Mapping()] for clinical missing-value behavior.
 #'
 #' @param seed Integer. Random seed for reproducibility.
@@ -787,7 +805,10 @@ BS_cIHC.itr <- function(
 #' `NODE` affects only the additional subtype-specific risk group,
 #' `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)`, using categories
 #' 0, 1--3 and 4 or more. It does not enter any numerical ROR score.
-#' The current R API does not enforce nonnegative integer values for `NODE`.
+#' This group requires finite nonnegative integer-valued counts. Negative,
+#' fractional or infinite numeric `NODE` values give a warning and a missing
+#' additional group; numerical ROR scores remain available. Missing `NODE`
+#' (`NA`/`NaN`) gives a missing additional group without a warning.
 #' See [Mapping()] for clinical missing-value behavior.
 #'
 #' @param seed Integer. Random seed for reproducibility.
@@ -974,7 +995,10 @@ BS_PCAPAM50 <- function(
 #' `NODE` affects only the additional subtype-specific risk group,
 #' `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)`, using categories
 #' 0, 1--3 and 4 or more. It does not enter any numerical ROR score.
-#' The current R API does not enforce nonnegative integer values for `NODE`.
+#' This group requires finite nonnegative integer-valued counts. Negative,
+#' fractional or infinite numeric `NODE` values give a warning and a missing
+#' additional group; numerical ROR scores remain available. Missing `NODE`
+#' (`NA`/`NaN`) gives a missing additional group without a warning.
 #' See [Mapping()] for clinical missing-value behavior.
 #'
 #' @return A list with the following elements:
@@ -1334,7 +1358,10 @@ BS_sspbc <- function(se_obj, ssp.name = "ssp.pam50") {
 #' `NODE` affects only the additional subtype-specific risk group,
 #' `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)`, using categories
 #' 0, 1--3 and 4 or more. It does not enter any numerical ROR score.
-#' The current R API does not enforce nonnegative integer values for `NODE`.
+#' This group requires finite nonnegative integer-valued counts. Negative,
+#' fractional or infinite numeric `NODE` values give a warning and a missing
+#' additional group; numerical ROR scores remain available. Missing `NODE`
+#' (`NA`/`NaN`) gives a missing additional group without a warning.
 #' See [Mapping()] for clinical missing-value behavior.
 #'
 #' @param er_subsample Character, passed to `BS_cIHC.itr()` and used by no
