@@ -36,7 +36,8 @@ et al., 2020, 2024); see \code{\link[=BS_ssBC]{BS_ssBC()}} for quantile provenan
 \strong{Notes:}
 \itemize{
 \item If \code{"AUTO"} is selected, it must be the sole value in \code{methods}.
-\item Otherwise, at least \strong{two} methods must be specified.
+\item Otherwise, at least \strong{two distinct} methods must be specified.
+\item Duplicate entries are rejected rather than run repeatedly.
 }}
 
 \item{Subtype}{Logical. If \code{TRUE}, also returns a four-class summary in

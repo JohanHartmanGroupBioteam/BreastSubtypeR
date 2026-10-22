@@ -83,7 +83,10 @@ the probes into one row).
 \item \code{"stdev"}: keeps the single probe with the highest standard deviation.
 \item \code{"max"}: keeps the single probe with the largest row sum across samples
 (often used for RNA-seq). A group with one row is retained without
-ranking, including any remaining \code{NA} or \code{NaN} measurements.
+ranking, including any remaining \code{NA} or \code{NaN} measurements. If every
+probe of a multi-probe group has an undefined row sum (\code{NA}, \code{NaN} or
+\code{Inf - Inf}), \code{Mapping()} stops with an error naming the Entrez ID
+instead of selecting a probe.
 }}
 
 \item{impute}{Logical. If \code{TRUE}, applies KNN-based imputation to missing values.}

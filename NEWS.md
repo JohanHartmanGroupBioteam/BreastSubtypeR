@@ -1,3 +1,16 @@
+# BreastSubtypeR (development)
+
+## Bug fixes
+
+* Report an informative error from `Mapping(method = "max")` when every
+  probe of a multi-probe Entrez ID has an undefined row total (`NA`, `NaN`
+  or `Inf - Inf`), naming the Entrez ID and the number of candidate probes,
+  instead of failing with an unrelated dimnames error. This changes only the
+  diagnostic: no probe is selected, imputed, averaged or dropped for such a
+  group, and selection and results for every group with a defined total are
+  unchanged. Follows the singleton preservation of #178; the duplicate
+  resolution review of #177 remains open.
+
 # BreastSubtypeR 1.5.9
 
 ## Bug fixes
@@ -14,6 +27,11 @@
   ranking them (#178). In the nonraw `impute = FALSE` path, remaining `NA`
   and `NaN` measurements are retained instead of causing a dimension error.
   Selection among multiple probes and all other mapping methods are unchanged.
+* Reject mixed AUTO/manual selections and duplicate method names in
+  `BS_Multi()` before accessing input data or executing classifiers (#188).
+  AUTO must be the only entry; manual selections must contain at least two
+  distinct methods. Valid method selections and their execution order are
+  unchanged.
 
 # BreastSubtypeR 1.5.8
 

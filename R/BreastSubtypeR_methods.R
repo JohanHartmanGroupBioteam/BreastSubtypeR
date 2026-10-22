@@ -142,7 +142,10 @@ NULL
 #'   - `"stdev"`: keeps the single probe with the highest standard deviation.
 #'   - `"max"`: keeps the single probe with the largest row sum across samples
 #'     (often used for RNA-seq). A group with one row is retained without
-#'     ranking, including any remaining `NA` or `NaN` measurements.
+#'     ranking, including any remaining `NA` or `NaN` measurements. If every
+#'     probe of a multi-probe group has an undefined row sum (`NA`, `NaN` or
+#'     `Inf - Inf`), `Mapping()` stops with an error naming the Entrez ID
+#'     instead of selecting a probe.
 #'
 #' @param impute Logical. If `TRUE`, applies KNN-based imputation to missing values.
 #'
@@ -1336,7 +1339,8 @@ BS_sspbc <- function(se_obj, ssp.name = "ssp.pam50") {
 #'
 #'   **Notes:**
 #'   - If `"AUTO"` is selected, it must be the sole value in `methods`.
-#'   - Otherwise, at least **two** methods must be specified.
+#'   - Otherwise, at least **two distinct** methods must be specified.
+#'   - Duplicate entries are rejected rather than run repeatedly.
 #'
 #' @param Subtype Logical. If `TRUE`, also returns a four-class summary in
 #'   `res_subtypes.Subtype` (Luminal A, Luminal B, HER2-enriched, Basal-like).
@@ -1469,6 +1473,19 @@ BS_Multi <- function(data_input,
 
     if (length(invalid_methods) > 0) {
         stop("Invalid method(s) specified: ", paste(invalid_methods, collapse = ", "))
+    }
+
+    if ("AUTO" %in% methods && length(methods) > 1L) {
+        stop("'AUTO' must be the only entry in 'methods'.", call. = FALSE)
+    }
+
+    if (anyDuplicated(methods)) {
+        duplicates <- unique(methods[duplicated(methods)])
+        stop(
+            "Duplicate method(s) specified: ",
+            paste(duplicates, collapse = ", "),
+            call. = FALSE
+        )
     }
 
     if (length(methods) == 1 && methods[1] == "AUTO") {
