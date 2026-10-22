@@ -2,6 +2,11 @@
 
 ## Bug fixes
 
+* `BS_PCAPAM50()` now restores all sample-indexed outputs to input order,
+  including `score.ROR` and the prediction, distance and expression components
+  of `outList`. Internal calibration and sampling, and per-sample values for
+  the same input, seed and environment, are unchanged.
+
 * Report an informative error from `Mapping(method = "max")` when every
   probe of a multi-probe Entrez ID has an undefined row total (`NA`, `NaN`
   or `Inf - Inf`), naming the Entrez ID and the number of candidate probes,
