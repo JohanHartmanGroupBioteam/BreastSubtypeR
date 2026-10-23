@@ -13,7 +13,10 @@ BS_cIHC(se_obj, Subtype = FALSE, hasClinical = FALSE, seed = 118)
 genes (Gene Symbols) as rows and samples as columns.
 \item \strong{Column metadata} (\code{colData}): Must include:
 \itemize{
-\item \code{"PatientID"}: Unique sample or patient identifier.
+\item \code{"PatientID"}: Unique sample or patient identifier. Values are converted
+to character before name-based indexing, so factor labels (including
+unused levels) are matched to expression column names. Missing, empty,
+duplicated or unmatched identifiers are rejected.
 \item \code{"ER"}: Estrogen receptor status, coded as \code{"ER+"} or \code{"ER-"}.
 }
 }}

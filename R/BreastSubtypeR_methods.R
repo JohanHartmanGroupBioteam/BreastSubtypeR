@@ -503,7 +503,10 @@ BS_parker <- function(se_obj,
 #'   - **Assay data**: A log2-transformed, normalized expression matrix with
 #'     genes (Gene Symbols) as rows and samples as columns.
 #'   - **Column metadata** (`colData`): Must include:
-#'     - `"PatientID"`: Unique sample or patient identifier.
+#'     - `"PatientID"`: Unique sample or patient identifier. Values are converted
+#'       to character before name-based indexing, so factor labels (including
+#'       unused levels) are matched to expression column names. Missing, empty,
+#'       duplicated or unmatched identifiers are rejected.
 #'     - `"ER"`: Estrogen receptor status, coded as `"ER+"` or `"ER-"`.
 #'
 #' @param Subtype Logical. If `TRUE`, returns only the four main subtypes
@@ -573,6 +576,21 @@ BS_cIHC <- function(
 
     if (!all(c("PatientID", "ER") %in% colnames(pheno))) {
         stop("The 'colData' of 'se_obj' must include 'PatientID' and 'ER' columns.")
+    }
+    pheno$PatientID <- as.character(pheno$PatientID)
+    if (anyNA(pheno$PatientID) || any(!nzchar(pheno$PatientID))) {
+        stop("colData(se_obj)$PatientID must not contain missing or empty values.",
+             call. = FALSE)
+    }
+    if (anyDuplicated(pheno$PatientID)) {
+        stop("colData(se_obj)$PatientID must be unique; duplicated: ",
+             paste(utils::head(unique(pheno$PatientID[duplicated(pheno$PatientID)]), 5L),
+                   collapse = ", "), call. = FALSE)
+    }
+    missing_ids <- setdiff(pheno$PatientID, colnames(gene_expr))
+    if (length(missing_ids)) {
+        stop("colData(se_obj)$PatientID value(s) not found among assay column names: ",
+             paste(utils::head(missing_ids, 5L), collapse = ", "), call. = FALSE)
     }
     rownames(pheno) <- pheno$PatientID
 
