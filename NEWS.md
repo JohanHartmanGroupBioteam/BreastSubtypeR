@@ -2,6 +2,13 @@
 
 ## Bug fixes
 
+* `BS_PCAPAM50()` now orders complete intermediate rows by character
+  `PatientID` before second-stage sampling, matching the PCAPAM50 1.0.4
+  first-step merge under the caller's collation (#195). Selected sets,
+  centering medians, calls and derived scores may change. First-step
+  calculations and final input-order restoration are preserved. This does
+  not resolve the separate ROR expression-standardization investigation.
+
 * `BS_PCAPAM50()` now restores all sample-indexed outputs to input order,
   including `score.ROR` and the prediction, distance and expression components
   of `outList`. Internal calibration and sampling, and per-sample values for

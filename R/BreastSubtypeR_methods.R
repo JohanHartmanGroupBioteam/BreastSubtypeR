@@ -827,14 +827,22 @@ BS_cIHC.itr <- function(
 #' ER-positive subtypes start with "L" and all other labels are ER-negative;
 #' it does not define behaviour for missing labels.
 #'
+#' Before second-stage sampling, complete intermediate rows are ordered by
+#' character `PatientID`, matching the first-step merge in PCAPAM50 1.0.4 under
+#' the caller's collation. This can change selected samples, centering medians,
+#' subtype calls and derived scores relative to earlier package behavior.
+#' The first-step calculations and labels are unchanged. The caller's locale
+#' is not changed; universal input-permutation or cross-locale equivalence is
+#' not guaranteed. Independent ROR expression-standardization differences
+#' are not resolved by this ordering correction.
+#'
 #' After both PCA-PAM50 steps complete, all sample-indexed outputs follow the
 #' input sample order: rows of `BS.all` and `score.ROR`, prediction vectors and
 #' distance-matrix rows in `outList`, and columns of `outList$testData`.
 #' Gene medians and centroids are not reordered. This final reordering leaves
 #' internal calibration and sampling, and per-sample values for the same input,
-#' seed and environment, unchanged. Reordering the input samples can still
-#' change the internally sampled centering set and calls; this separate
-#' input-order sensitivity is not corrected here.
+#' seed and environment, unchanged. It is separate from the intermediate
+#' ordering used before second-stage sampling.
 #'
 #' @return A list with the following elements:
 #'   - `BS.all`: `data.frame` with `PatientID`, `BS` (five-class call) and,
@@ -940,6 +948,10 @@ BS_PCAPAM50 <- function(
             stringsAsFactors = FALSE
         )
     }
+
+    ## Match the reference's character PatientID merge order before sampling.
+    df.pc1pam <- df.pc1pam[
+        order(as.character(df.pc1pam$PatientID)), , drop = FALSE]
 
     arguments2 <- rlang::dots_list(
         mat = gene_expr,
