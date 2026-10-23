@@ -13,7 +13,10 @@ BS_PCAPAM50(se_obj, Subtype = FALSE, hasClinical = FALSE, seed = 118)
 genes (Gene Symbols) as rows and samples as columns.
 \item \strong{Column metadata} (\code{colData}): Must include:
 \itemize{
-\item \code{"PatientID"}: Unique sample or patient identifier.
+\item \code{"PatientID"}: Unique sample or patient identifier. Values are converted
+to character and matched to assay column names, including factor labels
+rather than their integer codes. Missing, empty, duplicated or unmatched
+identifiers give an error before classification.
 \item \code{"ER"}: Estrogen receptor status, coded as \code{"ER+"} or \code{"ER-"}.
 }
 }}
