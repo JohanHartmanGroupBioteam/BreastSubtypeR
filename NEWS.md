@@ -2,6 +2,13 @@
 
 ## Bug fixes
 
+* `BS_PCAPAM50()` now converts `PatientID` values to character before
+  name-based indexing (#197). Factor labels, including those with unused
+  levels, select the intended expression samples and centering values.
+  Missing, empty, duplicated and unmatched identifiers produce informative
+  errors. Valid character-ID results, sampling order, output order, RNG
+  behavior and numerical ROR formulas are unchanged.
+
 * `BS_PCAPAM50()` now orders complete intermediate rows by character
   `PatientID` before second-stage sampling, matching the PCAPAM50 1.0.4
   first-step merge under the caller's collation (#195). Selected sets,
