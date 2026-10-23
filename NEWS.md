@@ -2,6 +2,13 @@
 
 ## Bug fixes
 
+* `BS_cIHC()` now converts `PatientID` values to character before
+  name-based indexing (#200). Factor labels, including those with unused
+  levels, select the intended ER-balanced centering samples and expression
+  values. Missing, empty, duplicated and unmatched identifiers produce
+  informative errors. Valid character-ID results, balancing rules, RNG
+  behavior and numerical ROR formulas are unchanged.
+
 * `BS_PCAPAM50()` now converts `PatientID` values to character before
   name-based indexing (#197). Factor labels, including those with unused
   levels, select the intended expression samples and centering values.
