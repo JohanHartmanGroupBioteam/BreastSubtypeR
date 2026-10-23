@@ -827,6 +827,14 @@ BS_cIHC.itr <- function(
 #' ER-positive subtypes start with "L" and all other labels are ER-negative;
 #' it does not define behaviour for missing labels.
 #'
+#' After both PCA-PAM50 steps complete, all sample-indexed outputs follow the
+#' input sample order: rows of `BS.all` and `score.ROR`, prediction vectors and
+#' distance-matrix rows in `outList`, and columns of `outList$testData`.
+#' Gene medians and centroids are not reordered. This final reordering leaves
+#' internal calibration and sampling, and per-sample values for the same input,
+#' seed and environment, unchanged. Reordering the input samples can still
+#' change the internally sampled centering set and calls; this separate
+#' input-order sensitivity is not corrected here.
 #'
 #' @return A list with the following elements:
 #'   - `BS.all`: `data.frame` with `PatientID`, `BS` (five-class call) and,
@@ -945,9 +953,21 @@ BS_PCAPAM50 <- function(
     call <- rlang::call2(makeCalls.v1PAM, !!!arguments2)
     res_PCAPAM50 <- eval(call)
 
-    ## reorder
+    ## Restore all sample-indexed outputs after both steps; values are unchanged.
     idx <- na.omit(match(samples, res_PCAPAM50$BS.all$PatientID))
-    res_PCAPAM50$BS.all <- res_PCAPAM50$BS.all[idx, ]
+    ord <- res_PCAPAM50$BS.all$PatientID[idx]
+    res_PCAPAM50$BS.all <- res_PCAPAM50$BS.all[idx, , drop = FALSE]
+    res_PCAPAM50$score.ROR <- res_PCAPAM50$score.ROR[
+        match(ord, as.character(res_PCAPAM50$score.ROR$patientID)), , drop = FALSE]
+    ol <- res_PCAPAM50$outList
+    ol$predictions <- ol$predictions[ord]
+    if (!is.null(ol$predictions.FourSubtype)) {
+        ol$predictions.FourSubtype <- ol$predictions.FourSubtype[ord]
+    }
+    ol$testData <- ol$testData[, ord, drop = FALSE]
+    ol$distances <- ol$distances[ord, , drop = FALSE]
+    ol$dist.RORSubtype <- ol$dist.RORSubtype[ord, , drop = FALSE]
+    res_PCAPAM50$outList <- ol
 
     return(res_PCAPAM50)
 }

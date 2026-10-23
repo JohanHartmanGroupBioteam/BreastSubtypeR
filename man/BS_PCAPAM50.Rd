@@ -75,6 +75,15 @@ unaffected. The reference implementation (Raj-Kumar et al., CRAN package
 PCAPAM50) expects a complete, user-supplied IHC subtype column in which
 ER-positive subtypes start with "L" and all other labels are ER-negative;
 it does not define behaviour for missing labels.
+
+After both PCA-PAM50 steps complete, all sample-indexed outputs follow the
+input sample order: rows of \code{BS.all} and \code{score.ROR}, prediction vectors and
+distance-matrix rows in \code{outList}, and columns of \code{outList$testData}.
+Gene medians and centroids are not reordered. This final reordering leaves
+internal calibration and sampling, and per-sample values for the same input,
+seed and environment, unchanged. Reordering the input samples can still
+change the internally sampled centering set and calls; this separate
+input-order sensitivity is not corrected here.
 }
 \section{Research ROR interpretation}{
 
