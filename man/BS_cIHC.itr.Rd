@@ -24,7 +24,13 @@ genes (Gene Symbols) as rows and samples as columns.
 \item \code{"PatientID"}: Unique sample or patient identifier.
 \item \code{"ER"}: Estrogen receptor status, coded as \code{"ER+"} or \code{"ER-"}.
 }
-}}
+}
+
+\code{PatientID} values are converted to character before selecting expression
+columns in every iteration. Factor labels, including unused levels, are
+accepted. IDs must be non-missing, non-empty, unique and present in the
+assay column names. Valid character-ID results, ER balancing, RNG behavior
+and numerical ROR formulas are unchanged.}
 
 \item{iteration}{Integer. Number of iterations for the ER-balancing procedure.
 Default: 100.}
