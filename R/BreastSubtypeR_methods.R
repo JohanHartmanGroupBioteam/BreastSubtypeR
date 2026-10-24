@@ -639,6 +639,12 @@ BS_cIHC <- function(
 #'     - `"PatientID"`: Unique sample or patient identifier.
 #'     - `"ER"`: Estrogen receptor status, coded as `"ER+"` or `"ER-"`.
 #'
+#'   `PatientID` values are converted to character before selecting expression
+#'   columns in every iteration. Factor labels, including unused levels, are
+#'   accepted. IDs must be non-missing, non-empty, unique and present in the
+#'   assay column names. Valid character-ID results, ER balancing, RNG behavior
+#'   and numerical ROR formulas are unchanged.
+#'
 #' @param iteration Integer. Number of iterations for the ER-balancing procedure.
 #'   Default: 100.
 #'
@@ -762,6 +768,21 @@ BS_cIHC.itr <- function(
 
     if (!all(c("PatientID", "ER") %in% colnames(pheno))) {
         stop("The 'colData' of 'se_obj' must include 'PatientID' and 'ER' columns.")
+    }
+    pheno$PatientID <- as.character(pheno$PatientID)
+    if (anyNA(pheno$PatientID) || any(!nzchar(pheno$PatientID))) {
+        stop("colData(se_obj)$PatientID must not contain missing or empty values.",
+             call. = FALSE)
+    }
+    if (anyDuplicated(pheno$PatientID)) {
+        stop("colData(se_obj)$PatientID must be unique; duplicated: ",
+             paste(utils::head(unique(pheno$PatientID[duplicated(pheno$PatientID)]), 5L),
+                   collapse = ", "), call. = FALSE)
+    }
+    missing_ids <- setdiff(pheno$PatientID, colnames(gene_expr))
+    if (length(missing_ids)) {
+        stop("colData(se_obj)$PatientID value(s) not found among assay column names: ",
+             paste(utils::head(missing_ids, 5L), collapse = ", "), call. = FALSE)
     }
     rownames(pheno) <- pheno$PatientID
 

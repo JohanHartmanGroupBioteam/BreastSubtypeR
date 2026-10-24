@@ -2,6 +2,13 @@
 
 ## Bug fixes
 
+* `BS_cIHC.itr()` now converts `PatientID` values to character before
+  selecting expression columns in each iteration (#201). Factor labels,
+  including unused levels, select the intended ER-balanced centering samples
+  and values. Missing, empty, duplicated and unmatched identifiers produce
+  informative errors. Valid character-ID results, both subsampling policies,
+  iteration counts, RNG behavior and numerical ROR formulas are unchanged.
+
 * `BS_cIHC()` now converts `PatientID` values to character before
   name-based indexing (#200). Factor labels, including those with unused
   levels, select the intended ER-balanced centering samples and expression
