@@ -2,6 +2,12 @@
 
 ## Bug fixes
 
+* `BS_Multi()` restores AUTO `ssBC` and `ssBC.v2` subcohort results by
+  character `PatientID` labels after checking complete, unique identities
+  (#202). Factor levels no longer cause eligible calls to be lost during
+  restoration. Intended missing calls, valid character-ID results, AUTO
+  eligibility, prediction algorithms and ROR formulas are unchanged.
+
 * `BS_cIHC.itr()` now converts `PatientID` values to character before
   selecting expression columns in each iteration (#201). Factor labels,
   including unused levels, select the intended ER-balanced centering samples

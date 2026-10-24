@@ -101,6 +101,11 @@ include cIHC.itr when the ER-group size gates are met. TN-only and HER2+
 cohort routes are evaluated separately. See the package vignette for
 cohort-specific eligibility and minimum subgroup sizes.
 
+AUTO subcohort results for \code{ssBC} and \code{ssBC.v2} are restored by character
+\code{PatientID} labels, including factor labels with unused levels. Restoration
+requires complete, unique sample identities. Ineligible samples retain
+missing calls; subgroup eligibility and prediction algorithms are unchanged.
+
 For \code{ssBC.v2}, Fernandez-Martinez et al. (2020) described the earlier
 HER2/ER-specific application. The updated quantiles match the public
 \code{SIGMA.txt} reference in the

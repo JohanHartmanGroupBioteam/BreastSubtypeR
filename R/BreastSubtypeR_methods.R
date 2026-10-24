@@ -1469,6 +1469,11 @@ BS_sspbc <- function(se_obj, ssp.name = "ssp.pam50") {
 #' cohort routes are evaluated separately. See the package vignette for
 #' cohort-specific eligibility and minimum subgroup sizes.
 #'
+#' AUTO subcohort results for `ssBC` and `ssBC.v2` are restored by character
+#' `PatientID` labels, including factor labels with unused levels. Restoration
+#' requires complete, unique sample identities. Ineligible samples retain
+#' missing calls; subgroup eligibility and prediction algorithms are unchanged.
+#'
 #' For `ssBC.v2`, Fernandez-Martinez et al. (2020) described the earlier
 #' HER2/ER-specific application. The updated quantiles match the public
 #' `SIGMA.txt` reference in the
@@ -1590,6 +1595,19 @@ BS_Multi <- function(data_input,
         stop("colData(se_NC) must have a 'PatientID' column.")
     }
     rownames(pheno) <- pheno$PatientID
+
+    restore_auto_rows <- function(calls) {
+        ids <- as.character(pheno$PatientID)
+        row_ids <- rownames(calls)
+        if (anyNA(ids) || any(!nzchar(ids)) || anyDuplicated(ids) ||
+            anyDuplicated(row_ids) || length(row_ids) != length(ids) ||
+            !setequal(row_ids, ids) ||
+            !identical(as.character(calls$PatientID), row_ids)) {
+            stop("Cannot restore AUTO subcohort results: sample IDs must be complete and unique.",
+                 call. = FALSE)
+        }
+        calls[match(ids, row_ids), , drop = FALSE]
+    }
 
     # Detect true TN cohort
     has_TN_col <- "TN" %in% colnames(pheno)
@@ -1772,7 +1790,7 @@ BS_Multi <- function(data_input,
                 )
 
                 res_ssBC$BS.all <- rbind(res_ssBC$BS.all, na_df)
-                res_ssBC$BS.all <- res_ssBC$BS.all[pheno$PatientID, ]
+                res_ssBC$BS.all <- restore_auto_rows(res_ssBC$BS.all)
             }
 
             return(res_ssBC)
@@ -1824,7 +1842,7 @@ BS_Multi <- function(data_input,
                 )
 
                 res_ssBC.v2$BS.all <- rbind(res_ssBC.v2$BS.all, na_df)
-                res_ssBC.v2$BS.all <- res_ssBC.v2$BS.all[pheno$PatientID, ]
+                res_ssBC.v2$BS.all <- restore_auto_rows(res_ssBC.v2$BS.all)
             }
 
 
