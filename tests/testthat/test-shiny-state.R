@@ -3,8 +3,10 @@ shiny_app_env <- function() {
     skip_if_not_installed("shiny")
     skip_if_not_installed("bslib")
     env <- new.env(parent = asNamespace("shiny"))
-    sys.source(system.file("ShinyBreastSubtypeR/server.R",
-                           package = "BreastSubtypeR"), env)
+    server_path <- system.file("ShinyBreastSubtypeR/server.R",
+                               package = "BreastSubtypeR")
+    eval(parse(file = server_path, encoding = "UTF-8", keep.source = FALSE),
+         envir = env)
     env
 }
 shiny_defaults <- function(session, method = "PAM50") {
