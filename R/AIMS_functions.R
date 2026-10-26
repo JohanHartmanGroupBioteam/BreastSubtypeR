@@ -68,6 +68,15 @@
         cur.prob <- apply(prob.train, 1, function(prob.cur) {
             max(prob.cur)
         })
+        ## Count observed comparisons (both 0 and 1) used by this model.
+        model.rules <- match(
+            names(one.vs.all.tsp$one.vs.all.tsp[[ki]]$tables), names(nb.d)
+        )
+        evaluable <- colSums(!is.na(train.pairs[model.rules, , drop = FALSE]))
+        no.rules <- evaluable == 0L
+        cur.cl[no.rules] <- NA_character_
+        cur.prob[no.rules] <- NA_real_
+        prob.train[no.rules, ] <- NA_real_
         prob[, as.character(ki)] <- cur.prob
         classes[, as.character(ki)] <- cur.cl
         all.probs[[as.character(ki)]] <- prob.train
@@ -150,7 +159,7 @@
 
     ## AIMS needs to be applied on expression values > 0.
     ## Require 95% of the values to be > 0
-    if (!all(apply(D, 2, function(x) {
+    if (nrow(D) > 0L && !all(apply(D, 2, function(x) {
         (sum(x < 0, na.rm = TRUE) / length(x)) < 0.05
     }))) {
         stop(
@@ -168,7 +177,9 @@
         )
     }
 
-    D <- apply(D, 2, as.numeric)
+    ## Keep zero/one-row inputs as matrices when model genes are absent.
+    D <- matrix(as.numeric(D), nrow = nrow(D), ncol = ncol(D),
+        dimnames = list(NULL, colnames(D)))
     EntrezID <- as.character(EntrezID)
     sel.ids.nb <- .get.all.pairs.genes_AIMS(sel.nbc$all.pairs)
     sel.gn <- EntrezID %in% sel.ids.nb

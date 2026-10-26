@@ -47,6 +47,9 @@ single-sample predictions, independent of cohort composition, and supports
 multiple model variants for different applications.
 }
 \details{
+If no model rule is evaluable for a sample, its class, selected-class
+probability and all posterior probabilities are \code{NA}. Both TRUE and FALSE
+comparisons count as evaluable; with at least one, native predictions are retained.
 Posterior probabilities are conditional on the fitted naive Bayes model
 and its native handling of the available rule inputs. They differ from
 \code{\link[=InputCoverage]{InputCoverage()}}, multi-method entropy and Parker \code{Confidence}; they do
