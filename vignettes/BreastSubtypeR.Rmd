@@ -196,12 +196,11 @@ data_input <- Mapping(
 
 `InputCoverage()` reports the current processed inputs independently of which
 methods are selected or run. It uses the same calculation as the current
-GitHub Shiny coverage table. These features are available in current GitHub
-source. As of 18 October 2026, the published source packages for
+Shiny coverage table. Feature availability can differ between GitHub source,
 [Bioconductor release 3.23](https://bioconductor.org/packages/release/bioc/html/BreastSubtypeR.html)
-(BreastSubtypeR 1.4.1) and
-[Bioconductor devel 3.24](https://bioconductor.org/packages/devel/bioc/html/BreastSubtypeR.html)
-(1.5.7) do not include them. Check your installed namespace with
+and
+[Bioconductor devel 3.24](https://bioconductor.org/packages/devel/bioc/html/BreastSubtypeR.html).
+Check your installed namespace with
 `"InputCoverage" %in% getNamespaceExports("BreastSubtypeR")`; matching package
 version numbers alone do not establish feature availability.
 
@@ -418,7 +417,9 @@ within its validated assay workflow
 ([Wallden et al., 2015](https://doi.org/10.1186/s12920-015-0129-6)). Shared
 coefficients do not establish equivalent preprocessing, calibration or
 clinical validation. These research scores and groups are not clinical
-Prosigna results; version 1.5.8 does not change these calculations.
+Prosigna results. The 1.5.10 maintenance fixes preserve the ROR formulas,
+but corrected sample selection and centering can change their inputs and
+the resulting scores.
 
 **Known exact-equality limitation.** The original Parker-derived ROR-S,
 ROR-P, ROR-C and `ROR-PC (Subtype + Clinic + Prolif)` groups retain strict
@@ -427,8 +428,8 @@ text instead of `low`, `med` or `high`. The unscaled pairs are -0.15/0.10,
 -0.25/0.10, -0.10/0.20 and -0.20/0.20, respectively, before
 `100 * (score + 0.35) / 0.85`. They are not cutoffs on the displayed scaled
 scores. Numeric-text labels are invalid categories, not an additional risk
-group; do not infer an assignment by rounding. Version 1.5.8 temporarily
-defers this known defect pending scientific review of exact-equality
+group; do not infer an assignment by rounding. This known defect remains
+deferred pending scientific review of exact-equality
 assignments. The corrected NODE-dependent additional ROR-PC grouping from
 issue #154 remains unchanged.
 
