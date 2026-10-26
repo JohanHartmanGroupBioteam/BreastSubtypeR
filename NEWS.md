@@ -1,6 +1,15 @@
-# BreastSubtypeR (development)
+# BreastSubtypeR 1.5.10
 
 ## Bug fixes
+
+* Preserve all Shiny reference-median labels under C and UTF-8 locales
+  (#210, PR #211). Construct the four non-ASCII option names at runtime;
+  all option values, ordering and defaults remain unchanged. Regression
+  tests compare the rendered UI and HTTP option labels across locales.
+
+* Load Shiny server and UI regression-test sources explicitly as UTF-8
+  (PRs #209 and #211). This fixes locale-dependent test-source parsing
+  without weakening the citation assertions or changing prediction logic.
 
 * `BS_Multi()` restores AUTO `ssBC` and `ssBC.v2` subcohort results by
   character `PatientID` labels after checking complete, unique identities
@@ -49,6 +58,23 @@
   group, and selection and results for every group with a defined total are
   unchanged. Follows the singleton preservation of #178; the duplicate
   resolution review of #177 remains open.
+
+## Interpretation and documentation
+
+* Declare `S4Vectors` and `htmltools` in `Suggests` for their direct use in
+  tests and the optional Shiny application.
+
+* The factor-identifier corrections (#197, #200, #201 and #202) can change
+  affected sample selections, predictions, derived scores or restored calls.
+  The PCA-PAM50 intermediate-order correction (#195, PR #196) can change
+  results even with valid character identifiers. Unchanged ROR formulas do
+  not imply unchanged scores when their inputs change. Output-axis
+  restoration (PR #193) preserves per-sample values but can affect downstream
+  positional joins. These fixes do not resolve the separate ROR scientific
+  questions or establish that manuscript results are unaffected.
+
+* Clarify current version and installation-channel wording in the README
+  and vignette. Earlier release notes are retained.
 
 # BreastSubtypeR 1.5.9
 
