@@ -165,6 +165,75 @@ test_that("other SSPBC models retain their native zero-evidence behavior", {
     }
 })
 
+test_that("SSPBC fullname selection uses the resolved subtype model", {
+    env <- new.env(parent = emptyenv())
+    data("sspbc.models.fullname", package = "BreastSubtypeR", envir = env)
+    for (key in c("ssp.pam50", "ssp.subtype")) {
+        model <- rule_test_models()[[key]]
+        aliases <- names(Filter(function(m) identical(m$all.pairs, model$all.pairs),
+            env$sspbc.models.fullname))
+        expect_length(aliases, 1L)
+        x <- rule_test_input(model)
+        inputs <- c(list(x, x[FALSE, , drop = FALSE], x[1L, , drop = FALSE]),
+            lapply(seq_len(ncol(x)), function(j) x[, j, drop = FALSE]))
+        for (input in inputs) {
+            alias <- suppressMessages(BreastSubtypeR:::applySSP(
+                gex = input, id = sub("^e", "", rownames(input)),
+                id.type = "EntrezGene", ssp = aliases))
+            named <- rule_test_wrapper(input, key)
+            expect_identical(alias, named)
+        }
+        # An explicit ssp.name retains precedence over the alternate argument.
+        other <- if (key == "ssp.pam50") "ssp.subtype" else "ssp.pam50"
+        selected <- suppressMessages(BreastSubtypeR:::applySSP(
+            gex = x, id = sub("^e", "", rownames(x)), id.type = "EntrezGene",
+            ssp = aliases, ssp.name = other))
+        expect_identical(selected, rule_test_wrapper(x, other))
+    }
+})
+
+test_that("rule matching rejects missing and ambiguous predictors before prediction", {
+    for (key in names(rule_test_models())) {
+        model <- rule_test_models()[[key]]
+        x <- rule_test_input(model)
+        run <- function(m) suppressMessages(if (key == "AIMS") {
+            BreastSubtypeR:::.one.vs.all.tsp_AIMS(x, rownames(x), m)
+        } else {
+            BreastSubtypeR:::.one.vs.all.tsp(x, rownames(x), m, zero.rules.na = TRUE)
+        })
+        for (kind in c("missing", "duplicate", "empty", "NA", "unnamed")) {
+            bad <- model
+            predictors <- names(bad$one.vs.all.tsp[[model$k]]$tables)
+            predictors[1L] <- switch(kind, missing = "not_a_rule",
+                duplicate = predictors[2L], empty = "", "NA" = NA_character_,
+                unnamed = predictors[1L])
+            if (kind == "unnamed") predictors <- NULL
+            names(bad$one.vs.all.tsp[[model$k]]$tables) <- predictors
+            error <- if (kind == "missing") "Model predictors missing from rule matrix" else
+                "Model predictor names must be nonmissing, nonempty and unique"
+            expect_error(run(bad), error, fixed = TRUE)
+        }
+        duplicate <- model
+        duplicate$all.pairs[2L] <- duplicate$all.pairs[1L]
+        expect_error(run(duplicate), "unique after name conversion", fixed = TRUE)
+        # Different raw labels can collide when data.frame makes syntactic names.
+        collision <- model
+        collision$all.pairs[1:2] <- c("gene-a<gene.b", "gene.a<gene-b")
+        expect_error(run(collision), "unique after name conversion", fixed = TRUE)
+
+        # A valid permutation must be matched by name, not by position.
+        reordered <- model
+        reordered$all.pairs <- rev(reordered$all.pairs)
+        original <- run(model)
+        permuted <- run(reordered)
+        expect_identical(permuted$cl, original$cl)
+        expect_identical(permuted$prob, original$prob)
+        expect_identical(permuted$all.probs, original$all.probs)
+        expect_identical(permuted$rules.matrix[model$all.pairs, , drop = FALSE],
+            original$rules.matrix)
+    }
+})
+
 test_that("BS_Multi propagates per-model missing calls and native details", {
     models <- rule_test_models()
     pairs <- lapply(models, function(model) {

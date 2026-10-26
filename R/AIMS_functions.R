@@ -3,6 +3,33 @@
     x < y
 }
 
+## Match fitted predictors before prediction; automatic name repair must not
+## conceal duplicate rules or collisions in their syntactic names.
+.rule_predictor_rows <- function(model, rules, newdata) {
+    predictors <- names(model$tables)
+    if (!length(predictors) || anyNA(predictors) ||
+        any(!nzchar(predictors)) || anyDuplicated(predictors)) {
+        stop("Model predictor names must be nonmissing, nonempty and unique.",
+            call. = FALSE)
+    }
+    rule.names <- rownames(rules)
+    if (is.null(rule.names) || anyNA(rule.names) || any(!nzchar(rule.names)) ||
+        anyDuplicated(make.names(rule.names))) {
+        stop("Rule-matrix predictor names must be nonmissing, nonempty and unique after name conversion.",
+            call. = FALSE)
+    }
+    if (!identical(names(newdata), make.names(rule.names))) {
+        stop("Rule-matrix predictor names do not match prediction data columns.",
+            call. = FALSE)
+    }
+    rows <- match(predictors, names(newdata))
+    if (anyNA(rows)) {
+        stop("Model predictors missing from rule matrix: ",
+            paste(predictors[is.na(rows)], collapse = ", "), call. = FALSE)
+    }
+    rows
+}
+
 ## Functions necessary to run AIMS
 ## stopifnot(length(gene1) == 1 & length(gene2) == 1)
 .comp.sel.pairs_AIMS <- function(dataset, sel.pairs, func = .smaller_AIMS) {
@@ -47,6 +74,9 @@
     all.probs <- list()
     for (ki in one.vs.all.tsp$k) {
         message(sprintf("Current k = %d", ki))
+        model.rules <- .rule_predictor_rows(
+            one.vs.all.tsp$one.vs.all.tsp[[ki]], train.pairs, nb.d
+        )
 
         ## need to add this for the new version of e1071 (1.7-1)
         ## there is now a new isnumeric field in the naive bayes object
@@ -69,9 +99,6 @@
             max(prob.cur)
         })
         ## Count observed comparisons (both 0 and 1) used by this model.
-        model.rules <- match(
-            names(one.vs.all.tsp$one.vs.all.tsp[[ki]]$tables), names(nb.d)
-        )
         evaluable <- colSums(!is.na(train.pairs[model.rules, , drop = FALSE]))
         no.rules <- evaluable == 0L
         cur.cl[no.rules] <- NA_character_

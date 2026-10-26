@@ -88,17 +88,30 @@ applySSP <- function(tsv,
         }
     }
 
+    ## Fullname copies differ only in e1071 compatibility metadata. Identify
+    ## the resolved fitted model independently of the selection argument.
+    model.identity <- function(model) {
+        for (ki in model$k) model$one.vs.all.tsp[[ki]]$isnumeric <- NULL
+        model
+    }
+    zero.rules.na <- any(vapply(
+        sspbc.models[c("ssp.pam50", "ssp.subtype")],
+        function(model) identical(model.identity(aims.gs), model.identity(model)),
+        logical(1)
+    ))
+
     # fix issue with $isnumeric
     # add logi (aims.gs$ all.pairs), i.e, one TRUE for each aims.gs$ all.pairs
     if (add.is.num) {
         one_vs_all_tsp <- aims.gs$one.vs.all.tsp[[aims.gs$k]]
         one_vs_all_tsp$isnumeric[names(one_vs_all_tsp$tables)] <- TRUE
+        if (zero.rules.na) aims.gs$one.vs.all.tsp[[aims.gs$k]] <- one_vs_all_tsp
     }
 
     # apply ssp model
     ## Restrict the zero-evidence correction to the two subtype models.
     resultslist <- applyAIMS(mymatrix, myid, aims.gs,
-        zero.rules.na = ssp.name %in% c("ssp.pam50", "ssp.subtype"))
+        zero.rules.na = zero.rules.na)
 
     names(resultslist)
 
@@ -442,6 +455,11 @@ translate_id2entrez <- function(id,
     all.probs <- list()
     for (ki in one.vs.all.tsp$k) {
         message(sprintf("Current k = %d", ki))
+        if (zero.rules.na) {
+            model.rules <- .rule_predictor_rows(
+                one.vs.all.tsp$one.vs.all.tsp[[ki]], train.pairs, nb.d
+            )
+        }
         prob.train <- predict(
             one.vs.all.tsp$one.vs.all.tsp[[ki]],
             nb.d,
@@ -455,9 +473,6 @@ translate_id2entrez <- function(id,
         })
         if (zero.rules.na) {
             ## Count observed comparisons (both 0 and 1) used by this model.
-            model.rules <- match(
-                names(one.vs.all.tsp$one.vs.all.tsp[[ki]]$tables), names(nb.d)
-            )
             evaluable <- colSums(!is.na(train.pairs[model.rules, , drop = FALSE]))
             no.rules <- evaluable == 0L
             cur.cl[no.rules] <- NA_character_
