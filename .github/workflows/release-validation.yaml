@@ -1,0 +1,204 @@
+# Manual-only full check of the 1.5.10 source, including its PDF manual.
+# Reuses the existing CI pins and strict R CMD check assessment helper.
+name: Release validation (PDF manual)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-validation:
+    name: Ubuntu (R 4.6, Bioc 3.24, TinyTeX)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    env:
+      R_BIOC_VERSION: "3.24"
+      R_KEEP_PKG_SOURCE: "yes"
+      _R_CHECK_FORCE_SUGGESTS_: "true"
+
+    steps:
+      - name: Create evidence directories
+        run: |
+          evidence="$RUNNER_TEMP/release-validation"
+          mkdir -p "$evidence"/{environment,build,check,manual}
+          echo "EVIDENCE_DIR=$evidence" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Record the exact source identity
+        id: identity
+        run: |
+          sha="$(git rev-parse HEAD)"
+          version="$(sed -n 's/^Version:[[:space:]]*//p' DESCRIPTION)"
+          {
+            echo "commit=$sha"
+            echo "tree=$(git rev-parse HEAD^{tree})"
+            echo "ref=$GITHUB_REF"
+            echo "package=BreastSubtypeR"
+            echo "version=$version"
+            echo "run=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          } | tee "$EVIDENCE_DIR/source.txt"
+          test "$sha" = "$GITHUB_SHA"
+          test "$version" = "1.5.10"
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+      - uses: r-lib/actions/setup-pandoc@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
+
+      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
+        with:
+          r-version: "4.6"
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
+        with:
+          dependencies: '"all"'
+          extra-packages: |
+            any::BiocManager
+            any::rcmdcheck
+            any::jsonlite
+            bioc::BiocVersion
+          needs: check
+
+      - uses: r-lib/actions/setup-tinytex@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
+        env:
+          TINYTEX_INSTALLER: TinyTeX
+
+      - name: Prepare and record PDF tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y texinfo ghostscript qpdf
+          tlmgr update --self 2>&1 | tee "$EVIDENCE_DIR/environment/tlmgr-update.log"
+          tlmgr install collection-fontsrecommended collection-latexrecommended inconsolata \
+            2>&1 | tee "$EVIDENCE_DIR/environment/tlmgr-install.log"
+          pdflatex --version | tee "$EVIDENCE_DIR/environment/pdflatex.txt"
+          pandoc --version | tee "$EVIDENCE_DIR/environment/pandoc.txt"
+          tlmgr list --only-installed > "$EVIDENCE_DIR/environment/tex-packages.txt"
+
+      - name: Verify R and Bioconductor and record dependencies
+        shell: Rscript {0}
+        run: |
+          out <- file.path(Sys.getenv("EVIDENCE_DIR"), "environment")
+          capture.output(sessionInfo(), file = file.path(out, "session-info.txt"))
+          write.csv(installed.packages()[, c("Package", "Version", "LibPath")],
+                    file.path(out, "installed-packages.csv"), row.names = FALSE)
+          r <- getRversion()
+          bioc <- packageVersion("BiocVersion")
+          stopifnot(r >= "4.6.0", r < "4.7.0",
+                    bioc >= "3.24", bioc < "3.25",
+                    as.character(BiocManager::version()) == "3.24")
+
+      - name: Build one source tarball with manuals enabled
+        id: build
+        working-directory: ${{ runner.temp }}/release-validation/build
+        run: |
+          R CMD build "$GITHUB_WORKSPACE" 2>&1 | tee build.log
+          if grep -E '^(WARNING[: ]|Warning( messages?)?:|Warning in )' build.log; then
+            echo "::error::R CMD build reported a warning"
+            exit 1
+          fi
+          shopt -s nullglob
+          tarballs=(*.tar.gz)
+          test "${#tarballs[@]}" -eq 1
+          test "${tarballs[0]}" = "BreastSubtypeR_1.5.10.tar.gz"
+          tar -tzf "${tarballs[0]}" > tarball-contents.txt
+          sha256sum "${tarballs[0]}" | tee tarball.sha256
+          echo "tarball=$PWD/${tarballs[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Full R CMD check --as-cran
+        id: check
+        working-directory: ${{ runner.temp }}/release-validation/check
+        env:
+          TARBALL: ${{ steps.build.outputs.tarball }}
+        run: |
+          (cd "$EVIDENCE_DIR/build" && sha256sum --check tarball.sha256)
+          R CMD check --as-cran "$TARBALL" 2>&1 | tee check.log
+
+      - name: Require a complete check without errors or warnings and a successful PDF check
+        id: assess
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        env:
+          RCMDCHECK_RUN_OUTCOME: ${{ steps.check.outcome }}
+        run: |
+          Rscript "$GITHUB_WORKSPACE/.github/scripts/bioccheck-ci.R" rcmdcheck \
+            "$EVIDENCE_DIR/check/BreastSubtypeR.Rcheck" "$EVIDENCE_DIR/check" \
+            2>&1 | tee "$EVIDENCE_DIR/check/assessment.log"
+          grep -E '^\* checking PDF version of manual \.\.\. (\[[^]]+\] )?OK$' \
+            "$EVIDENCE_DIR/check/BreastSubtypeR.Rcheck/00check.log"
+
+      - name: Generate and verify the PDF manual from the same tarball
+        id: manual
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        working-directory: ${{ runner.temp }}/release-validation/manual
+        env:
+          TARBALL: ${{ steps.build.outputs.tarball }}
+        run: |
+          (cd "$EVIDENCE_DIR/build" && sha256sum --check tarball.sha256)
+          mkdir source tex
+          tar -xzf "$TARBALL" -C source
+          R CMD Rd2pdf --no-preview --no-clean --build-dir="$PWD/tex" \
+            --output="$PWD/BreastSubtypeR_1.5.10.pdf" "$PWD/source/BreastSubtypeR" \
+            2>&1 | tee manual.log
+          test -s BreastSubtypeR_1.5.10.pdf
+          qpdf --check BreastSubtypeR_1.5.10.pdf 2>&1 | tee pdf-check.log
+          sha256sum BreastSubtypeR_1.5.10.pdf > manual.sha256
+
+      - name: Verify checkout integrity
+        id: pristine
+        if: ${{ always() && steps.identity.outcome == 'success' }}
+        run: |
+          git status --porcelain --untracked-files=all | tee "$EVIDENCE_DIR/checkout-status.txt"
+          test ! -s "$EVIDENCE_DIR/checkout-status.txt"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+
+      - name: Report outcomes and all check notes
+        if: always()
+        env:
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+          CHECK_OUTCOME: ${{ steps.check.outcome }}
+          ASSESS_OUTCOME: ${{ steps.assess.outcome }}
+          MANUAL_OUTCOME: ${{ steps.manual.outcome }}
+          PRISTINE_OUTCOME: ${{ steps.pristine.outcome }}
+        run: |
+          {
+            echo '## BreastSubtypeR release validation'
+            echo
+            echo '```text'
+            if test -f "$EVIDENCE_DIR/source.txt"; then cat "$EVIDENCE_DIR/source.txt"; else echo 'Source identity not recorded; validation incomplete.'; fi
+            echo '```'
+            echo
+            printf '| Stage | Outcome |\n|---|---|\n'
+            printf '| Build | %s |\n| Full check | %s |\n| Strict assessment and PDF check | %s |\n| PDF generation and verification | %s |\n| Checkout integrity | %s |\n' \
+              "$BUILD_OUTCOME" "$CHECK_OUTCOME" "$ASSESS_OUTCOME" "$MANUAL_OUTCOME" "$PRISTINE_OUTCOME"
+            echo
+            echo 'Errors, warnings and incomplete checks fail the job. Notes are retained below in full.'
+            echo '<details><summary>Complete check log, including every NOTE</summary>'
+            echo
+            echo '```text'
+            if test -f "$EVIDENCE_DIR/check/BreastSubtypeR.Rcheck/00check.log"; then
+              cat "$EVIDENCE_DIR/check/BreastSubtypeR.Rcheck/00check.log"
+            else
+              echo 'No check log: validation did not reach a completed R CMD check.'
+            fi
+            echo '```'
+            echo '</details>'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload validation evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-validation-${{ github.sha }}-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/release-validation
+          retention-days: 14
+          if-no-files-found: error
