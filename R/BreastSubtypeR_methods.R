@@ -1247,6 +1247,9 @@ BS_ssBC <- function(
 #' its `all.pairs` vector and fitted naive Bayes tables contain 100 rule
 #' predictors. `k` is not the total rule denominator. [InputCoverage()] reports
 #' represented genes and rule evaluability without modifying this model.
+#' If no model rule is evaluable for a sample, its class, selected-class
+#' probability and all posterior probabilities are `NA`. Both TRUE and FALSE
+#' comparisons count as evaluable; with at least one, native predictions are retained.
 #' The posterior probabilities come from the fitted model and are distinct
 #' from input coverage, multi-method entropy and Parker `Confidence`.
 #' They are not externally calibrated measures of clinical reliability.
@@ -1346,6 +1349,9 @@ BS_AIMS <- function(se_obj) {
 #' }
 #'
 #' @details
+#' If no model rule is evaluable for a sample, its class, selected-class
+#' probability and all posterior probabilities are `NA`. Both TRUE and FALSE
+#' comparisons count as evaluable; with at least one, native predictions are retained.
 #' Posterior probabilities are conditional on the fitted naive Bayes model
 #' and its native handling of the available rule inputs. They differ from
 #' [InputCoverage()], multi-method entropy and Parker `Confidence`; they do
