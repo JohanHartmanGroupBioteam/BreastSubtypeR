@@ -758,7 +758,7 @@ server <- function(input, output, session) {
         output_text <- capture.output({
           message("Mapping() -> RawCounts = ", reactive_files$RawCounts)
           data_input <- BreastSubtypeR::Mapping(se_obj = se_obj, RawCounts = reactive_files$RawCounts,
-                                impute = TRUE, verbose = TRUE)
+                                impute = FALSE, verbose = TRUE)
           cat("Step 1 is complete.\nYou may now proceed to Step 2.\n")
         })
         reactive_files$data_input <- data_input

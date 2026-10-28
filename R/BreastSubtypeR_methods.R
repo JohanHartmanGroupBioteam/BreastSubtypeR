@@ -147,7 +147,11 @@ NULL
 #'     `Inf - Inf`), `Mapping()` stops with an error naming the Entrez ID
 #'     instead of selecting a probe.
 #'
-#' @param impute Logical. If `TRUE`, applies KNN-based imputation to missing values.
+#' @param impute Logical; default `FALSE` preserves missing measurements after
+#'   duplicate resolution. For nonraw input, `TRUE` requests optional gene-level
+#'   KNN with fixed `k = 10`, using the full eligible supplied donor matrix.
+#'   Only originally missing measurements in represented genes selected for the
+#'   existing NC/SSP outputs are estimated. Complete required outputs bypass KNN.
 #'
 #' @param verbose Logical. If `TRUE`, prints progress messages during execution.
 #'
@@ -172,6 +176,46 @@ NULL
 #'
 #' This design allows users to supply a single expression format, while
 #' BreastSubtypeR automatically applies method-specific preprocessing.
+#'
+#' **Missingness and optional imputation.** Absent genes are never synthesized.
+#' Duplicate methods retain their existing rules: mean/median use available
+#' probes, while max requires a defined total for a duplicate probe group.
+#' Donors are prepared only when requested output measurements remain missing.
+#' Unusable nonprotected background genes (failed duplicate resolution,
+#' infinite observations or entirely missing profiles) are excluded with
+#' diagnostics; required genes are protected. Otherwise usable partially missing
+#' donors are retained, including profiles with more than 50% missingness.
+#'
+#' KNN compares each target with every other eligible original gene profile.
+#' Distance is the mean squared difference over shared finite observations,
+#' accumulated in input sample order. Exactly ten distinct other profiles with
+#' finite distances and positive overlap are selected; exact ties use original
+#' donor row order. Each missing coordinate uses the available original values
+#' among those ten neighbors (one to ten observed contributors per coordinate). No estimated value is reused, and there is no
+#' adaptive k, mean fallback or zero filling. `NA` and `NaN` are both missing,
+#' with separate internal counts. Observed and nontarget measurements and caller
+#' RNG state are preserved. When optional KNN runs, retained input infinities
+#' are unsupported; disabled/complete-output bypasses add no infinity filter. Nonfinite
+#' calculated distances are diagnosed and excluded individually.
+#'
+#' Unsupported or partly unresolved represented targets stop the call with a
+#' structured error identifying target genes and reasons. Full estimator
+#' diagnostics remain available on the condition for inspection, without adding
+#' fields to successful Mapping outputs. Newly estimated values must also remain
+#' finite on their existing NC/SSP output scales. Integer diagnostic/work limits
+#' are checked before estimation; workload is never silently reduced.
+#'
+#' This revised implementation differs from the original publication's pipeline.
+#' Incomplete-input estimates and downstream predictions may change, including
+#' calls that explicitly set `impute = TRUE`.
+#'
+#' **Raw counts and exact output scales.** Raw `NA`/`NaN` counts are rejected with
+#' either impute setting. KNN is never used on raw counts or raw-derived outputs;
+#' `impute = TRUE` errors if missing raw-derived expression remains. Full-count
+#' normalization, library sizes and gene-length handling are unchanged: raw NC
+#' uses upper-quartile log2-CPM with the existing prior count, and raw SSP uses
+#' linear FPKM. Nonraw NC retains collapsed log expression; SSP uses `2^x`, so
+#' log2(FPKM+1) input yields FPKM+1 without subtraction of one.
 #' 
 #' **Clinical ROR covariates.** With `hasClinical = TRUE`, NC method wrappers
 #' require both `TSIZE` and `NODE` columns and check that `NODE` is numeric.
@@ -260,9 +304,12 @@ NULL
 Mapping <- function(se_obj,
     RawCounts = FALSE,
     method = c("max", "mean", "median", "iqr", "stdev"),
-    impute = TRUE,
+    impute = FALSE,
     verbose = TRUE) {
     method <- match.arg(method)
+    if (!is.logical(impute) || length(impute) != 1L || is.na(impute)) {
+        stop("impute must be one nonmissing logical value.", call. = FALSE)
+    }
 
     ## --- Normalize ER/HER2/TN in colData ---
     cd0 <- SummarizedExperiment::colData(se_obj)
