@@ -1,4 +1,4 @@
-# Manual-only full check of the 1.5.10 source, including its PDF manual.
+# Manual-only full check of the 1.5.11 source, including its PDF manual.
 # Reuses the existing CI pins and strict R CMD check assessment helper.
 name: Release validation (PDF manual)
 
@@ -50,7 +50,7 @@ jobs:
             echo "run=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           } | tee "$EVIDENCE_DIR/source.txt"
           test "$sha" = "$GITHUB_SHA"
-          test "$version" = "1.5.10"
+          test "$version" = "1.5.11"
           test -z "$(git status --porcelain --untracked-files=all)"
 
       - uses: r-lib/actions/setup-pandoc@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
@@ -110,7 +110,7 @@ jobs:
           shopt -s nullglob
           tarballs=(*.tar.gz)
           test "${#tarballs[@]}" -eq 1
-          test "${tarballs[0]}" = "BreastSubtypeR_1.5.10.tar.gz"
+          test "${tarballs[0]}" = "BreastSubtypeR_1.5.11.tar.gz"
           tar -tzf "${tarballs[0]}" > tarball-contents.txt
           sha256sum "${tarballs[0]}" | tee tarball.sha256
           echo "tarball=$PWD/${tarballs[0]}" >> "$GITHUB_OUTPUT"
@@ -147,11 +147,11 @@ jobs:
           mkdir source tex
           tar -xzf "$TARBALL" -C source
           R CMD Rd2pdf --no-preview --no-clean --build-dir="$PWD/tex" \
-            --output="$PWD/BreastSubtypeR_1.5.10.pdf" "$PWD/source/BreastSubtypeR" \
+            --output="$PWD/BreastSubtypeR_1.5.11.pdf" "$PWD/source/BreastSubtypeR" \
             2>&1 | tee manual.log
-          test -s BreastSubtypeR_1.5.10.pdf
-          qpdf --check BreastSubtypeR_1.5.10.pdf 2>&1 | tee pdf-check.log
-          sha256sum BreastSubtypeR_1.5.10.pdf > manual.sha256
+          test -s BreastSubtypeR_1.5.11.pdf
+          qpdf --check BreastSubtypeR_1.5.11.pdf 2>&1 | tee pdf-check.log
+          sha256sum BreastSubtypeR_1.5.11.pdf > manual.sha256
 
       - name: Verify checkout integrity
         id: pristine
