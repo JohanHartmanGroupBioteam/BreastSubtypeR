@@ -284,7 +284,8 @@ test_that("coverage does not call classifiers or repeat preprocessing", {
     expected <- InputCoverage(input)
     forbidden <- function(...) stop("reporting called a scientific processing step")
     testthat::local_mocked_bindings(
-        Mapping = forbidden, domapping = forbidden, impute_missing = forbidden,
+        Mapping = forbidden, domapping = forbidden, .mapping_impute_log = forbidden,
+        knn_vectorized_reference = forbidden,
         BS_AIMS = forbidden, BS_sspbc = forbidden, applyAIMS_AIMS = forbidden,
         applySSP = forbidden, .apply.nbc_AIMS = forbidden, .apply.nbc = forbidden,
         .package = "BreastSubtypeR")

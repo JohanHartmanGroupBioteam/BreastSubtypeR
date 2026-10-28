@@ -5,7 +5,6 @@
 #' @import RColorBrewer
 #' @import circlize
 #' @import magrittr
-#' @import impute
 #' @importFrom dplyr mutate across everything
 #' @importFrom ggplot2 ggplot aes geom_point geom_bar geom_text geom_line geom_vline geom_hline
 #' @importFrom ggplot2 geom_boxplot scale_x_continuous scale_color_manual scale_fill_manual
@@ -24,26 +23,6 @@ NULL
         message(sprintf("[%s] %s", origin, sprintf(fmt, ...)))
     }
 }
-
-#' Impute missing values using k-nearest neighbors
-#'
-#' @param x Numeric matrix with missing values (NA).
-#' @param verbose Logical; if TRUE, prints missing probes/samples.
-#' @return Imputed matrix.
-#' @noRd
-impute_missing <- function(x, verbose = FALSE) {
-    if (anyNA(x)) {
-        if (verbose) {
-            probeid_NA <- rownames(x)[rowSums(is.na(x)) > 0]
-            sample_NA <- colnames(x)[colSums(is.na(x)) > 0]
-            message("Missing probes: ", paste(probeid_NA, collapse = ", "))
-            message("Missing samples: ", paste(sample_NA, collapse = ", "))
-        }
-        x <- impute::impute.knn(x)$data
-    }
-    x
-}
-
 
 #' Collapse duplicate genes by a summary statistic
 #'
@@ -271,7 +250,7 @@ domapping <- function(
         se_obj,
         RawCounts = FALSE,
         method = "max",
-        impute = TRUE,
+        impute = FALSE,
         verbose = TRUE) {
     ## 1. Input raw counts
     if (RawCounts && !"Length" %in% colnames(rowData(se_obj))) {
@@ -292,6 +271,10 @@ domapping <- function(
     if (RawCounts) {
         # Pull counts from SummarizedExperiment and build a DGEList
         counts <- SummarizedExperiment::assay(se_obj)
+        if (anyNA(counts)) {
+            stop("NA counts not allowed: RawCounts=TRUE requires complete counts; raw-count imputation is not supported.",
+                call. = FALSE)
+        }
         y_all <- edgeR::DGEList(counts = round(as.matrix(counts)))
 
         # Light positive-only subset (very gentle): CPM > 0 in ≥30% samples
@@ -336,19 +319,35 @@ domapping <- function(
     }
     samplenames <- colnames(x)
 
-    # 5. Filter by signature genes and impute
-    ## filter by ENTREZID
-    y <- y[y$ENTREZID %in% genes.s$EntrezGene.ID, ]
-    x <- x[y$probe, , drop = FALSE]
-    if (impute && anyNA(x)) x <- impute_missing(x, verbose)
-    if (RawCounts && impute && anyNA(counts.fpkm)) {
-        counts.fpkm <- impute_missing(counts.fpkm, verbose)
+    # 5. Preserve duplicate selection on each established expression scale.
+    # Full-count normalization and library sizes above precede all exclusions.
+    target_y <- y[y$ENTREZID %in% genes.s$EntrezGene.ID, , drop = FALSE]
+    source_log <- x
+    x <- duplicate_genes(x[target_y$probe, , drop = FALSE], target_y, method)
+    if (RawCounts) {
+        counts.fpkm <- duplicate_genes(counts.fpkm, target_y, method)
     }
 
-    # 6. Deduplicate by EntrezID
-    x <- duplicate_genes(x, y, method)
-    if (RawCounts) {
-        counts.fpkm <- duplicate_genes(counts.fpkm, y, method)
+    # Freeze represented output IDs before donor preparation/exclusion.
+    targets <- .mapping_output_targets(x, BreastSubtypeRobj)
+    if (impute && RawCounts && (anyNA(x) || anyNA(counts.fpkm))) {
+        stop(paste0("Missing expression after raw-count normalization or duplicate ",
+            "resolution is not supported for optional KNN. Review counts and ",
+            "gene lengths; neither counts nor linear FPKM will be imputed."),
+            call. = FALSE)
+    }
+    # Complete required outputs bypass even background duplicate preparation.
+    if (impute && !RawCounts && anyNA(x[targets, , drop = FALSE])) {
+        donors <- .mapping_donor_matrix(source_log, y, method,
+            .mapping_required_ids(BreastSubtypeRobj))
+        ssp_targets <- as.character(genes.s$EntrezGene.ID[genes.s$SSP_based == "Yes"])
+        accepted <- .mapping_impute_log(donors$matrix, targets,
+            ssp_targets = intersect(targets, ssp_targets),
+            exclusions = donors$exclusions, verbose = verbose)
+        # Change only original holes of the frozen targets in the output source.
+        holes <- is.na(x) & (rownames(x) %in% targets)
+        estimates <- accepted$matrix[match(rownames(x), rownames(accepted$matrix)), , drop = FALSE]
+        x[holes] <- estimates[holes]
     }
 
     # 7. Prepare output (NC and SSP matrices)

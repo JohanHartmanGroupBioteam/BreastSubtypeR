@@ -174,7 +174,7 @@ data_input <- Mapping(
     OSLO2EMIT0obj$se_obj,
     method = "max", # mapping strategy (example)
     RawCounts = FALSE,
-    impute = TRUE,
+    impute = FALSE,
     verbose = FALSE
 )
 ```
@@ -188,9 +188,35 @@ data_input <- Mapping(
         -   **Microarray/nCounter (log₂-processed):** used directly for NC-based methods; back-transformed to linear scale (`2^x`) for SSP-based methods.\
     -   resolving probe/ID → Entrez mappings,\
     -   selecting or collapsing multiple probes per gene (`method` argument),\
-    -   optionally imputing missing marker values,\
+    -   retaining missing measurements by default, with optional target-only
+        imputation after duplicate resolution for nonraw expression,\
     -   and returning a packaged object ready for `BS_Multi` or single-method callers.
--   See `?Mapping` for the full parameter list (e.g., `RawCounts`, `method`, `impute`, `verbose`) and [Methods (Sections 2.3–2.4) in the paper](https://doi.org/10.1093/nargab/lqaf131) for a complete description of the input/normalization pipeline.
+-   See `?Mapping` for the current preprocessing and optional-imputation
+    behavior. The original published pipeline is described in Methods
+    Sections 2.3–2.4 of the [package paper](https://doi.org/10.1093/nargab/lqaf131).
+
+With `impute = TRUE`, complete required outputs bypass donor preparation and
+KNN, including holes resolved by duplicate collapsing. Otherwise, the full
+eligible supplied gene-level log-expression matrix supplies donors, including
+usable partially missing background genes. Exactly ten other profiles with
+finite shared-observation distances are selected; each hole uses available
+original values from one to ten contributors among those ten selected profiles. No fallback or reuse of estimates occurs.
+Only represented genes selected for existing NC/SSP outputs are targets; absent
+genes are never synthesized and unrelated background holes remain unchanged.
+Unusable nonprotected donors are excluded with diagnostics, while protected
+genes cannot be silently dropped to obtain success.
+
+Unsupported or partly unresolved targets stop Mapping with a structured error;
+the condition retains full internal estimator diagnostics. Newly imputed values
+must remain finite on the existing output scales. Raw counts with NA/NaN are
+rejected with either setting, and missing raw-derived expression is never
+imputed. Normalization and library sizes are unchanged. Nonraw SSP remains
+`2^x`, yielding FPKM+1 for log2(FPKM+1) input, without subtraction of one.
+
+Retained infinities are rejected when optional KNN runs; disabled or complete-output
+bypasses introduce no new infinity filter. This is a revised implementation,
+distinct from the original publication's pipeline linked above. Incomplete-input
+estimates and downstream predictions may change even with explicit `impute = TRUE`.
 
 ## Descriptive input coverage
 

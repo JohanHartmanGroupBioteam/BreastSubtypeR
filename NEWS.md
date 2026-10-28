@@ -1,3 +1,29 @@
+# Development (unreleased)
+
+* `Mapping()` now defaults to `impute = FALSE`; primary examples and Shiny
+  explicitly opt out. Duplicate resolution precedes optional imputation and
+  complete required outputs bypass donor preparation.
+* Optional nonraw imputation uses the fixed-k=10 pure-R estimator over the full
+  eligible gene-level donor input, targeting only original holes in represented
+  genes selected for existing NC/SSP outputs. Exact ties retain donor row order;
+  estimates use one to ten available original contributors per coordinate among
+  those ten selected profiles.
+  Unsupported/partial targets and nonfinite newly projected estimates error
+  with internal diagnostics. Absent rows are not created and observed/nontarget
+  values, RNG state, output structure and expression scales are preserved.
+* Retire legacy backend row/column missingness cutoffs. The historical blocked
+  prototype's per-hole potential-donor precheck was not a released contributor
+  requirement and is not retained. Keep diagnostics for unusable background exclusions and protection
+  for required genes; check integer diagnostic capacity before estimation.
+* Reject missing raw counts with either setting and never impute raw-derived
+  expression. Full-count normalization and library-size handling are unchanged.
+  Remove unused `impute` imports/dependency after replacing the legacy backend.
+
+* Infinity rejection applies when optional KNN runs, not to disabled or complete
+  output bypasses. This revision differs from the original published pipeline;
+  incomplete-input estimates and downstream predictions may change even with
+  explicit `impute = TRUE`.
+
 # BreastSubtypeR 1.5.10
 
 ## Bug fixes

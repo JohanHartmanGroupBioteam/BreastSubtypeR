@@ -73,7 +73,7 @@ mapped <- Mapping(
     OSLO2EMIT0obj$se_obj,
     RawCounts = FALSE,
     method = "max",
-    impute = TRUE
+    impute = FALSE
 )
 result <- BS_Multi(
     data_input = mapped,
@@ -83,6 +83,20 @@ result <- BS_Multi(
 )
 head(result$res_subtypes)
 ```
+
+`Mapping()` preserves missing measurements by default and resolves duplicate
+probes before optional imputation. For nonraw input, `impute = TRUE` uses ten
+supported other gene profiles from the full eligible supplied input, filling
+only original holes in represented genes selected for existing NC/SSP outputs.
+Absent genes are not added. Unsupported or partially unresolved targets produce
+a structured error with internal diagnostics; observed values are preserved.
+Missing raw counts are rejected, and no raw-derived expression is imputed.
+Existing scales are unchanged, including `2^x` for nonraw SSP input.
+Each hole uses one to ten original observed contributors among the ten selected
+profiles. Retained infinities are rejected when optional KNN runs; disabled and
+complete-output bypasses introduce no new infinity filter. This revised
+implementation differs from the original publication's pipeline. Incomplete-input
+estimates and downstream predictions may change even with explicit `impute = TRUE`.
 
 `Subtype = FALSE` requests the five-class summary; `hasClinical = FALSE`
 disables clinical ROR outputs. Rows are samples and method columns contain

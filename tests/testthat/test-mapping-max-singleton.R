@@ -230,7 +230,7 @@ test_that("max stops with a gene-specific error when every duplicate total is un
     }
 })
 
-test_that("nonraw Mapping reports an undefined duplicate group and keeps impute = TRUE", {
+test_that("nonraw Mapping rejects undefined duplicate totals before optional KNN", {
     withr::local_seed(178)
     input <- mapping178_input()
     se <- input$se
@@ -252,11 +252,9 @@ test_that("nonraw Mapping reports an undefined duplicate group and keeps impute 
         inherits = FALSE), seed)
     expect_false(any(vapply(colnames(mixed), grepl, logical(1),
         x = conditionMessage(error), fixed = TRUE)))
-    # With imputation the same input maps as the imputed matrix does without.
-    filled <- mixed
-    SummarizedExperiment::assay(filled) <- BreastSubtypeR:::impute_missing(
-        SummarizedExperiment::assay(mixed), verbose = FALSE)
-    expect_identical(mapping178_map(mixed, impute = TRUE), mapping178_map(filled))
+    # Gene-level KNN must not rescue undefined probe totals before selection.
+    expect_error(mapping178_map(mixed, impute = TRUE),
+        "Cannot resolve Entrez ID 55165 with method = \"max\"", fixed = TRUE)
     # One sample: the probe with a defined value is selected as before, and
     # a group with no defined value is reported.
     expect_identical(mapping178_map(mixed[, 1]), mapping178_map(se[, 1]))
@@ -364,7 +362,7 @@ test_that("complete Mapping controls preserve both scales and impute settings", 
     }
 })
 
-test_that("nonraw imputation and early rejection of raw NA counts stay unchanged", {
+test_that("nonraw estimates follow frozen gene-level KNN and raw NA counts error", {
     withr::local_seed(178)
     input <- mapping178_input()
     raw <- input$se
@@ -377,9 +375,15 @@ test_that("nonraw imputation and early rejection of raw NA counts stay unchanged
     se <- input$se
     SummarizedExperiment::assay(se) <- log2(SummarizedExperiment::assay(se) + 1)
     SummarizedExperiment::assay(se)[target, 2] <- NA_real_
+    # This singleton fixture requires no collapse. Independently call frozen B3
+    # on the full gene-level input, rather than the retired probe-level backend.
+    full <- SummarizedExperiment::assay(se)
+    rownames(full) <- as.character(SummarizedExperiment::rowData(se)$ENTREZID)
+    expected <- BreastSubtypeR:::knn_vectorized_reference(full, rownames(full))
+    expect_true(all(vapply(expected$targets, function(z)
+        z$status %in% c("complete", "imputed"), logical(1))))
     filled <- se
-    SummarizedExperiment::assay(filled) <- BreastSubtypeR:::impute_missing(
-        SummarizedExperiment::assay(se), verbose = FALSE)
+    SummarizedExperiment::assay(filled)[] <- expected$matrix
     actual <- mapping178_map(se, impute = TRUE)
     expect_identical(actual, mapping178_map(filled))
     expect_false(anyNA(SummarizedExperiment::assay(actual$se_NC)))

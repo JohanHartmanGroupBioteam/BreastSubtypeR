@@ -1,7 +1,6 @@
 #'
 #' Functions adapted from NC-based subtyping methods
 #' @import magrittr
-#' @import impute
 #' @importFrom withr with_seed
 #' @importFrom dplyr select
 #' @importFrom tidyselect everything
