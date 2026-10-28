@@ -1,4 +1,6 @@
-# Development (unreleased)
+# BreastSubtypeR 1.5.11
+
+## Mapping
 
 * `Mapping()` now defaults to `impute = FALSE`; primary examples and Shiny
   explicitly opt out. Duplicate resolution precedes optional imputation and
@@ -11,10 +13,9 @@
   Unsupported/partial targets and nonfinite newly projected estimates error
   with internal diagnostics. Absent rows are not created and observed/nontarget
   values, RNG state, output structure and expression scales are preserved.
-* Retire legacy backend row/column missingness cutoffs. The historical blocked
-  prototype's per-hole potential-donor precheck was not a released contributor
-  requirement and is not retained. Keep diagnostics for unusable background exclusions and protection
-  for required genes; check integer diagnostic capacity before estimation.
+* Optional KNN no longer uses legacy row/column missingness cutoffs. Unusable
+  background donors are excluded with diagnostics, required genes remain
+  protected, and diagnostic capacity is checked before estimation.
 * Reject missing raw counts with either setting and never impute raw-derived
   expression. Full-count normalization and library-size handling are unchanged.
   Remove unused `impute` imports/dependency after replacing the legacy backend.
@@ -23,6 +24,13 @@
   output bypasses. This revision differs from the original published pipeline;
   incomplete-input estimates and downstream predictions may change even with
   explicit `impute = TRUE`.
+
+## Bug fixes
+
+* AIMS and the SSPBC subtype models now return missing calls and probabilities
+  for samples with zero evaluable model rules (#212, PR #215). Observed FALSE
+  comparisons still count as evidence; supported samples and model definitions
+  are unchanged.
 
 # BreastSubtypeR 1.5.10
 
