@@ -415,9 +415,54 @@ sspPredict <- function(x, y, std = FALSE, distm = "spearman", Subtype = TRUE) {
 # or otherwise transforming scores. This is separate from the Parker groups.
 .ror_pc_subtype_labels <- function(score, low, high) {
     group <- setNames(rep(NA_character_, length(score)), names(score))
-    group[!is.na(score) & score <= low] <- "low"
-    group[!is.na(score) & score > low & score <= high] <- "med"
-    group[!is.na(score) & score > high] <- "high"
+    ## Only finite scores receive a category (#206): NA, NaN and +/-Inf stay
+    ## missing. The independent NODE >= 4 rule is applied by the caller.
+    ok <- is.finite(score)
+    group[ok & score <= low] <- "low"
+    group[ok & score > low & score <= high] <- "med"
+    group[ok & score > high] <- "high"
+    group
+}
+
+# Per-sample proliferation score for one panel (#206). The panel subset is
+# kept as a matrix (drop = FALSE) so one represented gene or one sample cannot
+# collapse to a vector. Represented genes are averaged with the original
+# mean(..., na.rm = TRUE); no gene-count threshold is imposed and absent genes
+# are never synthesized. A sample with no observed panel value, or a nonfinite
+# estimate, gets a genuine NA_real_ instead of NaN or +/-Inf.
+.proliferation_score <- function(testData, genes) {
+    if (!is.matrix(testData)) {
+        testData <- as.matrix(testData)
+    }
+    score <- setNames(rep(NA_real_, ncol(testData)), colnames(testData))
+    panel <- testData[rownames(testData) %in% genes, , drop = FALSE]
+    if (nrow(panel) > 0L && ncol(panel) > 0L) {
+        estimate <- apply(panel, 2, mean, na.rm = TRUE)
+        estimate[!is.finite(estimate)] <- NA_real_
+        score[] <- estimate
+    }
+    score
+}
+
+# Exported numerical ROR scores are finite or genuine NA_real_ (#206): NaN and
+# +/-Inf, including overflow produced by the final 100 * (x + 0.35) / 0.85
+# scaling, become NA. Applied to the final reported score, never to inputs.
+.finite_score <- function(score) {
+    nonfinite <- !is.finite(score)
+    if (any(nonfinite)) {
+        score[nonfinite] <- NA_real_
+    }
+    score
+}
+
+# Nonfinite (now NA) numerical ROR scores have no valid risk category (#206).
+# Finite scores keep the original strict-comparison labels assigned by the
+# caller, including the exact-equality text deferred in #172.
+.finite_group <- function(group, score) {
+    nonfinite <- !is.finite(score)
+    if (any(nonfinite)) {
+        group[nonfinite] <- NA_character_
+    }
     group
 }
 
@@ -543,14 +588,11 @@ RORgroup <- function(
     )
 
 
-    # calculate the proliferation score
-    # Filter test data for proliferation genes
-    prolifG_data <- out$testData[rownames(out$testData) %in% prolifG, ]
-    prolifScore <- apply(prolifG_data, 2, mean, na.rm = TRUE)
-
-    # Filter test data for proliferation Subtype genes
-    prolifG_Subtype <- out$testData[rownames(out$testData) %in% prolifG.Subtype, ]
-    prolifScore_Subtype <- apply(prolifG_Subtype, 2, mean, na.rm = TRUE)
+    # calculate the proliferation scores (#206): represented panel genes are
+    # averaged per sample with mean(..., na.rm = TRUE); missing or nonfinite
+    # estimates are NA, so the derived scores and groups below are missing.
+    prolifScore <- .proliferation_score(out$testData, prolifG)
+    prolifScore_Subtype <- .proliferation_score(out$testData, prolifG.Subtype)
 
     ## confidence
     call.conf <- data.frame(
@@ -587,6 +629,12 @@ RORgroup <- function(
 
     genomic <- 100 * (genomic + 0.35) / 0.85
     genomicWprolif <- 100 * (genomicWprolif + 0.35) / 0.85
+    ## exported scores are finite or NA, and a nonfinite result, including
+    ## overflow in the scaling above, has a missing category (#206)
+    genomic <- .finite_score(genomic)
+    genomicWprolif <- .finite_score(genomicWprolif)
+    griskgroups <- .finite_group(griskgroups, genomic)
+    gpriskgroups <- .finite_group(gpriskgroups, genomicWprolif)
 
     ROR.genomic <- data.frame(
         "ROR-S (Subtype Only)" = genomic,
@@ -628,6 +676,13 @@ RORgroup <- function(
 
             combined <- 100 * (combined + 0.35) / 0.85
             combinedWprolif <- 100 * (combinedWprolif + 0.35) / 0.85
+            ## exported scores are finite or NA, and a nonfinite result,
+            ## including overflow in the scaling above, has a missing
+            ## category (#206)
+            combined <- .finite_score(combined)
+            combinedWprolif <- .finite_score(combinedWprolif)
+            criskgroups <- .finite_group(criskgroups, combined)
+            cpriskgroups <- .finite_group(cpriskgroups, combinedWprolif)
 
             ROR.combined <- data.frame(
                 "ROR-C (Subtype + Clinic)" = combined,
@@ -642,6 +697,10 @@ RORgroup <- function(
                     0.3172 * out$dist.RORSubtype[, 3] + 0.4894 * out$dist.RORSubtype[, 4] +
                     0.1981 * prolifScore_Subtype + 0.1133 * xT + 0.8826
             )
+            ## the exported additional score is finite or NA (#206); its
+            ## NODE-dependent labels below only categorize finite scores and
+            ## the independent NODE >= 4 high-risk rule is unchanged
+            cmbWprolif.Subtype <- .finite_score(cmbWprolif.Subtype)
 
 
             ## check NODE

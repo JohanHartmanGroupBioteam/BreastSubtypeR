@@ -279,6 +279,26 @@ NULL
 #' `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)` boundaries described
 #' in [Mapping()], which remain unchanged.
 #'
+#' @section Proliferation panel coverage:
+#' The ROR-P and original ROR-PC scores use the per-sample mean of the
+#' represented original 11-gene proliferation panel genes, and the additional
+#' `ROR-PC (Subtype + Clinic + Prolif.Subtype)` score uses the per-sample mean
+#' of the represented 18-gene panel, both computed over observed values with
+#' `mean(..., na.rm = TRUE)` as in the distributed Parker implementation.
+#' Absent genes are never synthesized and no minimum gene count is enforced:
+#' an incomplete panel, down to one represented gene, gives a score computed
+#' from the available genes only. This is retained as a compatibility
+#' limitation and is not a validated partial-panel score; the packaged
+#' `TCGABRCAobj` example represents 7 of 11 and 8 of 18 panel genes. A sample
+#' with no observed panel value, or a nonfinite panel estimate, has a missing
+#' (`NA`) proliferation score, so its proliferation-dependent scores and
+#' groups are missing. Every exported numerical ROR score is finite or `NA`:
+#' a `NaN` or infinite result, including overflow in the final
+#' `100 * (score + 0.35) / 0.85` scaling, is reported as `NA` with a missing
+#' group rather than `low`, `med` or `high`. The independent NODE >= 4
+#' high-risk rule still applies with nonmissing tumor size. Finite
+#' complete-input results are unchanged.
+#'
 #' @details
 #' **Phenodata normalization.** If receptor fields are present, they are coerced to canonical encodings
 #' (\code{ER -> \{ER+, ER-\}}, \code{HER2 -> \{HER2+, HER2-\}},
@@ -366,6 +386,7 @@ Mapping <- function(se_obj,
 #' @name BS_parker
 #' @inheritSection Mapping Research ROR interpretation
 #' @inheritSection Mapping Known original ROR boundary limitation
+#' @inheritSection Mapping Proliferation panel coverage
 #' @description
 #' Implements the original PAM50 nearest-centroid classifier as described by
 #' Parker et al. (2009), along with supported calibration strategies and
@@ -539,6 +560,7 @@ BS_parker <- function(se_obj,
 #' @name BS_cIHC
 #' @inheritSection Mapping Research ROR interpretation
 #' @inheritSection Mapping Known original ROR boundary limitation
+#' @inheritSection Mapping Proliferation panel coverage
 #' @description
 #' Implements the conventional immunohistochemistry-based (cIHC) intrinsic
 #' subtyping approach, which balances cohorts by estrogen receptor (ER) status
@@ -670,6 +692,7 @@ BS_cIHC <- function(
 #' @name BS_cIHC.itr
 #' @inheritSection Mapping Research ROR interpretation
 #' @inheritSection Mapping Known original ROR boundary limitation
+#' @inheritSection Mapping Proliferation panel coverage
 #' @description
 #' Implements an **iterative** version of the conventional IHC-based intrinsic
 #' subtyping approach. This method repeatedly balances samples by estrogen
@@ -865,6 +888,7 @@ BS_cIHC.itr <- function(
 #' @name BS_PCAPAM50
 #' @inheritSection Mapping Research ROR interpretation
 #' @inheritSection Mapping Known original ROR boundary limitation
+#' @inheritSection Mapping Proliferation panel coverage
 #' @description
 #' Implements the PCA-PAM50 method, which integrates **Principal Component
 #' Analysis (PCA)** of ESR1 expression to adjust for estrogen receptor (ER)
@@ -1095,6 +1119,7 @@ BS_PCAPAM50 <- function(
 #' @name BS_ssBC
 #' @inheritSection Mapping Research ROR interpretation
 #' @inheritSection Mapping Known original ROR boundary limitation
+#' @inheritSection Mapping Proliferation panel coverage
 #' @description
 #' Implements the **subgroup-specific gene-centering (ssBC)** method for breast
 #' cancer intrinsic subtyping. The ssBC approach applies precomputed,
@@ -1453,6 +1478,7 @@ BS_sspbc <- function(se_obj, ssp.name = "ssp.pam50") {
 #' @name BS_Multi
 #' @inheritSection Mapping Research ROR interpretation
 #' @inheritSection Mapping Known original ROR boundary limitation
+#' @inheritSection Mapping Proliferation panel coverage
 #' @description
 #' Executes multiple intrinsic molecular subtyping methods in one call.
 #' Users can either specify a set of classifiers directly, or enable the

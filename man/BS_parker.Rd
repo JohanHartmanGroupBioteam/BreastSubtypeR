@@ -133,6 +133,28 @@ from the corrected NODE-dependent
 in \code{\link[=Mapping]{Mapping()}}, which remain unchanged.
 }
 
+\section{Proliferation panel coverage}{
+
+The ROR-P and original ROR-PC scores use the per-sample mean of the
+represented original 11-gene proliferation panel genes, and the additional
+\code{ROR-PC (Subtype + Clinic + Prolif.Subtype)} score uses the per-sample mean
+of the represented 18-gene panel, both computed over observed values with
+\code{mean(..., na.rm = TRUE)} as in the distributed Parker implementation.
+Absent genes are never synthesized and no minimum gene count is enforced:
+an incomplete panel, down to one represented gene, gives a score computed
+from the available genes only. This is retained as a compatibility
+limitation and is not a validated partial-panel score; the packaged
+\code{TCGABRCAobj} example represents 7 of 11 and 8 of 18 panel genes. A sample
+with no observed panel value, or a nonfinite panel estimate, has a missing
+(\code{NA}) proliferation score, so its proliferation-dependent scores and
+groups are missing. Every exported numerical ROR score is finite or \code{NA}:
+a \code{NaN} or infinite result, including overflow in the final
+\code{100 * (score + 0.35) / 0.85} scaling, is reported as \code{NA} with a missing
+group rather than \code{low}, \code{med} or \code{high}. The independent NODE >= 4
+high-risk rule still applies with nonmissing tumor size. Finite
+complete-input results are unchanged.
+}
+
 \examples{
 data("OSLO2EMIT0obj")
 res <- BS_parker(
