@@ -503,7 +503,9 @@ test_that("finite exact-equality scores keep the deferred #172 text after the fi
     input$out$distances[2, "LumA"] <- -1.0509660919621142
     input$out$dist.RORSubtype[2, "LumA"] <- -1.0509660919621142
     unscaled <- -0.0951505484 * -1.0509660919621142 + 0.3385116381 * 0
-    skip_if_not(identical(unscaled, 0.1), "platform arithmetic does not reach exact equality")
+    ## IEEE double arithmetic must reach the cutoff exactly; a platform that
+    ## does not is a test failure, never a silent skip.
+    expect_identical(unscaled, 0.1)
     res <- run_ror(input)
     expect_identical(res[["ROR-P Group (Subtype + Prolif)"]][2], as.character(unscaled))
     expect_identical(res[["ROR-P (Subtype + Prolif)"]][2], 100 * (unscaled + 0.35) / 0.85)

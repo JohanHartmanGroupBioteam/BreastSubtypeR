@@ -133,11 +133,19 @@ in \code{\link[=Mapping]{Mapping()}}, which remain unchanged.
 
 \section{Proliferation panel coverage}{
 
-The ROR-P and original ROR-PC scores use the per-sample mean of the
-represented original 11-gene proliferation panel genes, and the additional
-\code{ROR-PC (Subtype + Clinic + Prolif.Subtype)} score uses the per-sample mean
-of the represented 18-gene panel, both computed over observed values with
-\code{mean(..., na.rm = TRUE)} as in the distributed Parker implementation.
+Two distinct proliferation calculations are used and are never
+interchanged. The original Parker-derived ROR-P and
+\code{ROR-PC (Subtype + Clinic + Prolif)} scores use the per-sample mean of the
+represented genes of the original 11-gene proliferation panel (Parker et
+al., 2009) with the five-class centroid correlations and the published
+coefficients, as in the distributed Parker implementation. The additional
+research \code{ROR-PC (Subtype + Clinic + Prolif.Subtype)} score is a separate
+definition: it uses the per-sample mean of the represented genes of the
+18-gene proliferation panel with the four-class correlations that exclude
+BIRC5, CCNB1, GRB7 and MYBL2, its own coefficients and the NODE-dependent
+groups described above. The panels share nine genes but are evaluated
+independently. Each mean is computed over observed values with
+\code{mean(..., na.rm = TRUE)}.
 Absent genes are never synthesized and no minimum gene count is enforced:
 an incomplete panel, down to one represented gene, gives a score computed
 from the available genes only. This is retained as a compatibility
