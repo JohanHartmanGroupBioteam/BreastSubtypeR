@@ -223,9 +223,11 @@ test_that("subtype-specific ROR-PC endpoints include the upper cutoff", {
         setNames(expected_n0, names(score)))
     expect_identical(BreastSubtypeR:::.ror_pc_subtype_labels(score, 15, 40),
         setNames(expected_n1_3, names(score)))
+    ## Nonfinite scores have no category (#206); see
+    ## test-ror-proliferation-coverage.R.
     expect_identical(BreastSubtypeR:::.ror_pc_subtype_labels(
         c(NA_real_, NaN, -Inf, Inf), 15, 40),
-        c(NA_character_, NA_character_, "low", "high"))
+        rep(NA_character_, 4))
 })
 
 test_that("undefined additional ROR-PC scores have missing categories", {
@@ -249,7 +251,8 @@ test_that("undefined additional ROR-PC scores have missing categories", {
             expect_identical(actual[3:4, c(score, group)],
                 reference[3:4, c(score, group)], info = info)
             if (!is.na(tsize)) {
-                expect_true(is.nan(actual[[score]][1]), info = info)
+                ## Undefined scores are exported as NA, never NaN (#206).
+                expect_true(is.na(actual[[score]][1]) && !is.nan(actual[[score]][1]), info = info)
                 expect_true(is.na(actual[[score]][2]), info = info)
                 expect_false(is.nan(actual[[score]][2]), info = info)
             }
@@ -534,7 +537,7 @@ test_that("valid NODE >= 4 keeps high risk with an undefined additional score", 
     input$df.cln$NODE <- c(4, 5L, -1, 4.5)
     out <- run_ror_capturing(input)
     expect_length(out$warnings, 1)
-    expect_true(is.nan(out$res[[score]][1]))
+    expect_true(is.na(out$res[[score]][1]) && !is.nan(out$res[[score]][1]))
     expect_true(is.na(out$res[[score]][2]))
     expect_identical(unname(out$res[[node_group_col]]),
         c("high", "high", NA, NA))

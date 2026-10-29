@@ -1,3 +1,26 @@
+# BreastSubtypeR (development)
+
+## Bug fixes
+
+* `RORgroup()` keeps both proliferation panel subsets as matrices and no
+  longer fails when exactly one 11-gene or 18-gene panel gene is represented
+  (#206). Represented genes are still averaged with `mean(..., na.rm = TRUE)`
+  without any gene-count threshold; absent genes are never synthesized. A
+  sample with no observed panel value, or a nonfinite panel estimate, now
+  receives a missing proliferation score instead of `NaN` or `Inf`, so
+  ROR-P, original ROR-PC and the additional ROR-PC score and groups are
+  missing for that sample rather than the literal text `"NaN"` or an
+  apparently valid `high`/`low` category. Every exported numerical ROR score
+  is now finite or `NA`: a `NaN` or infinite result, including overflow in
+  the final `100 * (score + 0.35) / 0.85` scaling or an infinite tumor-size
+  covariate, is reported as `NA` with a missing group for ROR-S, ROR-P,
+  ROR-C, original ROR-PC and the additional subtype-specific ROR-PC score.
+  Finite complete-input scores, subtype calls, calibration, correlations,
+  coefficients, cutoffs, the exact-equality limitation (#172), the reference
+  standardization question (#198), the correlation choice (#156) and the
+  independent NODE >= 4 high-risk rule are unchanged. Incomplete panels are
+  documented as a compatibility limitation, not a validated score.
+
 # BreastSubtypeR 1.5.11
 
 ## Mapping
