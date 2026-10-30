@@ -588,10 +588,16 @@ RORgroup <- function(
     )
 
 
-    # calculate the proliferation scores (#206): represented panel genes are
-    # averaged per sample with mean(..., na.rm = TRUE); missing or nonfinite
-    # estimates are NA, so the derived scores and groups below are missing.
-    prolifScore <- .proliferation_score(out$testData, prolifG)
+    # Original Parker ROR-P/PC (#198): standardize a separate copy across the
+    # represented PAM50 genes within each sample, after method calibration
+    # and centroid intersection. For cIHC.itr this is the final averaged matrix.
+    # Keep out$testData, correlations and the separate 18-gene score untouched.
+    prolifData <- standardize(out$testData)
+    sampleScale <- attr(prolifData, "scaled:scale")
+    # Undefined SD (including overflow) must not produce a fallback score.
+    prolifData[, !is.finite(sampleScale) | sampleScale <= 0] <- NA_real_
+    # Retain represented-panel means and finite-or-NA handling (#206).
+    prolifScore <- .proliferation_score(prolifData, prolifG)
     prolifScore_Subtype <- .proliferation_score(out$testData, prolifG.Subtype)
 
     ## confidence

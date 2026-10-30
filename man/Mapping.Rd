@@ -235,31 +235,63 @@ in \code{\link[=Mapping]{Mapping()}}, which remain unchanged.
 \section{Proliferation panel coverage}{
 
 Two distinct proliferation calculations are used and are never
-interchanged. The original Parker-derived ROR-P and
-\code{ROR-PC (Subtype + Clinic + Prolif)} scores use the per-sample mean of the
-represented genes of the original 11-gene proliferation panel (Parker et
-al., 2009) with the five-class centroid correlations and the published
-coefficients, as in the distributed Parker implementation. The additional
-research \code{ROR-PC (Subtype + Clinic + Prolif.Subtype)} score is a separate
-definition: it uses the per-sample mean of the represented genes of the
-18-gene proliferation panel with the four-class correlations that exclude
-BIRC5, CCNB1, GRB7 and MYBL2, its own coefficients and the NODE-dependent
-groups described above. The panels share nine genes but are evaluated
-independently. Each mean is computed over observed values with
-\code{mean(..., na.rm = TRUE)}.
-Absent genes are never synthesized and no minimum gene count is enforced:
-an incomplete panel, down to one represented gene, gives a score computed
-from the available genes only. This is retained as a compatibility
-limitation and is not a validated partial-panel score; the packaged
-\code{TCGABRCAobj} example represents 7 of 11 and 8 of 18 panel genes. A sample
-with no observed panel value, or a nonfinite panel estimate, has a missing
-(\code{NA}) proliferation score, so its proliferation-dependent scores and
-groups are missing. Every exported numerical ROR score is finite or \code{NA}:
-a \code{NaN} or infinite result, including overflow in the final
-\code{100 * (score + 0.35) / 0.85} scaling, is reported as \code{NA} with a missing
-group rather than \code{low}, \code{med} or \code{high}. The independent NODE >= 4
-high-risk rule still applies with nonmissing tumor size. Finite
-complete-input results are unchanged.
+interchanged. For the original Parker-derived ROR-P and
+\code{ROR-PC (Subtype + Clinic + Prolif)}, a separate copy of the calibrated
+expression matrix is standardized with column-wise \code{scale()}: each sample
+is centered at its mean across the represented PAM50 genes and divided by
+its sample standard deviation (denominator \code{n - 1} for \code{n}
+observed genes). The original 11-gene proliferation panel is then averaged
+on this standardized scale with \code{mean(..., na.rm = TRUE)}. The existing
+five-class centroid correlations, coefficients, cutoffs and final
+\code{100 * (score + 0.35) / 0.85} transformation are retained.
+
+This PAM50-only standardization is a chosen, reproducible convention
+matching the complete 50-gene Perou Lab executable example distributed
+with the Parker bioclassifier (also bundled in PCAPAM50 1.0.4). It is not
+a universal requirement inferred from the publication. The distributed
+script scales all rows present at its standardization step, before the
+centroid intersection; its behavior on arbitrary expanded gene sets is
+therefore not equivalent to this convention. BreastSubtypeR uses only
+the represented PAM50 genes in \code{outList$testData}, after its existing gene
+selection, duplicate resolution and method-specific calibration. No
+background genes are added. For \code{cIHC.itr}, standardization is applied to
+the final averaged matrix used for ROR scoring, not to each iteration.
+The classifier input retained in \code{outList$testData}, subtype predictions,
+correlations, Confidence and RNG behavior are unchanged.
+
+Earlier implementations averaged the calibrated but unstandardized
+original proliferation values. Original ROR-P and ROR-PC scores and risk
+groups can consequently change substantially, even for complete panels.
+Historical saved ROR outputs are not automatically equivalent to newly
+computed outputs; comparisons require the implementation version, gene
+coverage, calibration and input provenance. Bundled examples and historical
+research results are not automatically recalculated. Reference agreement
+on complete PAM50 input does not establish clinical validation or validate
+every calibration-specific extension of the shared ROR formulas.
+
+The additional research \code{ROR-PC (Subtype + Clinic + Prolif.Subtype)} is a
+separate definition: it continues to average the represented 18-gene panel
+on the calibrated, unstandardized expression scale, with the four-class
+correlations that exclude BIRC5, CCNB1, GRB7 and MYBL2, its own coefficients
+and the NODE-dependent groups described above. The panels share nine genes
+but are evaluated independently. This additional score and its groups,
+ROR-S and ROR-C are unchanged by the original proliferation correction.
+
+Absent genes are never synthesized and no new panel coverage threshold is
+imposed. One represented proliferation gene can contribute when sample-wise
+PAM50 standardization is defined. Fewer than two observed finite PAM50
+values, zero variance, or a nonfinite sample scale produce missing original
+proliferation-dependent scores and groups; no fallback score is substituted.
+Missing non-proliferation PAM50 genes also change the standardization mean
+and scale. Incomplete-panel scores are a compatibility limitation, not a
+validated partial-panel result; the packaged \code{TCGABRCAobj} example represents
+7 of 11 and 8 of 18 proliferation genes. For either panel, no observed panel
+value or a nonfinite panel estimate gives a missing (\code{NA}) proliferation
+score. Every exported numerical ROR score is finite or \code{NA}: a \code{NaN} or
+infinite result, including overflow in the final score transformation, has
+a missing group rather than \code{low}, \code{med} or \code{high}. The independent NODE >= 4
+high-risk rule for the additional score still applies with nonmissing tumor
+size. The deferred exact-boundary behavior of the original groups is unchanged.
 }
 
 \examples{

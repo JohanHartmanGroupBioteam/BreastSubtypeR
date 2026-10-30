@@ -116,7 +116,7 @@ test_that("output ordering retains samples with unknown ER", {
     for (axis in axes) expect_identical(axis, ids)
 })
 
-test_that("BS_PCAPAM50 reproduces the packaged OSLO2EMIT0 PCAPAM50 result", {
+test_that("BS_PCAPAM50 preserves packaged OSLO outputs except original ROR correction", {
     data("OSLO2EMIT0obj", package = "BreastSubtypeR")
     frozen <- OSLO2EMIT0obj$res$results$PCAPAM50
     pcapam50_order_assert(!is.null(frozen), "The required packaged PCAPAM50 fixture is missing")
@@ -151,7 +151,10 @@ test_that("BS_PCAPAM50 reproduces the packaged OSLO2EMIT0 PCAPAM50 result", {
     si <- match(ids, as.character(frozen$score.ROR$patientID))
     expect_false(anyNA(si))
     expect_identical(colnames(fresh$score.ROR), colnames(frozen$score.ROR))
-    for (col in colnames(fresh$score.ROR)) {
+    ## Keep the retained fixture; #198 intentionally changes only these ROR
+    ## columns. Assert their replacement independently instead of regenerating it.
+    ror198_expect_reference(fresh)
+    for (col in setdiff(colnames(fresh$score.ROR), ror198_changed)) {
         fresh_col <- fresh$score.ROR[[col]]
         frozen_col <- frozen$score.ROR[[col]][si]
         if (is.numeric(fresh_col)) {

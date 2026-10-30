@@ -127,12 +127,17 @@ expect_as_1.5.5 <- function(new, old) {
     expect_identical(new$BS.itr.keep, old$BS.itr.keep)
     expect_identical(new$BS.itr.keep.Subtype, old$BS.itr.keep.Subtype)
     # Retain the historical fixture, whose Confidence contains false zeros.
-    # Compare every other score unchanged; test Confidence against Parker.
-    other_scores <- setdiff(colnames(old$score.ROR), "Confidence")
+    # Keep original ROR-P/PC in the historical fixture as well; #198 changes
+    # only these four columns. Test their new values on the final averaged
+    # matrix while retaining every iteration/consensus/averaging assertion.
+    other_scores <- setdiff(colnames(old$score.ROR), c("Confidence", ror198_changed))
     expect_identical(colnames(new$score.ROR), colnames(old$score.ROR))
     expect_equal(new$score.ROR[, other_scores, drop = FALSE],
         old$score.ROR[, other_scores, drop = FALSE], tolerance = 1e-12)
     expect_identical(new$score.ROR$Confidence, new$confidence_reference)
+    clinical <- as.data.frame(SummarizedExperiment::colData(se))
+    ror198_expect_reference(list(score.ROR = new$score.ROR,
+        outList = list(testData = new$testData, distances = new$distances)), clinical)
     expect_equal(new$testData, old$testData, tolerance = 1e-12)
     expect_equal(new$distances, old$distances, tolerance = 1e-12)
 }

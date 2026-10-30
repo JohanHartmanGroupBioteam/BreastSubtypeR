@@ -103,12 +103,12 @@ expect_structure <- function(res, input, info = NULL) {
     }
 }
 
-test_that("complete panels reproduce the published arithmetic for both panels", {
+test_that("represented panels reproduce standardized original and raw additional arithmetic", {
     input <- make_panel_input()
     res <- run_ror(input)
     expect_length(attr(res, "conditions"), 0)
     td <- input$out$testData
-    p11 <- colMeans(td[c("CCNB1", "BIRC5", "UBE2C", "MKI67"), ])
+    p11 <- ror198_proliferation(td)
     p18 <- colMeans(td[c("UBE2C", "MKI67", "ANLN", "CENPF"), ])
     lumA <- input$out$distances[, "LumA"]
     xT <- input$df.cln$TSIZE
@@ -127,7 +127,7 @@ test_that("one represented gene in either panel no longer drops dimensions", {
     input <- make_panel_input()
     one11 <- keep_genes(input, c("ESR1", "ERBB2", "CCNB1", "ANLN", "CENPF"))
     ## CCNB1 is the only 11-gene panel member left; ANLN and CENPF remain in
-    ## the 18-gene panel. The 11-gene score is CCNB1 itself (mean of one gene).
+    ## the 18-gene panel. The 11-gene score is the standardized CCNB1 value.
     for (hasClinical in c(TRUE, FALSE)) {
         for (Subtype in c(TRUE, FALSE)) {
             info <- paste("hasClinical", hasClinical, "Subtype", Subtype)
@@ -137,7 +137,7 @@ test_that("one represented gene in either panel no longer drops dimensions", {
             expect_structure(res, one11, info = info)
             expect_equal(unname(res[["ROR-P (Subtype + Prolif)"]]),
                 unname(expected_rorp(one11$out$distances[, "LumA"],
-                    one11$out$testData["CCNB1", ])), info = info)
+                    ror198_proliferation(one11$out$testData))), info = info)
             expect_identical("Call.Subtype" %in% names(res), Subtype, info = info)
             expect_identical(add_score %in% names(res), hasClinical, info = info)
         }
@@ -170,7 +170,7 @@ test_that("partial panels average the represented genes without a threshold", {
     res <- run_ror(partial)
     expect_length(attr(res, "conditions"), 0)
     td <- partial$out$testData
-    p11 <- colMeans(td[c("CCNB1", "UBE2C"), ])
+    p11 <- ror198_proliferation(td)
     p18 <- colMeans(td[c("UBE2C", "ANLN"), ])
     lumA <- partial$out$distances[, "LumA"]
     expect_equal(unname(res[["ROR-P (Subtype + Prolif)"]]), unname(expected_rorp(lumA, p11)))
@@ -181,8 +181,7 @@ test_that("partial panels average the represented genes without a threshold", {
     na_one$out$testData["ANLN", "P3"] <- NaN
     res2 <- run_ror(na_one)
     full <- run_ror(input)
-    p11 <- colMeans(input$out$testData[c("CCNB1", "BIRC5", "UBE2C", "MKI67"), ])
-    p11["P2"] <- mean(input$out$testData[c("BIRC5", "UBE2C", "MKI67"), "P2"])
+    p11 <- ror198_proliferation(na_one$out$testData)
     expect_equal(unname(res2[["ROR-P (Subtype + Prolif)"]]),
         unname(expected_rorp(input$out$distances[, "LumA"], p11)))
     p18 <- colMeans(input$out$testData[c("UBE2C", "MKI67", "ANLN", "CENPF"), ])
@@ -241,7 +240,7 @@ test_that("zero represented 18-gene panel genes keep the NODE >= 4 override", {
     other <- setdiff(names(full), c(prolif_scores, prolif_groups, add_score, add_group))
     expect_identical(res[, other], full[, other])
     expect_equal(unname(res[["ROR-P (Subtype + Prolif)"]]), unname(expected_rorp(
-        zero18$out$distances[, "LumA"], colMeans(zero18$out$testData[c("CCNB1", "BIRC5"), ]))))
+        zero18$out$distances[, "LumA"], ror198_proliferation(zero18$out$testData))))
     both <- keep_genes(input, c("ESR1", "ERBB2"))
     res0 <- run_ror(both)
     expect_true(all(is.na(res0[, c(prolif_scores, add_score)])))
@@ -272,10 +271,11 @@ test_that("per-sample NA, NaN, Inf and -Inf panel values give missing outputs fo
             res <- run_ror(perturbed)
             info <- paste(sample, paste(case$gene, collapse = "+"),
                 paste(case$value, collapse = "/"))
-            ## an infinite value makes every panel containing the gene missing;
-            ## a missing value makes a panel missing only when no observed value
-            ## remains, otherwise that panel is a changed but finite partial mean
-            touched11 <- any(case$gene %in% prolif11)
+            ## Every represented PAM50 gene affects the original standardization.
+            ## Inf anywhere invalidates that sample's original score; NA values
+            ## are omitted, leaving a partial mean when proliferation remains.
+            ## The separate 18-gene calculation still uses unstandardized values.
+            touched11 <- TRUE
             touched18 <- any(case$gene %in% prolif18)
             hits11 <- touched11
             hits18 <- touched18
@@ -349,7 +349,7 @@ test_that("missing proliferation scores leave sample order, calls and RNG untouc
     expect_identical(run_ror(shuffled), res)
 })
 
-test_that("complete OSLO2EMIT0 inputs reproduce the packaged results exactly", {
+test_that("OSLO2EMIT0 retains historical outputs except corrected original ROR", {
     data("OSLO2EMIT0obj", package = "BreastSubtypeR", envir = environment())
     se <- OSLO2EMIT0obj$data_input$se_NC
     expect_true(all(prolif11 %in% rownames(se)) && all(prolif18 %in% rownames(se)))
@@ -358,11 +358,15 @@ test_that("complete OSLO2EMIT0 inputs reproduce the packaged results exactly", {
     fresh <- suppressMessages(BS_cIHC(se, Subtype = FALSE, hasClinical = FALSE))
     expect_identical(.Random.seed, seed_before)
     packaged <- OSLO2EMIT0obj$res$results$cIHC$score.ROR
-    expect_identical(fresh$score.ROR[, names(packaged)], packaged)
+    unchanged <- setdiff(names(packaged), ror198_changed)
+    expect_identical(fresh$score.ROR[, unchanged], packaged[, unchanged])
+    ror198_expect_reference(fresh)
     expect_identical(fresh$BS.all, OSLO2EMIT0obj$res$results$cIHC$BS.all)
     fresh_ssbc <- suppressMessages(BS_ssBC(se, s = "ER", Subtype = FALSE, hasClinical = FALSE))
     packaged_ssbc <- OSLO2EMIT0obj$res$results$ssBC$score.ROR
-    expect_identical(fresh_ssbc$score.ROR[, names(packaged_ssbc)], packaged_ssbc)
+    unchanged <- setdiff(names(packaged_ssbc), ror198_changed)
+    expect_identical(fresh_ssbc$score.ROR[, unchanged], packaged_ssbc[, unchanged])
+    ror198_expect_reference(fresh_ssbc)
     clinical <- suppressMessages(BS_parker(se, calibration = "Internal",
         internal = "medianCtr", Subtype = TRUE, hasClinical = TRUE))
     expect_identical(as.character(clinical$score.ROR$patientID), colnames(se))
@@ -370,7 +374,7 @@ test_that("complete OSLO2EMIT0 inputs reproduce the packaged results exactly", {
     for (g in group_cols) expect_true(all(clinical$score.ROR[[g]] %in% c("low", "med", "high")))
     ## explicit recomputation of the proliferation arithmetic from the output
     ol <- clinical$outList
-    p11 <- colMeans(ol$testData[prolif11, ])
+    p11 <- ror198_proliferation(ol$testData)
     rorp <- 100 * (-0.0009299747 * ol$distances[, 1] + 0.0692289192 * ol$distances[, 2] +
         -0.0951505484 * ol$distances[, 3] + 0.0493487685 * ol$distances[, 4] +
         0.3385116381 * p11 + 0.35) / 0.85
@@ -390,10 +394,12 @@ test_that("incomplete TCGABRCA panels run as a documented compatibility limitati
     expect_identical(nrow(res$score.ROR), ncol(se))
     expect_true(all(is.finite(res$score.ROR[["ROR-P (Subtype + Prolif)"]])))
     expect_true(all(res$score.ROR[["ROR-P Group (Subtype + Prolif)"]] %in% c("low", "med", "high")))
-    expect_identical(as.integer(table(res$score.ROR[["ROR-P Group (Subtype + Prolif)"]])[c("high", "low", "med")]),
-        c(50L, 32L, 18L))
+    ## Historical unstandardized counts were 50/32/18 (high/low/med).
+    ## Keep packaged results unchanged and check current groups against the
+    ## independent standardized formula, including this incomplete gene set.
+    ror198_expect_reference(res)
     ol <- res$outList
-    p11 <- colMeans(ol$testData[present11, , drop = FALSE])
+    p11 <- ror198_proliferation(ol$testData)
     rorp <- 100 * (-0.0009299747 * ol$distances[, 1] + 0.0692289192 * ol$distances[, 2] +
         -0.0951505484 * ol$distances[, 3] + 0.0493487685 * ol$distances[, 4] +
         0.3385116381 * p11 + 0.35) / 0.85
@@ -497,9 +503,10 @@ test_that("every exported ROR score is finite or NA and nonfinite results have N
 
 test_that("finite exact-equality scores keep the deferred #172 text after the finiteness check", {
     input <- make_panel_input()
-    ## zero proliferation values and LumA = -1.0509660919621142 give an unscaled
-    ## ROR-P of exactly 0.1, the upper ROR-P cutoff
+    ## A zero sample mean with positive SD makes the standardized proliferation
+    ## exactly zero. LumA = -1.0509660919621142 then gives exactly 0.1.
     input$out$testData[c("CCNB1", "BIRC5", "UBE2C", "MKI67"), "P2"] <- 0
+    input$out$testData[c("ESR1", "ERBB2", "ANLN", "CENPF"), "P2"] <- c(0.4, -0.4, 0.6, -0.6)
     input$out$distances[2, "LumA"] <- -1.0509660919621142
     input$out$dist.RORSubtype[2, "LumA"] <- -1.0509660919621142
     unscaled <- -0.0951505484 * -1.0509660919621142 + 0.3385116381 * 0

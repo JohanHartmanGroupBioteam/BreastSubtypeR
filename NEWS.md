@@ -2,6 +2,30 @@
 
 ## Bug fixes
 
+* Correct original Parker-derived ROR-P and ROR-PC proliferation scoring
+  (#198). After existing PAM50 selection and method-specific calibration,
+  `RORgroup()` standardizes a separate copy of the represented PAM50 expression
+  within each sample, then averages the original 11-gene panel. This chosen
+  PAM50-only convention matches the complete 50-gene Perou Lab executable
+  example; it is not equivalent to running the distributed script on arbitrary
+  expanded gene sets. For `cIHC.itr`, only the final averaged matrix used for
+  ROR scoring is standardized. Classifier predictions, correlations, calibration,
+  sampling, consensus, Confidence, RNG, sample axes and `outList` are unchanged.
+  ROR-S, ROR-C and the distinct unstandardized 18-gene research ROR-PC are
+  unchanged, including its NODE-dependent groups. Existing original coefficients,
+  cutoffs, transformations and deferred exact-boundary behavior (#172) remain.
+  Undefined sample standardization gives missing original proliferation-dependent
+  scores/groups; matrix dimensions and finite-or-NA handling (#206) are retained
+  without imposing a new panel coverage threshold.
+* **Compatibility:** original ROR-P/ROR-PC scores and risk groups can change
+  substantially, including for complete inputs. Historical saved scores are
+  not automatically equivalent to newly computed scores. Record implementation,
+  gene coverage, calibration and input provenance when comparing results. Bundled
+  datasets, historical outputs and manuscript/Ensemble analyses have not been
+  recalculated. These remain research scores, without commercial Prosigna
+  equivalence or clinical validation; method-specific extensions and incomplete
+  panels require separate interpretation.
+
 * `RORgroup()` keeps both proliferation panel subsets as matrices and no
   longer fails when exactly one 11-gene or 18-gene panel gene is represented
   (#206). Represented genes are still averaged with `mean(..., na.rm = TRUE)`
@@ -15,10 +39,10 @@
   the final `100 * (score + 0.35) / 0.85` scaling or an infinite tumor-size
   covariate, is reported as `NA` with a missing group for ROR-S, ROR-P,
   ROR-C, original ROR-PC and the additional subtype-specific ROR-PC score.
-  Finite complete-input scores, subtype calls, calibration, correlations,
-  coefficients, cutoffs, the exact-equality limitation (#172), the reference
-  standardization question (#198), the correlation choice (#156) and the
-  independent NODE >= 4 high-risk rule are unchanged. Incomplete panels are
+  This missing-value correction alone preserved finite complete-input scores,
+  subtype calls, calibration, correlations, coefficients, cutoffs, the
+  exact-equality limitation (#172), the correlation choice (#156) and the
+  independent NODE >= 4 high-risk rule. Incomplete panels are
   documented as a compatibility limitation, not a validated score.
 
 # BreastSubtypeR 1.5.11
