@@ -66,8 +66,8 @@ test_that("ROR-C group follows the ROR-C score, not the ROR-PC score", {
         hasClinical = TRUE
     ))
 
-    ## S1: combined = 0.2348 (high), combined + prolif = -0.2459 (low)
-    ## S2: combined = -0.2348 (low), combined + prolif = 0.2459 (high)
+    ## S1: combined = 0.2348 (high), standardized combined + prolif is med.
+    ## S2: combined = -0.2348 (low), standardized combined + prolif is med.
     ## S3: both scores are 0 (med)
     expect_identical(
         unname(as.character(res[["ROR-C Group (Subtype + Clinic)"]])),
@@ -75,7 +75,7 @@ test_that("ROR-C group follows the ROR-C score, not the ROR-PC score", {
     )
     expect_identical(
         unname(as.character(res[["ROR-PC Group (Subtype + Clinic + Prolif)"]])),
-        c("low", "high", "med")
+        c("med", "med", "med")
     )
 
     ## The group must be reproducible from the reported ROR-C score. The score
@@ -138,10 +138,10 @@ test_that("NODE changes only the subtype-specific ROR-PC risk group", {
 
     ## Fixed numerical expectations also protect the NODE-independent scores.
     expect_equal(unname(as.matrix(baseline[, score_cols])), rbind(
-        c(3.86822953, -48.54809056, 13.55824471, -45.40136640, 11.00418748),
-        c(20.44967000, 15.66693021, 25.83301176, 16.60612406, 34.22788655),
+        c(3.86822953, 3.42357780, 13.55824471, 4.84274279, 11.00418748),
+        c(20.44967000, 15.34831079, 25.83301176, 16.29809568, 34.22788655),
         c(49.46719082, 43.41530702, 47.31385412, 43.30438861, 51.81366476),
-        c(78.48471165, 91.07613314, 68.79469647, 89.25320464, 74.82431242)
+        c(78.48471165, 75.68667686, 68.79469647, 74.37530008, 74.82431242)
     ), tolerance = 1e-7)
     expect_identical(unname(as.matrix(baseline[, group_cols])), rbind(
         c("low", "low", "low", "low"),
@@ -313,10 +313,13 @@ test_that("NODE boundary labels leave scores and other outputs unchanged", {
     standard_groups <- c("ROR-S Group (Subtype Only)",
         "ROR-P Group (Subtype + Prolif)", "ROR-C Group (Subtype + Clinic)",
         "ROR-PC Group (Subtype + Clinic + Prolif)")
-    expected_prolif <- c(rep("low", 5), "high", "high",
+    ## Original P/PC now use standardized proliferation (#198); the retained
+    ## additional-score doubles and all NODE boundary expectations stay exact.
+    expected_p <- c(rep("med", 5), "high", "high", "med", "med", "med", "high")
+    expected_pc <- c("low", "low", "med", "med", "med", "high", "high",
         "low", "low", "med", "high")
     expect_identical(unname(as.matrix(baseline[, standard_groups])),
-        unname(cbind(rep("med", 11), expected_prolif, rep("med", 11), expected_prolif)))
+        unname(cbind(rep("med", 11), expected_p, rep("med", 11), expected_pc)))
     expected_n0 <- c("low", "low", "low", "low", "med", "med", "high",
         "low", "low", "med", "high")
     expected_n1_3 <- c("low", "med", "med", "med", "high", "high", "high",
