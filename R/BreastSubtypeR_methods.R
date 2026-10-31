@@ -262,11 +262,17 @@ NULL
 #' validation. These scores and groups are research outputs, not clinical
 #' Prosigna results. No correlation calculation is changed in version 1.5.8.
 #'
-#' **Experimental 18-gene ROR-PC.** This display label identifies the existing
-#' `ROR-PC (Subtype + Clinic + Prolif.Subtype)` column. Its companion,
-#' `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)`, is displayed as
-#' **Experimental 18-gene ROR-PC group**. Both legacy column names, their
-#' types and values are retained for compatibility. The original 11-gene
+#' **Experimental 18-gene ROR-PC** and
+#' **Experimental 18-gene ROR-PC group** identify the existing score and group
+#' columns, respectively:
+#'
+#' \preformatted{
+#' ROR-PC (Subtype + Clinic + Prolif.Subtype)
+#' ROR-PC Group (Subtype + Clinic + Prolif.Subtype)
+#' }
+#'
+#' Both legacy column names, their types and values are retained for
+#' compatibility. The original 11-gene
 #' Parker `ROR-PC (Subtype + Clinic + Prolif)` is a different output.
 #'
 #' Experimental 18-gene ROR-PC: this research calculation differs from the
@@ -291,10 +297,13 @@ NULL
 #' still assign `high` with nonmissing tumor size.
 #'
 #' This is an intentional warning: `options(warn = 2)` turns it into an error.
-#' An expert workflow can handle only `bsr_experimental_ror_pc_warning` with
-#' `withCallingHandlers()` and `invokeRestart("muffleWarning")`; unrelated
-#' warnings, including invalid NODE counts, should remain visible. Shiny
-#' identifies relevant selected Full metrics with the experimental labels
+#' An expert workflow can handle only the
+#' `bsr_experimental_ror_pc_warning` class:
+#' - Establish a handler with `withCallingHandlers()`.
+#' - Within that handler, call `invokeRestart("muffleWarning")`.
+#'
+#' Unrelated warnings, including invalid NODE counts, should remain visible.
+#' Shiny identifies relevant selected Full metrics with the experimental labels
 #' and notice. Its TSV export preserves the existing tabular schema and
 #' provenance-comment layout while recording this interpretation.
 #'
@@ -311,9 +320,8 @@ NULL
 #' Version 1.5.8 temporarily defers this known categorical-output defect
 #' pending scientific review of the intended equality convention. Scores,
 #' coefficients and thresholds are preserved. This limitation is separate
-#' from the corrected NODE-dependent
-#' `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)` boundaries described
-#' in [Mapping()], which remain unchanged.
+#' from the corrected NODE-dependent Experimental 18-gene ROR-PC group
+#' boundaries described in [Mapping()], which remain unchanged.
 #'
 #' @section Proliferation panel coverage:
 #' Two distinct proliferation calculations are used and are never
@@ -508,8 +516,8 @@ Mapping <- function(se_obj,
 #'   integer count as a numeric value when available. Binary 0/1 is accepted
 #'   but cannot distinguish 1--3 from 4 or more positive nodes.
 #'
-#' `NODE` affects only the additional subtype-specific risk group,
-#' `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)`, using categories
+#' `NODE` affects only the additional subtype-specific risk group
+#' (Experimental 18-gene ROR-PC group), using categories
 #' 0, 1--3 and 4 or more. It does not enter any numerical ROR score.
 #' This group requires finite nonnegative integer-valued counts. Negative,
 #' fractional or infinite numeric `NODE` values give a warning and a missing
@@ -665,8 +673,8 @@ BS_parker <- function(se_obj,
 #'   integer count as a numeric value when available. Binary 0/1 is accepted
 #'   but cannot distinguish 1--3 from 4 or more positive nodes.
 #'
-#' `NODE` affects only the additional subtype-specific risk group,
-#' `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)`, using categories
+#' `NODE` affects only the additional subtype-specific risk group
+#' (Experimental 18-gene ROR-PC group), using categories
 #' 0, 1--3 and 4 or more. It does not enter any numerical ROR score.
 #' This group requires finite nonnegative integer-valued counts. Negative,
 #' fractional or infinite numeric `NODE` values give a warning and a missing
@@ -836,8 +844,8 @@ BS_cIHC <- function(
 #'   integer count as a numeric value when available. Binary 0/1 is accepted
 #'   but cannot distinguish 1--3 from 4 or more positive nodes.
 #'
-#' `NODE` affects only the additional subtype-specific risk group,
-#' `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)`, using categories
+#' `NODE` affects only the additional subtype-specific risk group
+#' (Experimental 18-gene ROR-PC group), using categories
 #' 0, 1--3 and 4 or more. It does not enter any numerical ROR score.
 #' This group requires finite nonnegative integer-valued counts. Negative,
 #' fractional or infinite numeric `NODE` values give a warning and a missing
@@ -994,8 +1002,8 @@ BS_cIHC.itr <- function(
 #'   integer count as a numeric value when available. Binary 0/1 is accepted
 #'   but cannot distinguish 1--3 from 4 or more positive nodes.
 #'
-#' `NODE` affects only the additional subtype-specific risk group,
-#' `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)`, using categories
+#' `NODE` affects only the additional subtype-specific risk group
+#' (Experimental 18-gene ROR-PC group), using categories
 #' 0, 1--3 and 4 or more. It does not enter any numerical ROR score.
 #' This group requires finite nonnegative integer-valued counts. Negative,
 #' fractional or infinite numeric `NODE` values give a warning and a missing
@@ -1234,8 +1242,8 @@ BS_PCAPAM50 <- function(
 #'   integer count as a numeric value when available. Binary 0/1 is accepted
 #'   but cannot distinguish 1--3 from 4 or more positive nodes.
 #'
-#' `NODE` affects only the additional subtype-specific risk group,
-#' `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)`, using categories
+#' `NODE` affects only the additional subtype-specific risk group
+#' (Experimental 18-gene ROR-PC group), using categories
 #' 0, 1--3 and 4 or more. It does not enter any numerical ROR score.
 #' This group requires finite nonnegative integer-valued counts. Negative,
 #' fractional or infinite numeric `NODE` values give a warning and a missing
@@ -1605,8 +1613,8 @@ BS_sspbc <- function(se_obj, ssp.name = "ssp.pam50") {
 #'   integer count as a numeric value when available. Binary 0/1 is accepted
 #'   but cannot distinguish 1--3 from 4 or more positive nodes.
 #'
-#' `NODE` affects only the additional subtype-specific risk group,
-#' `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)`, using categories
+#' `NODE` affects only the additional subtype-specific risk group
+#' (Experimental 18-gene ROR-PC group), using categories
 #' 0, 1--3 and 4 or more. It does not enter any numerical ROR score.
 #' This group requires finite nonnegative integer-valued counts. Negative,
 #' fractional or infinite numeric `NODE` values give a warning and a missing
