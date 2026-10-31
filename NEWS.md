@@ -1,5 +1,29 @@
 # BreastSubtypeR (development)
 
+## Interpretation and compatibility
+
+* Identify the existing additional 18-gene research score and its group as
+  **Experimental 18-gene ROR-PC** and **Experimental 18-gene ROR-PC group**
+  (#221). Their prognostic performance and risk-category thresholds have not
+  been independently validated; this calculation differs from the published
+  Lien implementation and is not a clinical Prosigna result. The original
+  11-gene Parker ROR-PC remains a distinct output.
+* Retain the exact `ROR-PC (Subtype + Clinic + Prolif.Subtype)` and
+  `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)` data columns, types and
+  values. Correlations, proliferation processing, coefficients, thresholds,
+  missing-value handling and the independent NODE >= 4 rule are unchanged.
+* Signal the classed `bsr_experimental_ror_pc_warning` once per relevant
+  top-level public NC call, and once for `BS_Multi()` when returned component
+  results contain the experimental columns. Package loading, `Mapping()`,
+  clinical-off and AIMS/SSPBC-only calls do not emit this notice. Expert
+  handlers can target this class without suppressing other warnings;
+  `options(warn = 2)` intentionally treats it as an error.
+* Show the notice and display labels for relevant selected Shiny Full metrics
+  and record them in its existing TSV provenance comments. Preserve the
+  comment-line count and tabular schema; Calls-only and AUTO exports are
+  unchanged. Labeling and reproducibility do not establish prognostic or
+  clinical validation.
+
 ## Bug fixes
 
 * Correct original Parker-derived ROR-P and ROR-PC proliferation scoring

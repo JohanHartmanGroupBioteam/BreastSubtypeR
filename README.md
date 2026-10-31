@@ -155,6 +155,28 @@ AUTO rules and threshold provenance remain in the
 Research ROR outputs use Spearman centroid correlations. Commercial
 Prosigna uses Pearson correlations within its validated assay workflow;
 BreastSubtypeR scores and groups are not clinical Prosigna results.
+
+**Experimental 18-gene ROR-PC** labels the existing
+`ROR-PC (Subtype + Clinic + Prolif.Subtype)` output; its companion is
+**Experimental 18-gene ROR-PC group**, stored under
+`ROR-PC Group (Subtype + Clinic + Prolif.Subtype)`. Legacy column names,
+types and values remain unchanged. This is separate from the original
+11-gene Parker ROR-PC.
+
+Experimental 18-gene ROR-PC: this research calculation differs from the
+published Lien implementation. Its prognostic performance and risk-category
+thresholds have not been independently validated. It is not a clinical
+Prosigna result and must not guide patient care.
+
+The package retains a calibrated, unstandardized 18-gene mean; Lien's
+published calculation standardizes each gene across patients. Reproducing
+Lien's results does not validate this package variant. Relevant public NC
+calls emit one `bsr_experimental_ror_pc_warning`; `BS_Multi()` aggregates the
+notice once when a returned component contains the experimental outputs.
+No such warning is emitted by package loading, `Mapping()`,
+`hasClinical = FALSE`, or AIMS/SSPBC-only results. See the ROR guide below for
+warning handling, including `options(warn = 2)`.
+
 The package retains the original Parker-derived grouping comparisons:
 exact equality at an unscaled cutoff can return numeric text instead of a
 valid risk category. This known defect is temporarily deferred for separate
@@ -191,6 +213,11 @@ have an older interface.
    tab-separated text (TSV), saved with a `.txt` extension. AUTO exports
    separate method calls and entropy;
    **Full metrics** are available for supported single NC methods.
+
+Relevant selected Full metrics carry the experimental 18-gene ROR-PC notice
+and display labels. Exports retain their existing column names and data,
+with the interpretation recorded in the existing provenance comments.
+Calls-only and AUTO exports do not acquire this score-specific notice.
 
 Changing inputs or relevant settings clears stale predictions and downloads.
 See the [development Shiny guide source](vignettes/BreastSubtypeR.Rmd#shiny-app)

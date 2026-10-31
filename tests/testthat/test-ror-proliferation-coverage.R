@@ -367,8 +367,9 @@ test_that("OSLO2EMIT0 retains historical outputs except corrected original ROR",
     unchanged <- setdiff(names(packaged_ssbc), ror198_changed)
     expect_identical(fresh_ssbc$score.ROR[, unchanged], packaged_ssbc[, unchanged])
     ror198_expect_reference(fresh_ssbc)
-    clinical <- suppressMessages(BS_parker(se, calibration = "Internal",
-        internal = "medianCtr", Subtype = TRUE, hasClinical = TRUE))
+    clinical <- suppressMessages(expect_experimental_ror_pc(BS_parker(se,
+        calibration = "Internal", internal = "medianCtr", Subtype = TRUE,
+        hasClinical = TRUE)))
     expect_identical(as.character(clinical$score.ROR$patientID), colnames(se))
     expect_true(all(is.finite(as.matrix(clinical$score.ROR[, score_cols]))))
     for (g in group_cols) expect_true(all(clinical$score.ROR[[g]] %in% c("low", "med", "high")))

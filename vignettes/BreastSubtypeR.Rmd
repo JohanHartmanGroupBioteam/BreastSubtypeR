@@ -421,7 +421,7 @@ nonnegative integer-valued counts. Negative, fractional or infinite numeric
 numerical ROR scores remain available. `NODE` is never rounded or recoded.
 
 In the R API, `NA` or `NaN` in `NODE` makes only this additional risk group
-missing, without a warning.
+missing, without a NODE warning.
 `NA` in `TSIZE` makes all clinical ROR scores and groups missing, while ROR-S
 and ROR-P remain available. These are missing values within required columns;
 the columns themselves must still be supplied. The additional subtype-specific
@@ -446,6 +446,47 @@ clinical validation. These research scores and groups are not clinical
 Prosigna results. The 1.5.10 maintenance fixes preserve the ROR formulas,
 but corrected sample selection and centering can change their inputs and
 the resulting scores.
+
+**Experimental 18-gene ROR-PC** is the display label for the existing
+`ROR-PC (Subtype + Clinic + Prolif.Subtype)` column. Its companion,
+`ROR-PC Group (Subtype + Clinic + Prolif.Subtype)`, is labeled
+**Experimental 18-gene ROR-PC group**. These legacy data keys, column types
+and values remain unchanged. The original 11-gene Parker
+`ROR-PC (Subtype + Clinic + Prolif)` remains a separate output.
+
+Experimental 18-gene ROR-PC: this research calculation differs from the
+published Lien implementation. Its prognostic performance and risk-category
+thresholds have not been independently validated. It is not a clinical
+Prosigna result and must not guide patient care.
+
+The package retains the calibrated, unstandardized 18-gene mean. The
+[published Lien calculation](https://doi.org/10.3390/cancers13236118)
+standardizes each proliferation gene across patients before averaging.
+Independent numerical reproduction of Lien's results does not validate the
+package's different implementation. Its `low`, `med` and `high` outputs are
+experimental threshold assignments, not validated clinical risk strata.
+
+Public NC wrappers emit one warning of class
+`bsr_experimental_ror_pc_warning` when their nonempty returned `score.ROR`
+contains both experimental columns. `BS_Multi()` aggregates this notice once
+per top-level call when a returned component contains them, not per method,
+patient or iteration. Package loading, `Mapping()`, `hasClinical = FALSE`
+and AIMS/SSPBC-only results do not emit this warning. The notice also applies
+when all numerical values are missing: NODE >= 4 with nonmissing tumor size
+can still produce the existing `high` category.
+
+`options(warn = 2)` intentionally converts this warning to an error. An
+expert workflow that has recorded the interpretation can handle this class
+alone, leaving other warnings, such as invalid NODE counts, visible:
+
+```{r experimental-ror-warning-handler, eval=FALSE}
+res <- withCallingHandlers(
+    BS_parker(se_obj, hasClinical = TRUE),
+    bsr_experimental_ror_pc_warning = function(w) {
+        invokeRestart("muffleWarning")
+    }
+)
+```
 
 **Known exact-equality limitation.** The original Parker-derived ROR-S,
 ROR-P, ROR-C and `ROR-PC (Subtype + Clinic + Prolif)` groups retain strict
@@ -575,6 +616,14 @@ tab-separated text (TSV), saved with a `.txt` extension, using **Calls only** or
 supported. AUTO reports separate method predictions and raw Shannon entropy,
 not consensus calls or calibrated confidence. Research ROR outputs are not
 clinical Prosigna results.
+
+When current **Full metrics** contain both experimental 18-gene ROR-PC
+columns, the selected export has a persistent experimental notice and the
+score/group display labels. The TSV retains its existing column names,
+types, data and provenance-comment line count; those comments identify the
+experimental outputs and their interpretation. **Calls only**, AUTO and
+other results without these columns do not receive this score-specific
+notice. Changing the export selection does not recalculate scores.
 
 Replacing any expression, clinical or annotation file, reloading the example,
 or changing the data type clears the mapped inputs, predictions, plots and

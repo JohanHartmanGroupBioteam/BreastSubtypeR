@@ -64,8 +64,9 @@ cihc_itr_capture <- function(input, subtype = TRUE, clinical = TRUE,
     stopifnot(found == 1L)
     environment(native) <- list2env(list(.record = record), parent = environment(native))
     result <- testthat::with_mocked_bindings(
-        BS_cIHC.itr(input, Subtype = subtype, hasClinical = clinical,
+        expect_experimental_ror_pc(BS_cIHC.itr(input, Subtype = subtype, hasClinical = clinical,
             er_subsample = policy, ratio = ratio, iteration = iterations, seed = 118),
+            n = as.integer(clinical)),
         makeCalls_ihc.iterative = native, .package = "BreastSubtypeR")
     list(result = result, captured = captured)
 }
@@ -105,8 +106,8 @@ test_that("native iterative cIHC selects each centering matrix by biological ID"
     input <- OSLO2EMIT0obj$data_input$se_NC
     ids <- colnames(input)
     reference <- expect_silent(cihc_itr_capture(input))
-    plain <- expect_silent(BS_cIHC.itr(input, iteration = 2L,
-        Subtype = TRUE, hasClinical = TRUE))
+    plain <- expect_silent(expect_experimental_ror_pc(BS_cIHC.itr(input, iteration = 2L,
+        Subtype = TRUE, hasClinical = TRUE)))
     expect_identical(reference$result, plain)
     cihc_itr_outputs(reference$result, ids, TRUE, 2L)
     cihc_itr_centering(reference, input, 2L)
@@ -207,8 +208,8 @@ test_that("iterative ID conversion preserves RNG kinds and absent caller state",
                 rm(".Random.seed", envir = .GlobalEnv)
             before <- get0(".Random.seed", .GlobalEnv, inherits = FALSE)
             before_kind <- RNGkind()
-            actual <- expect_silent(BS_cIHC.itr(input, iteration = 2L,
-                Subtype = TRUE, hasClinical = TRUE, er_subsample = policy))
+            actual <- expect_silent(expect_experimental_ror_pc(BS_cIHC.itr(input, iteration = 2L,
+                Subtype = TRUE, hasClinical = TRUE, er_subsample = policy)))
             expect_identical(exists(".Random.seed", .GlobalEnv, inherits = FALSE), present)
             expect_identical(get0(".Random.seed", .GlobalEnv, inherits = FALSE), before)
             expect_identical(RNGkind(), before_kind)

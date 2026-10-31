@@ -229,13 +229,13 @@ NULL
 #' `NODE` is the number of positive lymph nodes. For this additional group,
 #' the NC methods accept only finite nonnegative integer-valued counts,
 #' stored as doubles or integers. Negative, fractional or infinite numeric values
-#' give one warning per call and a missing additional group, while all
+#' give one NODE warning per call and a missing additional group, while all
 #' numerical ROR scores and the other groups remain available. `NODE` is
 #' never rounded, truncated or recoded. `Mapping()` itself performs no
 #' `NODE` validation.
 #'
 #' In the R API, an `NA` or `NaN` value in `NODE` makes only this additional
-#' group missing, without a warning. An `NA` value in `TSIZE` makes all
+#' group missing, without a NODE warning. An `NA` value in `TSIZE` makes all
 #' clinical ROR scores and groups missing; ROR-S and ROR-P remain available. These are missing values within
 #' required columns, not permission to omit the columns. The additional
 #' subtype-specific ROR-PC group uses inclusive upper boundaries: NODE = 0
@@ -261,6 +261,42 @@ NULL
 #' do not establish equivalence of preprocessing, calibration or clinical
 #' validation. These scores and groups are research outputs, not clinical
 #' Prosigna results. No correlation calculation is changed in version 1.5.8.
+#'
+#' **Experimental 18-gene ROR-PC.** This display label identifies the existing
+#' `ROR-PC (Subtype + Clinic + Prolif.Subtype)` column. Its companion,
+#' `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)`, is displayed as
+#' **Experimental 18-gene ROR-PC group**. Both legacy column names, their
+#' types and values are retained for compatibility. The original 11-gene
+#' Parker `ROR-PC (Subtype + Clinic + Prolif)` is a different output.
+#'
+#' Experimental 18-gene ROR-PC: this research calculation differs from the
+#' published Lien implementation. Its prognostic performance and risk-category
+#' thresholds have not been independently validated. It is not a clinical
+#' Prosigna result and must not guide patient care.
+#' The published Lien implementation (2021,
+#' <https://doi.org/10.3390/cancers13236118>) standardizes each proliferation
+#' gene across patients; this package's additional score retains its calibrated,
+#' unstandardized 18-gene mean. Reproducing Lien's published results therefore
+#' does not validate this package variant. The categorical labels are
+#' experimental threshold assignments, not validated clinical risk strata.
+#'
+#' Relevant public NC wrappers signal a warning of class
+#' `bsr_experimental_ror_pc_warning` once per top-level call when a nonempty
+#' returned `score.ROR` contains both legacy columns. [BS_Multi()] aggregates
+#' this notice once per call when a returned component contains them, rather
+#' than once per method, sample or iteration. There is no such warning on
+#' package loading, in [Mapping()], with `hasClinical = FALSE`, or for
+#' AIMS/SSPBC-only results. An all-NA score column does not establish
+#' that its companion category is absent: the existing NODE >= 4 rule can
+#' still assign `high` with nonmissing tumor size.
+#'
+#' This is an intentional warning: `options(warn = 2)` turns it into an error.
+#' An expert workflow can handle only `bsr_experimental_ror_pc_warning` with
+#' `withCallingHandlers()` and `invokeRestart("muffleWarning")`; unrelated
+#' warnings, including invalid NODE counts, should remain visible. Shiny
+#' identifies relevant selected Full metrics with the experimental labels
+#' and notice. Its TSV export preserves the existing tabular schema and
+#' provenance-comment layout while recording this interpretation.
 #'
 #' @section Known original ROR boundary limitation:
 #' The original Parker-derived ROR-S, ROR-P, ROR-C and
@@ -478,7 +514,7 @@ Mapping <- function(se_obj,
 #' This group requires finite nonnegative integer-valued counts. Negative,
 #' fractional or infinite numeric `NODE` values give a warning and a missing
 #' additional group; numerical ROR scores remain available. Missing `NODE`
-#' (`NA`/`NaN`) gives a missing additional group without a warning.
+#' (`NA`/`NaN`) gives a missing additional group without a NODE warning.
 #' For NODE = 0 or 1--3, an undefined numerical `NA` or `NaN` additional
 #' ROR-PC score has an actual missing risk category, not the text `"NaN"`.
 #' The numerical score is unchanged. The independent NODE >= 4 high-risk
@@ -592,6 +628,7 @@ BS_parker <- function(se_obj,
     call <- rlang::call2(makeCalls.parker, !!!arguments)
     res_parker <- eval(call)
 
+    .warn_experimental_ror_pc(res_parker)
     return(res_parker)
 }
 
@@ -634,7 +671,7 @@ BS_parker <- function(se_obj,
 #' This group requires finite nonnegative integer-valued counts. Negative,
 #' fractional or infinite numeric `NODE` values give a warning and a missing
 #' additional group; numerical ROR scores remain available. Missing `NODE`
-#' (`NA`/`NaN`) gives a missing additional group without a warning.
+#' (`NA`/`NaN`) gives a missing additional group without a NODE warning.
 #' See [Mapping()] for clinical missing-value behavior.
 #'
 #' @param seed Integer. Random seed for reproducibility of ER-balancing.
@@ -723,6 +760,7 @@ BS_cIHC <- function(
     call <- rlang::call2(makeCalls_ihc, !!!arguments)
     res_IHC <- eval(call)
 
+    .warn_experimental_ror_pc(res_IHC)
     return(res_IHC)
 }
 
@@ -804,7 +842,7 @@ BS_cIHC <- function(
 #' This group requires finite nonnegative integer-valued counts. Negative,
 #' fractional or infinite numeric `NODE` values give a warning and a missing
 #' additional group; numerical ROR scores remain available. Missing `NODE`
-#' (`NA`/`NaN`) gives a missing additional group without a warning.
+#' (`NA`/`NaN`) gives a missing additional group without a NODE warning.
 #' See [Mapping()] for clinical missing-value behavior.
 #'
 #' @param seed Integer. Random seed for reproducibility.
@@ -919,6 +957,7 @@ BS_cIHC.itr <- function(
     call <- rlang::call2(makeCalls_ihc.iterative, !!!arguments)
     res_IHC.itr <- eval(call)
 
+    .warn_experimental_ror_pc(res_IHC.itr)
     return(res_IHC.itr)
 }
 
@@ -961,7 +1000,7 @@ BS_cIHC.itr <- function(
 #' This group requires finite nonnegative integer-valued counts. Negative,
 #' fractional or infinite numeric `NODE` values give a warning and a missing
 #' additional group; numerical ROR scores remain available. Missing `NODE`
-#' (`NA`/`NaN`) gives a missing additional group without a warning.
+#' (`NA`/`NaN`) gives a missing additional group without a NODE warning.
 #' See [Mapping()] for clinical missing-value behavior.
 #'
 #' @param seed Integer. Random seed for reproducibility.
@@ -1150,6 +1189,7 @@ BS_PCAPAM50 <- function(
     ol$dist.RORSubtype <- ol$dist.RORSubtype[ord, , drop = FALSE]
     res_PCAPAM50$outList <- ol
 
+    .warn_experimental_ror_pc(res_PCAPAM50)
     return(res_PCAPAM50)
 }
 
@@ -1200,7 +1240,7 @@ BS_PCAPAM50 <- function(
 #' This group requires finite nonnegative integer-valued counts. Negative,
 #' fractional or infinite numeric `NODE` values give a warning and a missing
 #' additional group; numerical ROR scores remain available. Missing `NODE`
-#' (`NA`/`NaN`) gives a missing additional group without a warning.
+#' (`NA`/`NaN`) gives a missing additional group without a NODE warning.
 #' See [Mapping()] for clinical missing-value behavior.
 #'
 #' @return A list with the following elements:
@@ -1316,6 +1356,7 @@ BS_ssBC <- function(
     call <- rlang::call2(makeCalls.ssBC, !!!arguments)
     res_ssBC <- eval(call)
 
+    .warn_experimental_ror_pc(res_ssBC)
     return(res_ssBC)
 }
 
@@ -1570,7 +1611,7 @@ BS_sspbc <- function(se_obj, ssp.name = "ssp.pam50") {
 #' This group requires finite nonnegative integer-valued counts. Negative,
 #' fractional or infinite numeric `NODE` values give a warning and a missing
 #' additional group; numerical ROR scores remain available. Missing `NODE`
-#' (`NA`/`NaN`) gives a missing additional group without a warning.
+#' (`NA`/`NaN`) gives a missing additional group without a NODE warning.
 #' See [Mapping()] for clinical missing-value behavior.
 #'
 #' @param er_subsample Character, passed to `BS_cIHC.itr()` and used by no
@@ -1775,7 +1816,7 @@ BS_Multi <- function(data_input,
     }
 
     ## run each method
-    results <- lapply(methods, function(method) {
+    results <- withCallingHandlers(lapply(methods, function(method) {
         ## try NC-based
         if (method == "parker.original") {
             message(method, " is running!")
@@ -2013,6 +2054,8 @@ BS_Multi <- function(data_input,
         }
 
         stop("Unknown method: ", method)
+    }), bsr_experimental_ror_pc_warning = function(w) {
+        invokeRestart("muffleWarning")
     })
 
     ## Map method names and align outputs by PatientID (robust to order/missing)
@@ -2104,6 +2147,10 @@ BS_Multi <- function(data_input,
         )
     } else {
         res <- list(res_subtypes = res_subtypes, results = results)
+    }
+    experimental <- which(vapply(results, .has_experimental_ror_pc, logical(1)))
+    if (length(experimental)) {
+        .warn_experimental_ror_pc(results[[experimental[1L]]])
     }
     return(res)
 }

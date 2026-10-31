@@ -61,7 +61,7 @@ but cannot distinguish 1--3 from 4 or more positive nodes.
 This group requires finite nonnegative integer-valued counts. Negative,
 fractional or infinite numeric \code{NODE} values give a warning and a missing
 additional group; numerical ROR scores remain available. Missing \code{NODE}
-(\code{NA}/\code{NaN}) gives a missing additional group without a warning.
+(\code{NA}/\code{NaN}) gives a missing additional group without a NODE warning.
 See \code{\link[=Mapping]{Mapping()}} for clinical missing-value behavior.}
 
 \item{er_subsample}{Character, passed to \code{BS_cIHC.itr()} and used by no
@@ -128,6 +128,42 @@ Pearson correlations within its validated assay workflow (Wallden et al.,
 do not establish equivalence of preprocessing, calibration or clinical
 validation. These scores and groups are research outputs, not clinical
 Prosigna results. No correlation calculation is changed in version 1.5.8.
+
+\strong{Experimental 18-gene ROR-PC.} This display label identifies the existing
+\code{ROR-PC (Subtype + Clinic + Prolif.Subtype)} column. Its companion,
+\verb{ROR-PC Group (Subtype + Clinic + Prolif.Subtype)}, is displayed as
+\strong{Experimental 18-gene ROR-PC group}. Both legacy column names, their
+types and values are retained for compatibility. The original 11-gene
+Parker \code{ROR-PC (Subtype + Clinic + Prolif)} is a different output.
+
+Experimental 18-gene ROR-PC: this research calculation differs from the
+published Lien implementation. Its prognostic performance and risk-category
+thresholds have not been independently validated. It is not a clinical
+Prosigna result and must not guide patient care.
+The published Lien implementation (2021,
+\url{https://doi.org/10.3390/cancers13236118}) standardizes each proliferation
+gene across patients; this package's additional score retains its calibrated,
+unstandardized 18-gene mean. Reproducing Lien's published results therefore
+does not validate this package variant. The categorical labels are
+experimental threshold assignments, not validated clinical risk strata.
+
+Relevant public NC wrappers signal a warning of class
+\code{bsr_experimental_ror_pc_warning} once per top-level call when a nonempty
+returned \code{score.ROR} contains both legacy columns. \code{\link[=BS_Multi]{BS_Multi()}} aggregates
+this notice once per call when a returned component contains them, rather
+than once per method, sample or iteration. There is no such warning on
+package loading, in \code{\link[=Mapping]{Mapping()}}, with \code{hasClinical = FALSE}, or for
+AIMS/SSPBC-only results. An all-NA score column does not establish
+that its companion category is absent: the existing NODE >= 4 rule can
+still assign \code{high} with nonmissing tumor size.
+
+This is an intentional warning: \code{options(warn = 2)} turns it into an error.
+An expert workflow can handle only \code{bsr_experimental_ror_pc_warning} with
+\code{withCallingHandlers()} and \code{invokeRestart("muffleWarning")}; unrelated
+warnings, including invalid NODE counts, should remain visible. Shiny
+identifies relevant selected Full metrics with the experimental labels
+and notice. Its TSV export preserves the existing tabular schema and
+provenance-comment layout while recording this interpretation.
 }
 
 \section{Known original ROR boundary limitation}{
