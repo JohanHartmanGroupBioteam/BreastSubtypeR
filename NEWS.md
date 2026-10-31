@@ -1,3 +1,26 @@
+# BreastSubtypeR 1.4.3
+
+## Interpretation and compatibility
+
+* Label the existing additional score and group as **Experimental 18-gene
+  ROR-PC** and **Experimental 18-gene ROR-PC group** (#221). This research
+  calculation differs from the published Lien implementation. Its prognostic
+  performance and risk-category thresholds have not been independently
+  validated. It is not a clinical Prosigna result and must not guide patient care.
+* Signal `bsr_experimental_ror_pc_warning` once per relevant public NC call,
+  including one aggregated warning from `BS_Multi()`. Signal only when both
+  experimental fields are returned in a nonempty table; unrelated warnings
+  and errors are unchanged. `options(warn = 2)` intentionally converts the
+  new warning to an error; expert handlers can target only this class.
+* Add a persistent notice for relevant selected Shiny Full metrics results
+  and interpretation text in existing export comment metadata. Exact column
+  names, tabular content, filenames and header-line counts remain unchanged.
+* Preserve all 1.4.2 scientific calculations, Spearman correlations, calibration,
+  both proliferation terms, coefficients, thresholds, NODE behavior, risk
+  categories, API signatures, outputs and RNG. The original 11-gene Parker
+  ROR-PC remains distinct. No #198, #206 or other development fixes are included;
+  existing release edge cases and limitations remain.
+
 # BreastSubtypeR 1.4.2
 
 ## Bug fixes

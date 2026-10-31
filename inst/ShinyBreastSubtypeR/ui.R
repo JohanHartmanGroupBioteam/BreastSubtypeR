@@ -296,6 +296,7 @@ ui <- bslib::page_fluid(
   
   # Export
   bslib::card(
+    uiOutput("experimental_ror_pc_notice"),
     bslib::layout_columns(
       col_widths = c(8,4),
       uiOutput("export_selector"),

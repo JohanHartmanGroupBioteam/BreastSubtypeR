@@ -73,6 +73,47 @@ NULL
 #' Gene ID Mapping
 #'
 #' @name Mapping
+#' @section Research ROR interpretation:
+#' **Experimental 18-gene ROR-PC** and
+#' **Experimental 18-gene ROR-PC group** label the existing score and group
+#' columns, respectively. The exact legacy data keys remain:
+#' \preformatted{
+#' ROR-PC (Subtype + Clinic + Prolif.Subtype)
+#' ROR-PC Group (Subtype + Clinic + Prolif.Subtype)
+#' }
+#' These outputs are distinct from the original 11-gene Parker ROR-PC,
+#' whose score key is \code{ROR-PC (Subtype + Clinic + Prolif)}.
+#'
+#' Experimental 18-gene ROR-PC: this research calculation differs from the
+#' published Lien implementation. Its prognostic performance and risk-category
+#' thresholds have not been independently validated. It is not a clinical
+#' Prosigna result and must not guide patient care. The categorical groups
+#' must not be interpreted as validated patient-risk assignments.
+#'
+#' This release retains its existing Spearman correlations and mean of
+#' calibrated expression for the 18-gene proliferation term. Version 1.4.3
+#' changes interpretation notices only: neither proliferation calculation,
+#' coefficients, thresholds, NODE handling, groups nor column names are changed.
+#' Development scoring changes are not part of this release backport.
+#'
+#' The public NC functions signal the classed warning
+#' \code{bsr_experimental_ror_pc_warning} once per successful top-level call
+#' when a nonempty result contains both experimental fields.
+#' \code{BS_Multi()} aggregates only this warning class and signals once
+#' for its returned component results. Internal ROR calculations, package
+#' loading, \code{Mapping()}, clinical-off calls and SSP-only outputs do not
+#' signal it. Unrelated warnings and errors retain their existing behavior.
+#'
+#' This is an intentional compatibility change:
+#' \code{options(warn = 2)} turns the warning into an error.
+#' An expert workflow can handle only the
+#' \code{bsr_experimental_ror_pc_warning} class:
+#' \itemize{
+#' \item Establish a handler with \code{withCallingHandlers()}.
+#' \item Within that handler, call \code{invokeRestart("muffleWarning")}.
+#' }
+#' Other warning classes should remain visible.
+#'
 #' @description Preprocesses and maps gene expression input to prepare for
 #'   intrinsic subtyping workflows (NC- and SSP-based).
 #'
@@ -231,6 +272,7 @@ Mapping <- function(se_obj,
 #' Original Parker Intrinsic Subtyping (BS_parker)
 #'
 #' @name BS_parker
+#' @inheritSection Mapping Research ROR interpretation
 #' @description
 #' Implements the original PAM50 nearest-centroid classifier as described by
 #' Parker et al. (2009), along with supported calibration strategies and
@@ -373,12 +415,14 @@ BS_parker <- function(se_obj,
     call <- rlang::call2(makeCalls.parker, !!!arguments)
     res_parker <- eval(call)
 
+    .warn_experimental_ror_pc(res_parker)
     return(res_parker)
 }
 
 #' Conventional IHC Intrinsic Subtyping (BS_cIHC)
 #'
 #' @name BS_cIHC
+#' @inheritSection Mapping Research ROR interpretation
 #' @description
 #' Implements the conventional immunohistochemistry-based (cIHC) intrinsic
 #' subtyping approach, which balances cohorts by estrogen receptor (ER) status
@@ -472,6 +516,7 @@ BS_cIHC <- function(
     call <- rlang::call2(makeCalls_ihc, !!!arguments)
     res_IHC <- eval(call)
 
+    .warn_experimental_ror_pc(res_IHC)
     return(res_IHC)
 }
 
@@ -479,6 +524,7 @@ BS_cIHC <- function(
 #' Iterative Conventional IHC Intrinsic Subtyping (BS_cIHC.itr)
 #'
 #' @name BS_cIHC.itr
+#' @inheritSection Mapping Research ROR interpretation
 #' @description
 #' Implements an **iterative** version of the conventional IHC-based intrinsic
 #' subtyping approach. This method repeatedly balances samples by estrogen
@@ -595,6 +641,7 @@ BS_cIHC.itr <- function(
     call <- rlang::call2(makeCalls_ihc.iterative, !!!arguments)
     res_IHC.itr <- eval(call)
 
+    .warn_experimental_ror_pc(res_IHC.itr)
     return(res_IHC.itr)
 }
 
@@ -602,6 +649,7 @@ BS_cIHC.itr <- function(
 #' PCA-PAM50 Intrinsic Subtyping (BS_PCAPAM50)
 #'
 #' @name BS_PCAPAM50
+#' @inheritSection Mapping Research ROR interpretation
 #' @description
 #' Implements the PCA-PAM50 method, which integrates **Principal Component
 #' Analysis (PCA)** of ESR1 expression to adjust for estrogen receptor (ER)
@@ -745,6 +793,7 @@ BS_PCAPAM50 <- function(
     idx <- na.omit(match(samples, res_PCAPAM50$BS.all$PatientID))
     res_PCAPAM50$BS.all <- res_PCAPAM50$BS.all[idx, ]
 
+    .warn_experimental_ror_pc(res_PCAPAM50)
     return(res_PCAPAM50)
 }
 
@@ -752,6 +801,7 @@ BS_PCAPAM50 <- function(
 #' Subgroup-Specific Gene-Centering Intrinsic Subtyping (BS_ssBC)
 #'
 #' @name BS_ssBC
+#' @inheritSection Mapping Research ROR interpretation
 #' @description
 #' Implements the **subgroup-specific gene-centering (ssBC)** method for breast
 #' cancer intrinsic subtyping. The ssBC approach applies precomputed,
@@ -874,6 +924,7 @@ BS_ssBC <- function(
     call <- rlang::call2(makeCalls.ssBC, !!!arguments)
     res_ssBC <- eval(call)
 
+    .warn_experimental_ror_pc(res_ssBC)
     return(res_ssBC)
 }
 
@@ -1044,6 +1095,7 @@ BS_sspbc <- function(se_obj, ssp.name = "ssp.pam50") {
 #' Intrinsic Subtyping with Multiple Approaches (BS_Multi)
 #'
 #' @name BS_Multi
+#' @inheritSection Mapping Research ROR interpretation
 #' @description
 #' Executes multiple intrinsic molecular subtyping methods in parallel.
 #' Users can either specify a set of classifiers directly, or enable the
@@ -1210,7 +1262,7 @@ BS_Multi <- function(data_input,
     }
 
     ## run each method
-    results <- lapply(methods, function(method) {
+    results <- withCallingHandlers(lapply(methods, function(method) {
         ## try NC-based
         if (method == "parker.original") {
             message(method, " is running!")
@@ -1447,6 +1499,8 @@ BS_Multi <- function(data_input,
         }
 
         stop("Unknown method: ", method)
+    }), bsr_experimental_ror_pc_warning = function(w) {
+        invokeRestart("muffleWarning")
     })
 
     ## Map method names and align outputs by PatientID (robust to order/missing)
@@ -1538,6 +1592,10 @@ BS_Multi <- function(data_input,
         )
     } else {
         res <- list(res_subtypes = res_subtypes, results = results)
+    }
+    experimental <- which(vapply(results, .has_experimental_ror_pc, logical(1)))
+    if (length(experimental)) {
+        .warn_experimental_ror_pc(results[[experimental[1L]]])
     }
     return(res)
 }

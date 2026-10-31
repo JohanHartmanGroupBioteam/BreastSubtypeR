@@ -115,6 +115,49 @@ BreastSubtypeR automatically applies method-specific preprocessing.
 \code{TN -> \{TN, nonTN\}}). Ambiguous values (e.g., \code{HER2 == "2+"})
 are left unchanged and emit a warning.
 }
+\section{Research ROR interpretation}{
+
+\strong{Experimental 18-gene ROR-PC} and
+\strong{Experimental 18-gene ROR-PC group} label the existing score and group
+columns, respectively. The exact legacy data keys remain:
+\preformatted{
+ROR-PC (Subtype + Clinic + Prolif.Subtype)
+ROR-PC Group (Subtype + Clinic + Prolif.Subtype)
+}
+These outputs are distinct from the original 11-gene Parker ROR-PC,
+whose score key is \code{ROR-PC (Subtype + Clinic + Prolif)}.
+
+Experimental 18-gene ROR-PC: this research calculation differs from the
+published Lien implementation. Its prognostic performance and risk-category
+thresholds have not been independently validated. It is not a clinical
+Prosigna result and must not guide patient care. The categorical groups
+must not be interpreted as validated patient-risk assignments.
+
+This release retains its existing Spearman correlations and mean of
+calibrated expression for the 18-gene proliferation term. Version 1.4.3
+changes interpretation notices only: neither proliferation calculation,
+coefficients, thresholds, NODE handling, groups nor column names are changed.
+Development scoring changes are not part of this release backport.
+
+The public NC functions signal the classed warning
+\code{bsr_experimental_ror_pc_warning} once per successful top-level call
+when a nonempty result contains both experimental fields.
+\code{BS_Multi()} aggregates only this warning class and signals once
+for its returned component results. Internal ROR calculations, package
+loading, \code{Mapping()}, clinical-off calls and SSP-only outputs do not
+signal it. Unrelated warnings and errors retain their existing behavior.
+
+This is an intentional compatibility change:
+\code{options(warn = 2)} turns the warning into an error.
+An expert workflow can handle only the
+\code{bsr_experimental_ror_pc_warning} class:
+\itemize{
+\item Establish a handler with \code{withCallingHandlers()}.
+\item Within that handler, call \code{invokeRestart("muffleWarning")}.
+}
+Other warning classes should remain visible.
+}
+
 \examples{
 if (requireNamespace("SummarizedExperiment", quietly = TRUE)) {
     # Using example raw RNA-seq counts (with gene lengths)
