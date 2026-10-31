@@ -212,11 +212,17 @@ do not establish equivalence of preprocessing, calibration or clinical
 validation. These scores and groups are research outputs, not clinical
 Prosigna results. No correlation calculation is changed in version 1.5.8.
 
-\strong{Experimental 18-gene ROR-PC.} This display label identifies the existing
-\code{ROR-PC (Subtype + Clinic + Prolif.Subtype)} column. Its companion,
-\verb{ROR-PC Group (Subtype + Clinic + Prolif.Subtype)}, is displayed as
-\strong{Experimental 18-gene ROR-PC group}. Both legacy column names, their
-types and values are retained for compatibility. The original 11-gene
+\strong{Experimental 18-gene ROR-PC} and
+\strong{Experimental 18-gene ROR-PC group} identify the existing score and group
+columns, respectively:
+
+\preformatted{
+ROR-PC (Subtype + Clinic + Prolif.Subtype)
+ROR-PC Group (Subtype + Clinic + Prolif.Subtype)
+}
+
+Both legacy column names, their types and values are retained for
+compatibility. The original 11-gene
 Parker \code{ROR-PC (Subtype + Clinic + Prolif)} is a different output.
 
 Experimental 18-gene ROR-PC: this research calculation differs from the
@@ -241,10 +247,15 @@ that its companion category is absent: the existing NODE >= 4 rule can
 still assign \code{high} with nonmissing tumor size.
 
 This is an intentional warning: \code{options(warn = 2)} turns it into an error.
-An expert workflow can handle only \code{bsr_experimental_ror_pc_warning} with
-\code{withCallingHandlers()} and \code{invokeRestart("muffleWarning")}; unrelated
-warnings, including invalid NODE counts, should remain visible. Shiny
-identifies relevant selected Full metrics with the experimental labels
+An expert workflow can handle only the
+\code{bsr_experimental_ror_pc_warning} class:
+\itemize{
+\item Establish a handler with \code{withCallingHandlers()}.
+\item Within that handler, call \code{invokeRestart("muffleWarning")}.
+}
+
+Unrelated warnings, including invalid NODE counts, should remain visible.
+Shiny identifies relevant selected Full metrics with the experimental labels
 and notice. Its TSV export preserves the existing tabular schema and
 provenance-comment layout while recording this interpretation.
 }
@@ -263,9 +274,8 @@ as an additional category or infer an assignment by rounding.
 Version 1.5.8 temporarily defers this known categorical-output defect
 pending scientific review of the intended equality convention. Scores,
 coefficients and thresholds are preserved. This limitation is separate
-from the corrected NODE-dependent
-\verb{ROR-PC Group (Subtype + Clinic + Prolif.Subtype)} boundaries described
-in \code{\link[=Mapping]{Mapping()}}, which remain unchanged.
+from the corrected NODE-dependent Experimental 18-gene ROR-PC group
+boundaries described in \code{\link[=Mapping]{Mapping()}}, which remain unchanged.
 }
 
 \section{Proliferation panel coverage}{
