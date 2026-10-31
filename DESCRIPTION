@@ -45,6 +45,7 @@ Imports:
     SummarizedExperiment,
     utils
 Suggests:
+    S4Vectors,
     lifecycle,
     tidyverse,
     shiny (>= 1.9.1),
