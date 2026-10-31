@@ -140,7 +140,8 @@ test_that("reference ordering preserves caller RNG state and package four-class 
         if (seed_exists) set.seed(17) else if (exists(".Random.seed", .GlobalEnv, inherits = FALSE))
             rm(".Random.seed", envir = .GlobalEnv)
         before <- if (seed_exists) get(".Random.seed", .GlobalEnv) else NULL
-        res <- BS_PCAPAM50(se, Subtype = TRUE, hasClinical = TRUE, seed = 118)
+        res <- expect_experimental_ror_pc(BS_PCAPAM50(se,
+            Subtype = TRUE, hasClinical = TRUE, seed = 118))
         expect_identical(RNGkind(), kind)
         expect_identical(Sys.getlocale(), locale)
         expect_identical(exists(".Random.seed", .GlobalEnv, inherits = FALSE), seed_exists)

@@ -32,7 +32,8 @@ test_that("factor PatientID preserves complete character-ID results", {
     original <- OSLO2EMIT0obj$data_input$se_NC
     ids <- colnames(original)
     for (subtype in c(FALSE, TRUE)) for (clinical in c(FALSE, TRUE)) {
-        reference <- BS_PCAPAM50(original, Subtype = subtype, hasClinical = clinical)
+        reference <- expect_experimental_ror_pc(BS_PCAPAM50(original,
+            Subtype = subtype, hasClinical = clinical), n = as.integer(clinical))
         pcapam50_id_outputs(reference, ids, subtype)
         encodings <- list(factor(ids), factor(ids, levels = rev(ids)),
             factor(ids, levels = c("unused-before", rev(ids), "unused-after")))
@@ -40,7 +41,8 @@ test_that("factor PatientID preserves complete character-ID results", {
             input <- original
             SummarizedExperiment::colData(input)$PatientID <- encoding
             saved <- input
-            result <- BS_PCAPAM50(input, Subtype = subtype, hasClinical = clinical)
+            result <- expect_experimental_ror_pc(BS_PCAPAM50(input,
+                Subtype = subtype, hasClinical = clinical), n = as.integer(clinical))
             expect_identical(input, saved)
             pcapam50_id_outputs(result, ids, subtype)
             expect_identical(is.na(result$score.ROR), is.na(reference$score.ROR))
@@ -66,8 +68,8 @@ test_that("factor IDs retain names through reordering, subsets and unused levels
             levels = c("unused-before", rev(names), "unused-after"))
         input <- input[, indices, drop = FALSE]
         reference_input <- original[, indices, drop = FALSE]
-        reference <- BS_PCAPAM50(reference_input, Subtype = TRUE, hasClinical = TRUE)
-        result <- BS_PCAPAM50(input, Subtype = TRUE, hasClinical = TRUE)
+        reference <- expect_experimental_ror_pc(BS_PCAPAM50(reference_input, Subtype = TRUE, hasClinical = TRUE))
+        result <- expect_experimental_ror_pc(BS_PCAPAM50(input, Subtype = TRUE, hasClinical = TRUE))
         pcapam50_id_outputs(result, names[indices], TRUE)
         expect_identical(result, reference)
     }
@@ -84,7 +86,7 @@ test_that("native PCA-PAM50 centering selects expression values by biological ID
     original <- OSLO2EMIT0obj$data_input$se_NC
     ids <- colnames(original)
     assay <- as.matrix(SummarizedExperiment::assay(original))
-    reference <- BS_PCAPAM50(original, Subtype = TRUE, hasClinical = TRUE)
+    reference <- expect_experimental_ror_pc(BS_PCAPAM50(original, Subtype = TRUE, hasClinical = TRUE))
     captures <- new.env(parent = emptyenv())
     instrument <- function(name, stage) {
         fn <- getFromNamespace(name, "BreastSubtypeR")
@@ -113,7 +115,7 @@ test_that("native PCA-PAM50 centering selects expression values by biological ID
     for (factor_ids in c(FALSE, TRUE)) {
         input <- original
         if (factor_ids) SummarizedExperiment::colData(input)$PatientID <- factor(ids, levels = rev(ids))
-        result <- BS_PCAPAM50(input, Subtype = TRUE, hasClinical = TRUE)
+        result <- expect_experimental_ror_pc(BS_PCAPAM50(input, Subtype = TRUE, hasClinical = TRUE))
         expect_identical(result, reference)
         expect_true(all(c("first", "second") %in% ls(captures)))
         for (stage in c("first", "second")) {
@@ -178,7 +180,7 @@ test_that("factor-ID correction preserves caller RNG and locale", {
             if (present) set.seed(197) else if (exists(".Random.seed", .GlobalEnv, inherits = FALSE)) rm(".Random.seed", envir = .GlobalEnv)
             before <- if (present) get(".Random.seed", .GlobalEnv) else NULL
             before_kind <- RNGkind()
-            result <- BS_PCAPAM50(input, Subtype = TRUE, hasClinical = TRUE)
+            result <- expect_experimental_ror_pc(BS_PCAPAM50(input, Subtype = TRUE, hasClinical = TRUE))
             expect_identical(exists(".Random.seed", .GlobalEnv, inherits = FALSE), present)
             if (present) expect_identical(get(".Random.seed", .GlobalEnv), before)
             expect_identical(RNGkind(), before_kind)

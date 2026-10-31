@@ -32,7 +32,7 @@ test_that("native cIHC centering selects expression values by biological ID", {
     original <- OSLO2EMIT0obj$data_input$se_NC
     ids <- colnames(original)
     assay <- SummarizedExperiment::assay(original)
-    reference <- BS_cIHC(original, Subtype = TRUE, hasClinical = TRUE)
+    reference <- expect_experimental_ror_pc(BS_cIHC(original, Subtype = TRUE, hasClinical = TRUE))
     captures <- new.env(parent = emptyenv())
     native <- getFromNamespace("makeCalls_ihc", "BreastSubtypeR")
     record <- function(e) {
@@ -53,7 +53,7 @@ test_that("native cIHC centering selects expression values by biological ID", {
     for (factor_ids in c(FALSE, TRUE)) {
         input <- original
         if (factor_ids) SummarizedExperiment::colData(input)$PatientID <- factor(ids, levels = rev(ids))
-        result <- BS_cIHC(input, Subtype = TRUE, hasClinical = TRUE)
+        result <- expect_experimental_ror_pc(BS_cIHC(input, Subtype = TRUE, hasClinical = TRUE))
         cihc_id_outputs(result, ids, TRUE)
         expect_identical(result, reference)
         z <- captures$native
@@ -90,7 +90,8 @@ test_that("cIHC factor IDs preserve complete character results in both column or
         reference_input <- original[, indices, drop = FALSE]
         ids <- colnames(reference_input)
         for (subtype in c(FALSE, TRUE)) for (clinical in c(FALSE, TRUE)) {
-            reference <- BS_cIHC(reference_input, Subtype = subtype, hasClinical = clinical)
+            reference <- expect_experimental_ror_pc(BS_cIHC(reference_input,
+                Subtype = subtype, hasClinical = clinical), n = as.integer(clinical))
             cihc_id_outputs(reference, ids, subtype)
             encodings <- list(factor(ids), factor(ids, levels = rev(ids)),
                 factor(ids, levels = c("unused-before", rev(ids), "unused-after")),
@@ -99,7 +100,8 @@ test_that("cIHC factor IDs preserve complete character results in both column or
                 input <- reference_input
                 SummarizedExperiment::colData(input)$PatientID <- encoding
                 saved <- input
-                result <- BS_cIHC(input, Subtype = subtype, hasClinical = clinical)
+                result <- expect_experimental_ror_pc(BS_cIHC(input,
+                    Subtype = subtype, hasClinical = clinical), n = as.integer(clinical))
                 expect_identical(input, saved)
                 cihc_id_outputs(result, ids, subtype)
                 expect_identical(is.na(result$score.ROR), is.na(reference$score.ROR))
@@ -122,10 +124,10 @@ test_that("cIHC names remain aligned with matrix assays and smaller ER-positive 
     er <- SummarizedExperiment::colData(original)$ER
     keep <- rev(c(which(er == "ER+")[seq_len(10)], which(er == "ER-")))
     original <- original[, keep, drop = FALSE]
-    reference <- BS_cIHC(original, Subtype = TRUE, hasClinical = TRUE)
+    reference <- expect_experimental_ror_pc(BS_cIHC(original, Subtype = TRUE, hasClinical = TRUE))
     factor_input <- original
     SummarizedExperiment::colData(factor_input)$PatientID <- factor(ids, levels = c("unused", rev(ids)))[keep]
-    result <- BS_cIHC(factor_input, Subtype = TRUE, hasClinical = TRUE)
+    result <- expect_experimental_ror_pc(BS_cIHC(factor_input, Subtype = TRUE, hasClinical = TRUE))
     cihc_id_outputs(result, ids[keep], TRUE)
     expect_identical(result, reference)
     numeric_ids <- seq_len(ncol(original)) + 1000L
@@ -173,7 +175,7 @@ test_that("cIHC factor IDs preserve caller RNG and locale", {
             if (present) set.seed(200) else if (exists(".Random.seed", .GlobalEnv, inherits = FALSE)) rm(".Random.seed", envir = .GlobalEnv)
             before <- if (present) get(".Random.seed", .GlobalEnv) else NULL
             before_kind <- RNGkind()
-            result <- BS_cIHC(input, Subtype = TRUE, hasClinical = TRUE)
+            result <- expect_experimental_ror_pc(BS_cIHC(input, Subtype = TRUE, hasClinical = TRUE))
             expect_identical(exists(".Random.seed", .GlobalEnv, inherits = FALSE), present)
             if (present) expect_identical(get(".Random.seed", .GlobalEnv), before)
             expect_identical(RNGkind(), before_kind)

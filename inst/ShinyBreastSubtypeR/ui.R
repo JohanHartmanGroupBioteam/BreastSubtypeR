@@ -319,7 +319,8 @@ ui <- bslib::page_fluid(
       div(style = "text-align:center;",
           uiOutput("download_control")
       )
-    )
+    ),
+    uiOutput("experimental_ror_pc_notice")
   ),
   
   tags$hr(),

@@ -2,8 +2,8 @@ test_that("complete PAM50 ROR-P and original ROR-PC match the Parker reference",
     data("OSLO2EMIT0obj", package = "BreastSubtypeR", envir = environment())
     se <- OSLO2EMIT0obj$data_input$se_NC
     expect_identical(dim(se), c(50L, 102L))
-    res <- BS_parker(se, calibration = "Internal", internal = "medianCtr",
-        Subtype = TRUE, hasClinical = TRUE)
+    res <- expect_experimental_ror_pc(BS_parker(se, calibration = "Internal", internal = "medianCtr",
+        Subtype = TRUE, hasClinical = TRUE))
     clinical <- as.data.frame(SummarizedExperiment::colData(se))
     ror198_expect_reference(res, clinical)
     ## Independently executed original distributed script on the complete
@@ -22,8 +22,8 @@ test_that("complete PAM50 ROR-P and original ROR-PC match the Parker reference",
         assays = list(rbind(as.matrix(SummarizedExperiment::assay(se)),
             NOT_A_PAM50_GENE = seq_len(ncol(se)) * 1e6)),
         colData = SummarizedExperiment::colData(se))
-    expect_identical(BS_parker(expanded, calibration = "Internal",
-        internal = "medianCtr", Subtype = TRUE, hasClinical = TRUE), res)
+    expect_identical(expect_experimental_ror_pc(BS_parker(expanded, calibration = "Internal",
+        internal = "medianCtr", Subtype = TRUE, hasClinical = TRUE)), res)
 })
 
 test_that("the ROR standardization is within each sample and never mutates its input", {
@@ -71,7 +71,8 @@ test_that("all NC methods use the final PAM50 matrix for original ROR only", {
             info <- paste(dataset, method, hasClinical, Subtype)
             set.seed(198)
             rng <- .Random.seed
-            res <- suppressMessages(ror198_run(method, se, hasClinical, Subtype))
+            res <- suppressMessages(expect_experimental_ror_pc(
+                ror198_run(method, se, hasClinical, Subtype), n = as.integer(hasClinical)))
             expect_identical(.Random.seed, rng, info = info)
             expect_identical(res$BS.all$PatientID, colnames(se), info = info)
             expect_identical(as.character(res$score.ROR$patientID), colnames(se), info = info)
@@ -113,8 +114,9 @@ test_that("all Parker calibration variants standardize after calibration", {
         list(calibration = "External", external = "Given.mdns", medians =
             data.frame(X = rownames(se), medians = apply(SummarizedExperiment::assay(se), 1, median))))
     for (args in variants) for (hasClinical in c(FALSE, TRUE)) for (Subtype in c(FALSE, TRUE)) {
-        res <- do.call(BS_parker, c(list(se_obj = se, hasClinical = hasClinical,
-            Subtype = Subtype), args))
+        res <- expect_experimental_ror_pc(do.call(BS_parker,
+            c(list(se_obj = se, hasClinical = hasClinical, Subtype = Subtype), args)),
+            n = as.integer(hasClinical))
         ror198_expect_reference(res, if (hasClinical) clinical else NULL)
     }
 })

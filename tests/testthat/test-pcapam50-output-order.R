@@ -91,8 +91,9 @@ test_that("BS_PCAPAM50 returns all sample-indexed outputs in input order", {
         expect_identical(as.character(SummarizedExperiment::colData(input)$PatientID), order)
         for (subtype in c(FALSE, TRUE)) {
             ## Clinical and nonclinical calls are exercised for each order.
-            res <- BS_PCAPAM50(input, Subtype = subtype,
-                               hasClinical = subtype, seed = 118)
+            res <- expect_experimental_ror_pc(BS_PCAPAM50(input,
+                Subtype = subtype, hasClinical = subtype, seed = 118),
+                n = as.integer(subtype))
             axes <- pcapam50_order_structure(res, order, genes, subtype, subtype)
             for (axis in axes) expect_identical(axis, order)
         }

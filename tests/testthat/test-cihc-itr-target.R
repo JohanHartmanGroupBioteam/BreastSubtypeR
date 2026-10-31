@@ -110,7 +110,7 @@ run_case <- function(nm, er_subsample) {
     if (grepl("ratio1", nm)) args$ratio <- 1
     if (grepl("ratio2", nm)) args$ratio <- 2
     res <- withr::with_options(list(BreastSubtypeR.verbose = FALSE),
-        do.call(BS_cIHC.itr, args))
+        expect_experimental_ror_pc(do.call(BS_cIHC.itr, args)))
     out <- res$outList
     confidence_reference <- vapply(seq_along(out$predictions), function(j) {
         suppressWarnings(round(1 - cor.test(out$testData[, j],

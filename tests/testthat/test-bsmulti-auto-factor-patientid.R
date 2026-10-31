@@ -58,9 +58,9 @@ m202_capture_run <- function(input, subtype = TRUE, clinical = TRUE, methods = "
         selection
     }
     messages <- warnings <- character()
-    result <- withCallingHandlers(testthat::with_mocked_bindings(native_multi(input, methods = methods,
+    result <- withCallingHandlers(expect_experimental_ror_pc(testthat::with_mocked_bindings(native_multi(input, methods = methods,
         Subtype = subtype, hasClinical = clinical), BS_ssBC = predictor, get_methods = selector,
-        .package = "BreastSubtypeR"), message = function(m) {
+        .package = "BreastSubtypeR"), n = as.integer(clinical)), message = function(m) {
         messages <<- c(messages, conditionMessage(m))
         invokeRestart("muffleMessage")
     }, warning = function(w) {
@@ -235,8 +235,9 @@ test_that("manual, TN and complete AUTO paths preserve routing and caller state"
         expect_identical(names(actual$predictors), names(reference$predictors))
         if (grepl("^tn-", cs$name)) expect_identical(names(actual$predictors), c("TN", "TN.v2"))
         m202_assert_restoration(actual, input, cs$subtype)
-        plain <- suppressMessages(BS_Multi(input, methods = cs$methods,
-            Subtype = cs$subtype, hasClinical = cs$clinical))
+        plain <- suppressMessages(expect_experimental_ror_pc(BS_Multi(input,
+            methods = cs$methods, Subtype = cs$subtype, hasClinical = cs$clinical),
+            n = as.integer(cs$clinical)))
         expect_identical(plain, actual$result)
     }
 })

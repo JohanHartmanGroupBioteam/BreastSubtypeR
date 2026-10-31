@@ -9,7 +9,7 @@ test_that("BS_parker warns on invalid numeric NODE and leaves the group missing"
     node[2] <- 2.5
     SummarizedExperiment::colData(se)$NODE <- node
     expect_warning(
-        res <- suppressMessages(BS_parker(se, hasClinical = TRUE)),
+        res <- suppressMessages(expect_experimental_ror_pc(BS_parker(se, hasClinical = TRUE))),
         "finite nonnegative integer"
     )
     group <- res$score.ROR[["ROR-PC Group (Subtype + Clinic + Prolif.Subtype)"]]
