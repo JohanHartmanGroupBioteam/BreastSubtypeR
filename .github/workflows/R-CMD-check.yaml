@@ -1,79 +1,136 @@
-# R CMD check of the package source on Linux (R 4.6.x, Bioconductor 3.24).
-#
-# Fails on ERROR or WARNING; NOTEs are reported in the log and kept in the
-# uploaded .Rcheck directory. No secrets are used and nothing is published.
-#
-# Third-party actions are pinned to full commit SHAs; the comment after each
-# SHA gives the release tag it corresponds to.
-
+# Isolated release 1.4.3 validation. Never build the harness's main source.
 name: R-CMD-check
-
 on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
   workflow_dispatch:
-
 permissions:
   contents: read
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
+  cancel-in-progress: false
 jobs:
   R-CMD-check:
-    name: ubuntu-latest (R 4.6, Bioc 3.24)
+    name: Ubuntu (candidate 1.4.3, R 4.6, Bioc 3.23)
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
     env:
-      R_BIOC_VERSION: "3.24"
+      R_BIOC_VERSION: "3.23"
       R_KEEP_PKG_SOURCE: "yes"
       _R_CHECK_FORCE_SUGGESTS_: "true"
-
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
 
-      - uses: r-lib/actions/setup-pandoc@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
+      - name: Fetch and verify the exact release candidate before package setup
+        id: identity
+        run: bash "$GITHUB_WORKSPACE/.github/scripts/prepare-release143.sh" rcmdcheck-release143
 
-      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
+      - uses: r-lib/actions/setup-pandoc@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05
+      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05
         with:
           r-version: "4.6"
           use-public-rspm: true
-
-      - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
+      - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05
         with:
+          working-directory: ${{ env.DEPENDENCY_DIR }}
+          cache: false
+          install-quarto: false
           dependencies: '"all"'
           extra-packages: |
             any::rcmdcheck
+            any::jsonlite
+            any::gert
             bioc::BiocVersion
+            bioc::BiocCheck
           needs: check
 
-      - name: Confirm R 4.6.x and Bioconductor 3.24
-        shell: Rscript {0}
+      - name: Verify canonical environment, dependency provenance and candidate identity
+        id: environment
+        working-directory: ${{ runner.temp }}
         run: |
-          r <- getRversion()
-          bioc <- packageVersion("BiocVersion")
-          message("R ", r, "; BiocVersion ", bioc)
-          if (r < "4.6.0" || r >= "4.7.0") stop("expected R 4.6.x, found R ", r)
-          if (bioc < "3.24" || bioc >= "3.25") stop("expected Bioconductor 3.24, found ", bioc)
+          Rscript "$BIOCCHECK_CI" environment "$CANDIDATE_DIR" "$EVIDENCE_DIR/environment" 2>&1 | tee "$EVIDENCE_DIR/environment/console.log"
 
-      - uses: r-lib/actions/check-r-package@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
-        with:
-          args: 'c("--no-manual")'
-          build_args: 'c("--no-manual")'
-          error-on: '"warning"'
-          check-dir: '"check"'
-          upload-results: never
+      - name: Build the verified candidate
+        id: build
+        working-directory: ${{ runner.temp }}/rcmdcheck-release143/build
+        run: |
+          echo "R CMD build --no-manual $CANDIDATE_DIR" >> "$EVIDENCE_DIR/commands.txt"
+          R CMD build --no-manual "$CANDIDATE_DIR" 2>&1 | tee build.log
+          if grep -E '^(WARNING[: ]|Warning( messages?)?:|Warning in )' build.log; then
+            echo "::error::R CMD build reported a warning"; exit 1
+          fi
+          shopt -s nullglob
+          tarballs=(*.tar.gz)
+          test "${#tarballs[@]}" -eq 1
+          test "${tarballs[0]}" = "BreastSubtypeR_1.4.3.tar.gz"
+          tar -tzf "${tarballs[0]}" > tarball-contents.txt
+          if grep -E '^BreastSubtypeR/\.github(/|$)' tarball-contents.txt; then exit 1; fi
+          sha256sum "${tarballs[0]}" | tee tarball.sha256
+          echo "tarball=$PWD/${tarballs[0]}" >> "$GITHUB_OUTPUT"
 
-      - name: Upload check results
+      - name: R CMD check --no-manual including installed tests and examples
+        id: check
+        working-directory: ${{ runner.temp }}/rcmdcheck-release143/check
+        env:
+          TARBALL: ${{ steps.build.outputs.tarball }}
+        run: |
+          (cd "$EVIDENCE_DIR/build" && sha256sum --check tarball.sha256)
+          echo "R CMD check --no-manual $TARBALL" >> "$EVIDENCE_DIR/commands.txt"
+          R CMD check --no-manual "$TARBALL" 2>&1 | tee check.log
+
+      - name: Require complete check, zero errors/warnings and unskipped installed tests
+        id: assess
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        env:
+          RCMDCHECK_RUN_OUTCOME: ${{ steps.check.outcome }}
+        run: |
+          Rscript "$BIOCCHECK_CI" rcmdcheck "$EVIDENCE_DIR/check/BreastSubtypeR.Rcheck" "$EVIDENCE_DIR/check" 2>&1 | tee "$EVIDENCE_DIR/check/assessment.log"
+
+      - name: Focused API, Shiny and export regressions against the checked installation
+        id: focused
+        if: ${{ !cancelled() && steps.assess.outcome == 'success' }}
+        working-directory: ${{ runner.temp }}/rcmdcheck-release143/focused
+        run: |
+          echo "Rscript release143-focused.R $CANDIDATE_DIR $EVIDENCE_DIR/check/BreastSubtypeR.Rcheck $EVIDENCE_DIR/focused" >> "$EVIDENCE_DIR/commands.txt"
+          Rscript "$GITHUB_WORKSPACE/.github/scripts/release143-focused.R" "$CANDIDATE_DIR" "$EVIDENCE_DIR/check/BreastSubtypeR.Rcheck" "$EVIDENCE_DIR/focused" 2>&1 | tee "$EVIDENCE_DIR/focused/console.log"
+
+      - name: Verify checkout integrity
+        id: pristine
+        if: ${{ always() && steps.identity.outcome == 'success' }}
+        run: |
+          test "$(git -C "$CANDIDATE_DIR" rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(git -C "$CANDIDATE_DIR" rev-parse HEAD^{tree})" = "$CANDIDATE_TREE"
+          (cd "$CANDIDATE_DIR" && sha256sum --check "$EVIDENCE_DIR/source/files.sha256")
+          git -C "$CANDIDATE_DIR" status --porcelain --untracked-files=all --ignored > "$EVIDENCE_DIR/source/pristine-after.txt"
+          test ! -s "$EVIDENCE_DIR/source/pristine-after.txt"
+          git -C "$GITHUB_WORKSPACE" status --porcelain --untracked-files=all --ignored > "$EVIDENCE_DIR/source/harness-status-after.txt"
+          test ! -s "$EVIDENCE_DIR/source/harness-status-after.txt"
+          test "$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD)" = "$GITHUB_SHA"
+
+      - name: Summarize results and retain every check note
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        env:
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+          CHECK_OUTCOME: ${{ steps.check.outcome }}
+          ASSESS_OUTCOME: ${{ steps.assess.outcome }}
+          FOCUSED_OUTCOME: ${{ steps.focused.outcome }}
+          PRISTINE_OUTCOME: ${{ steps.pristine.outcome }}
+        run: |
+          {
+            echo "## Release 1.4.3 R-CMD-check"
+            cat "$EVIDENCE_DIR/source.txt"
+            echo "Build: $BUILD_OUTCOME; check: $CHECK_OUTCOME; assessment: $ASSESS_OUTCOME; focused: $FOCUSED_OUTCOME; pristine: $PRISTINE_OUTCOME"
+            if test -f "$EVIDENCE_DIR/check/BreastSubtypeR.Rcheck/00check.log"; then cat "$EVIDENCE_DIR/check/BreastSubtypeR.Rcheck/00check.log"; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload complete evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: R-CMD-check-results-attempt-${{ github.run_attempt }}
-          path: check/*.Rcheck
+          name: release143-R-CMD-check-${{ github.sha }}-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/rcmdcheck-release143
           retention-days: 14
-          if-no-files-found: warn
+          if-no-files-found: error

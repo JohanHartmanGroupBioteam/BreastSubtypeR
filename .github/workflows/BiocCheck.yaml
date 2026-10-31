@@ -1,4 +1,4 @@
-# BiocCheck of the package on Linux (R 4.6.x, Bioconductor 3.24).
+# BiocCheck of the package on Linux (R 4.6.x, Bioconductor 3.23).
 #
 # Independent of R-CMD-check.yaml, which remains the required check; this job
 # is advisory (not a required status check for merging). Advisory does not
@@ -25,10 +25,6 @@
 name: BiocCheck
 
 on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -40,7 +36,7 @@ concurrency:
 
 jobs:
   BiocCheck:
-    name: BiocCheck (R 4.6, Bioc 3.24)
+    name: BiocCheck (R 4.6, Bioc 3.23)
     runs-on: ubuntu-latest
     timeout-minutes: 120
     # Explicit bash runs steps with -eo pipefail, so a failing command piped
@@ -49,7 +45,7 @@ jobs:
       run:
         shell: bash
     env:
-      R_BIOC_VERSION: "3.24"
+      R_BIOC_VERSION: "3.23"
       R_KEEP_PKG_SOURCE: "yes"
       _R_CHECK_FORCE_SUGGESTS_: "true"
       PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -59,14 +55,9 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Create the evidence directory
-        run: |
-          evidence="$RUNNER_TEMP/bioccheck-evidence"
-          for d in environment selftest gitclone build check bioccheck; do
-            mkdir -p "$evidence/$d"
-          done
-          echo "EVIDENCE_DIR=$evidence" >> "$GITHUB_ENV"
-          echo "BIOCCHECK_CI=$GITHUB_WORKSPACE/.github/scripts/bioccheck-ci.R" >> "$GITHUB_ENV"
+      - name: Fetch and verify the exact release candidate before package setup
+        id: identity
+        run: bash "$GITHUB_WORKSPACE/.github/scripts/prepare-release143.sh" bioccheck-evidence
 
       - uses: r-lib/actions/setup-pandoc@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
 
@@ -77,6 +68,9 @@ jobs:
 
       - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
         with:
+          working-directory: ${{ env.DEPENDENCY_DIR }}
+          cache: false
+          install-quarto: false
           dependencies: '"all"'
           extra-packages: |
             any::rcmdcheck
@@ -86,11 +80,11 @@ jobs:
             bioc::BiocCheck
           needs: check
 
-      - name: Record and verify R 4.6.x, Bioconductor 3.24 and the library
+      - name: Record and verify R 4.6.x, Bioconductor 3.23 and the library
         id: environment
         working-directory: ${{ runner.temp }}
         run: >-
-          Rscript "$BIOCCHECK_CI" environment "$GITHUB_WORKSPACE" "$EVIDENCE_DIR/environment"
+          Rscript "$BIOCCHECK_CI" environment "$CANDIDATE_DIR" "$EVIDENCE_DIR/environment"
           2>&1 | tee "$EVIDENCE_DIR/environment/console.log"
 
       - name: Self-test the failure gate with synthetic results
@@ -119,14 +113,14 @@ jobs:
         id: gitclone
         working-directory: ${{ runner.temp }}
         run: |
-          git -C "$GITHUB_WORKSPACE" status --porcelain --untracked-files=all --ignored \
+          git -C "$CANDIDATE_DIR" status --porcelain --untracked-files=all --ignored \
             > "$EVIDENCE_DIR/gitclone/checkout-status-before.txt"
           if [ -s "$EVIDENCE_DIR/gitclone/checkout-status-before.txt" ]; then
             echo "::error::The checkout is not pristine before BiocCheckGitClone"
             cat "$EVIDENCE_DIR/gitclone/checkout-status-before.txt"
             exit 2
           fi
-          Rscript "$BIOCCHECK_CI" gitclone "$GITHUB_WORKSPACE" "$EVIDENCE_DIR/gitclone" \
+          Rscript "$BIOCCHECK_CI" gitclone "$CANDIDATE_DIR" "$EVIDENCE_DIR/gitclone" \
             2>&1 | tee "$EVIDENCE_DIR/gitclone/gitclone-console.log"
 
       - name: Build one source tarball
@@ -134,10 +128,15 @@ jobs:
         if: ${{ !cancelled() && steps.environment.outcome == 'success' && steps.selftest.outcome == 'success' }}
         working-directory: ${{ runner.temp }}/bioccheck-evidence/build
         run: |
-          pkg="$(sed -n 's/^Package:[[:space:]]*//p' "$GITHUB_WORKSPACE/DESCRIPTION")"
-          version="$(sed -n 's/^Version:[[:space:]]*//p' "$GITHUB_WORKSPACE/DESCRIPTION")"
-          echo "(cd $PWD) R CMD build --no-manual $GITHUB_WORKSPACE" >> "$EVIDENCE_DIR/commands.txt"
-          R CMD build --no-manual "$GITHUB_WORKSPACE" 2>&1 | tee build-output.txt
+          pkg="$(sed -n 's/^Package:[[:space:]]*//p' "$CANDIDATE_DIR/DESCRIPTION")"
+          version="$(sed -n 's/^Version:[[:space:]]*//p' "$CANDIDATE_DIR/DESCRIPTION")"
+          echo "(cd $PWD) R CMD build --no-manual $CANDIDATE_DIR" >> "$EVIDENCE_DIR/commands.txt"
+          R CMD build --no-manual "$CANDIDATE_DIR" 2>&1 | tee build-output.txt
+          if grep -E '^(WARNING[: ]|Warning( messages?)?:|Warning in )' build-output.txt; then
+            echo "::error::R CMD build reported a warning"; exit 1
+          fi
+          test "$pkg" = "BreastSubtypeR"
+          test "$version" = "1.4.3"
           shopt -s nullglob
           tarballs=(*.tar.gz)
           if [ "${#tarballs[@]}" -ne 1 ] || [ "${tarballs[0]}" != "${pkg}_${version}.tar.gz" ]; then
@@ -189,16 +188,18 @@ jobs:
             "$EVIDENCE_DIR/build/build-output.txt" "$EVIDENCE_DIR/bioccheck" \
             2>&1 | tee "$EVIDENCE_DIR/bioccheck/bioccheck-console.log"
 
-      - name: Verify the checkout was not modified
+      - name: Verify both checkouts were not modified
         id: pristine
-        if: ${{ always() }}
+        if: ${{ always() && steps.identity.outcome == 'success' }}
         run: |
-          status="$(git -C "$GITHUB_WORKSPACE" status --porcelain --untracked-files=all --ignored)"
-          if [ -n "$status" ]; then
-            echo "::error::The checkout was modified during the job"
-            printf '%s\n' "$status"
-            exit 1
-          fi
+          test "$(git -C "$CANDIDATE_DIR" rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(git -C "$CANDIDATE_DIR" rev-parse HEAD^{tree})" = "$CANDIDATE_TREE"
+          (cd "$CANDIDATE_DIR" && sha256sum --check "$EVIDENCE_DIR/source/files.sha256")
+          git -C "$CANDIDATE_DIR" status --porcelain --untracked-files=all --ignored > "$EVIDENCE_DIR/source/pristine-after.txt"
+          test ! -s "$EVIDENCE_DIR/source/pristine-after.txt"
+          git -C "$GITHUB_WORKSPACE" status --porcelain --untracked-files=all --ignored > "$EVIDENCE_DIR/source/harness-status-after.txt"
+          test ! -s "$EVIDENCE_DIR/source/harness-status-after.txt"
+          test "$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD)" = "$GITHUB_SHA"
 
       - name: Job summary
         if: ${{ always() }}
@@ -213,7 +214,7 @@ jobs:
           OUTCOME_PRISTINE: ${{ steps.pristine.outcome }}
         run: |
           if [ -z "${EVIDENCE_DIR:-}" ] || ! command -v Rscript > /dev/null; then
-            echo "## BiocCheck (R 4.6, Bioc 3.24)" >> "$GITHUB_STEP_SUMMARY"
+            echo "## BiocCheck (R 4.6, Bioc 3.23)" >> "$GITHUB_STEP_SUMMARY"
             echo "Setup did not complete (no R or no evidence directory); no check ran." >> "$GITHUB_STEP_SUMMARY"
             echo "Bioconductor mailing-list subscription: NOT checked." >> "$GITHUB_STEP_SUMMARY"
             echo "Support Site registration: NOT checked." >> "$GITHUB_STEP_SUMMARY"
@@ -227,7 +228,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: BiocCheck-evidence-attempt-${{ github.run_attempt }}
+          name: release143-BiocCheck-evidence-attempt-${{ github.run_attempt }}
           path: ${{ runner.temp }}/bioccheck-evidence
           retention-days: 14
           if-no-files-found: warn

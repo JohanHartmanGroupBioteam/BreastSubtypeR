@@ -1,6 +1,6 @@
 # CI-only helper for .github/workflows/BiocCheck.yaml.
 #
-# Not part of the package: .Rbuildignore excludes .github, and the workflow
+# Not part of the package: the candidate is in a separate checkout; the workflow
 # verifies that the built tarball contains no .github files. Every mode runs
 # in its own R process, because BiocCheck keeps its results in a
 # reference-class singleton that separate runs must not share.
@@ -23,9 +23,9 @@
 
 EXIT_FINDINGS <- 1L
 EXIT_INCOMPLETE <- 2L
-EXPECTED_BIOC <- "3.24"
+EXPECTED_BIOC <- "3.23"
 # GitHub CI only: account requirements must be verified separately.
-# https://bioconductor.org/packages/devel/bioc/vignettes/BiocCheck/inst/doc/BiocCheck.html
+# https://bioconductor.org/packages/3.23/bioc/vignettes/BiocCheck/inst/doc/BiocCheck.html
 BIOCCHECK_CI_OPTIONS <- list(`no-check-bioc-help` = TRUE)
 
 abort <- function(...) stop(paste0(...), call. = FALSE)
@@ -169,18 +169,26 @@ run_environment <- function(source_dir, out_dir) {
     )
 
     problems <- character()
+    candidate_sha <- system2("git", c("-C", shQuote(source_dir), "rev-parse", "HEAD"), stdout = TRUE)
+    candidate_tree <- system2("git", c("-C", shQuote(source_dir), "rev-parse", "HEAD^{tree}"), stdout = TRUE)
+    candidate_version <- unname(read.dcf(file.path(source_dir, "DESCRIPTION"))[, "Version"])
+    if (!identical(candidate_sha, "8c319a50220685261c1ef6591fc1077b40168197") ||
+        !identical(candidate_tree, "443ffdeeb2d67d013e99bef819bb57cdd97f55d4") ||
+        !identical(candidate_version, "1.4.3") ||
+        !same_path(source_dir, Sys.getenv("CANDIDATE_DIR")))
+        problems <- c(problems, "source is not the pinned 1.4.3 release candidate")
     if (r_version < "4.6.0" || r_version >= "4.7.0")
         problems <- c(problems, paste("expected R 4.6.x, found R", r_version))
-    if (bioc_version < EXPECTED_BIOC || bioc_version >= "3.25")
+    if (bioc_version < EXPECTED_BIOC || bioc_version >= "3.24")
         problems <- c(problems, paste(
-            "expected BiocVersion 3.24.x, found", bioc_version
+            "expected BiocVersion 3.23.x, found", bioc_version
         ))
     if (!identical(bioc_reported, EXPECTED_BIOC))
         problems <- c(problems, paste(
             "BiocManager::version() reports", bioc_reported
         ))
     if (!identical(Sys.getenv("R_BIOC_VERSION"), EXPECTED_BIOC))
-        problems <- c(problems, "R_BIOC_VERSION is not 3.24")
+        problems <- c(problems, "R_BIOC_VERSION is not 3.23")
     for (p in c("BiocCheck", "BiocVersion", "gert", "jsonlite", "rcmdcheck"))
         if (!p %in% pkgs$Package)
             problems <- c(problems, paste(p, "is not installed"))
@@ -189,13 +197,13 @@ run_environment <- function(source_dir, out_dir) {
     ]
     if (length(mixed))
         problems <- c(problems, paste(
-            "Bioconductor packages not installed from a 3.24 repository:",
+            "Bioconductor packages not installed from a 3.23 repository:",
             paste(mixed, collapse = ", ")
         ))
     for (p in c("BiocCheck", "BiocVersion"))
         if (!p %in% bioc_pkgs$Package[bioc_pkgs$repo_version %in% EXPECTED_BIOC])
             problems <- c(problems, paste(
-                p, "has no recorded Bioconductor 3.24 repository"
+                p, "has no recorded Bioconductor 3.23 repository"
             ))
     preinstalled <- find.package(pkg, lib.loc = .libPaths(), quiet = TRUE)
     if (length(preinstalled))
@@ -229,6 +237,8 @@ run_environment <- function(source_dir, out_dir) {
         key_packages = key_pkgs,
         git_head = system2("git", c("-C", shQuote(source_dir), "rev-parse", "HEAD"),
             stdout = TRUE),
+        candidate_tree = candidate_tree,
+        candidate_version = candidate_version,
         github = list(
             event = Sys.getenv("GITHUB_EVENT_NAME"),
             ref = Sys.getenv("GITHUB_REF"),
@@ -316,6 +326,12 @@ run_rcmdcheck <- function(rcheck_dir, out_dir) {
     test_summary <- grep("\\[ FAIL [0-9]+ \\| WARN [0-9]+ \\| SKIP [0-9]+ \\| PASS [0-9]+ \\]",
         test_lines, value = TRUE)
 
+    if (identical(basename(rcheck_dir), "BreastSubtypeR.Rcheck") &&
+        (!length(test_summary) || !grepl(
+            "\\[ FAIL 0 \\| WARN 0 \\| SKIP 0 \\| PASS [1-9][0-9]* \\]",
+            tail(test_summary, 1L))))
+        abort("installed package tests did not report a complete, warning-free, unskipped pass")
+
     findings <- c(
         lapply(parsed$errors, function(x) list(condition = "ERROR", message = x)),
         lapply(parsed$warnings, function(x) list(condition = "WARNING", message = x)),
@@ -384,7 +400,7 @@ run_bioccheck <- function(tarball, rcheck_dir, build_output, out_dir) {
         abort("could not put the R CMD check installation first on .libPaths()")
     tarball_sha256 <- unname(tools::sha256sum(tarball))
 
-    # BiocCheck 1.49.x: install = "check:<file>" skips installation and uses
+    # BiocCheck release API: install = "check:<file>" skips installation and uses
     # .libPaths()[1]; libloc is the library for the man-page checks. Its own
     # copy of <file> into the .BiocCheck folder is lost to a later on.exit(),
     # so 00install.out is preserved here instead.
@@ -598,7 +614,7 @@ run_summary <- function(evidence) {
     gh <- env$github %||% list()
 
     md <- c(
-        "## BiocCheck (R 4.6, Bioc 3.24)",
+        "## BiocCheck (R 4.6, Bioc 3.23)",
         "",
         "Advisory job: not a required status check. ERRORs and WARNINGs still fail it; NOTEs are listed and do not.",
         "",

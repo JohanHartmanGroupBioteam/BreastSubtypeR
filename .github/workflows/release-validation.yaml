@@ -1,4 +1,4 @@
-# Manual-only full check of the 1.5.12 source, including its PDF manual.
+# Manual-only full check of the 1.4.3 source, including its PDF manual.
 # Reuses the existing CI pins and strict R CMD check assessment helper.
 name: Release validation (PDF manual)
 
@@ -14,44 +14,25 @@ concurrency:
 
 jobs:
   release-validation:
-    name: Ubuntu (R 4.6, Bioc 3.24, TinyTeX)
+    name: Ubuntu (R 4.6, Bioc 3.23, TinyTeX)
     runs-on: ubuntu-latest
     timeout-minutes: 120
     defaults:
       run:
         shell: bash
     env:
-      R_BIOC_VERSION: "3.24"
+      R_BIOC_VERSION: "3.23"
       R_KEEP_PKG_SOURCE: "yes"
       _R_CHECK_FORCE_SUGGESTS_: "true"
 
     steps:
-      - name: Create evidence directories
-        run: |
-          evidence="$RUNNER_TEMP/release-validation"
-          mkdir -p "$evidence"/{environment,build,check,manual}
-          echo "EVIDENCE_DIR=$evidence" >> "$GITHUB_ENV"
-
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Record the exact source identity
+      - name: Fetch and verify the exact release candidate before package setup
         id: identity
-        run: |
-          sha="$(git rev-parse HEAD)"
-          version="$(sed -n 's/^Version:[[:space:]]*//p' DESCRIPTION)"
-          {
-            echo "commit=$sha"
-            echo "tree=$(git rev-parse HEAD^{tree})"
-            echo "ref=$GITHUB_REF"
-            echo "package=BreastSubtypeR"
-            echo "version=$version"
-            echo "run=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-          } | tee "$EVIDENCE_DIR/source.txt"
-          test "$sha" = "$GITHUB_SHA"
-          test "$version" = "1.5.12"
-          test -z "$(git status --porcelain --untracked-files=all)"
+        run: bash "$GITHUB_WORKSPACE/.github/scripts/prepare-release143.sh" release-validation
 
       - uses: r-lib/actions/setup-pandoc@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
 
@@ -62,11 +43,16 @@ jobs:
 
       - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
         with:
+          working-directory: ${{ env.DEPENDENCY_DIR }}
+          cache: false
+          install-quarto: false
           dependencies: '"all"'
           extra-packages: |
             any::BiocManager
             any::rcmdcheck
             any::jsonlite
+            any::gert
+            bioc::BiocCheck
             bioc::BiocVersion
           needs: check
 
@@ -85,24 +71,18 @@ jobs:
           pandoc --version | tee "$EVIDENCE_DIR/environment/pandoc.txt"
           tlmgr list --only-installed > "$EVIDENCE_DIR/environment/tex-packages.txt"
 
-      - name: Verify R and Bioconductor and record dependencies
-        shell: Rscript {0}
+      - name: Verify R 4.6, Bioconductor 3.23, dependency provenance and candidate identity
+        id: environment
+        working-directory: ${{ runner.temp }}
         run: |
-          out <- file.path(Sys.getenv("EVIDENCE_DIR"), "environment")
-          capture.output(sessionInfo(), file = file.path(out, "session-info.txt"))
-          write.csv(installed.packages()[, c("Package", "Version", "LibPath")],
-                    file.path(out, "installed-packages.csv"), row.names = FALSE)
-          r <- getRversion()
-          bioc <- packageVersion("BiocVersion")
-          stopifnot(r >= "4.6.0", r < "4.7.0",
-                    bioc >= "3.24", bioc < "3.25",
-                    as.character(BiocManager::version()) == "3.24")
+          Rscript "$BIOCCHECK_CI" environment "$CANDIDATE_DIR" "$EVIDENCE_DIR/environment" 2>&1 | tee "$EVIDENCE_DIR/environment/console.log"
 
       - name: Build one source tarball with manuals enabled
         id: build
         working-directory: ${{ runner.temp }}/release-validation/build
         run: |
-          R CMD build "$GITHUB_WORKSPACE" 2>&1 | tee build.log
+          echo "R CMD build $CANDIDATE_DIR" >> "$EVIDENCE_DIR/commands.txt"
+          R CMD build "$CANDIDATE_DIR" 2>&1 | tee build.log
           if grep -E '^(WARNING[: ]|Warning( messages?)?:|Warning in )' build.log; then
             echo "::error::R CMD build reported a warning"
             exit 1
@@ -110,7 +90,7 @@ jobs:
           shopt -s nullglob
           tarballs=(*.tar.gz)
           test "${#tarballs[@]}" -eq 1
-          test "${tarballs[0]}" = "BreastSubtypeR_1.5.12.tar.gz"
+          test "${tarballs[0]}" = "BreastSubtypeR_1.4.3.tar.gz"
           tar -tzf "${tarballs[0]}" > tarball-contents.txt
           sha256sum "${tarballs[0]}" | tee tarball.sha256
           echo "tarball=$PWD/${tarballs[0]}" >> "$GITHUB_OUTPUT"
@@ -122,6 +102,7 @@ jobs:
           TARBALL: ${{ steps.build.outputs.tarball }}
         run: |
           (cd "$EVIDENCE_DIR/build" && sha256sum --check tarball.sha256)
+          echo "R CMD check --as-cran $TARBALL" >> "$EVIDENCE_DIR/commands.txt"
           R CMD check --as-cran "$TARBALL" 2>&1 | tee check.log
 
       - name: Require a complete check without errors or warnings and a successful PDF check
@@ -146,20 +127,27 @@ jobs:
           (cd "$EVIDENCE_DIR/build" && sha256sum --check tarball.sha256)
           mkdir source tex
           tar -xzf "$TARBALL" -C source
+          echo "R CMD Rd2pdf --no-preview --no-clean --build-dir=$PWD/tex --output=$PWD/BreastSubtypeR_1.4.3.pdf $PWD/source/BreastSubtypeR" >> "$EVIDENCE_DIR/commands.txt"
           R CMD Rd2pdf --no-preview --no-clean --build-dir="$PWD/tex" \
-            --output="$PWD/BreastSubtypeR_1.5.12.pdf" "$PWD/source/BreastSubtypeR" \
+            --output="$PWD/BreastSubtypeR_1.4.3.pdf" "$PWD/source/BreastSubtypeR" \
             2>&1 | tee manual.log
-          test -s BreastSubtypeR_1.5.12.pdf
-          qpdf --check BreastSubtypeR_1.5.12.pdf 2>&1 | tee pdf-check.log
-          sha256sum BreastSubtypeR_1.5.12.pdf > manual.sha256
+          test -s BreastSubtypeR_1.4.3.pdf
+          echo "qpdf --check BreastSubtypeR_1.4.3.pdf" >> "$EVIDENCE_DIR/commands.txt"
+          qpdf --check BreastSubtypeR_1.4.3.pdf 2>&1 | tee pdf-check.log
+          sha256sum BreastSubtypeR_1.4.3.pdf > manual.sha256
 
       - name: Verify checkout integrity
         id: pristine
         if: ${{ always() && steps.identity.outcome == 'success' }}
         run: |
-          git status --porcelain --untracked-files=all | tee "$EVIDENCE_DIR/checkout-status.txt"
-          test ! -s "$EVIDENCE_DIR/checkout-status.txt"
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C "$CANDIDATE_DIR" rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(git -C "$CANDIDATE_DIR" rev-parse HEAD^{tree})" = "$CANDIDATE_TREE"
+          (cd "$CANDIDATE_DIR" && sha256sum --check "$EVIDENCE_DIR/source/files.sha256")
+          git -C "$CANDIDATE_DIR" status --porcelain --untracked-files=all --ignored > "$EVIDENCE_DIR/source/pristine-after.txt"
+          test ! -s "$EVIDENCE_DIR/source/pristine-after.txt"
+          git -C "$GITHUB_WORKSPACE" status --porcelain --untracked-files=all --ignored > "$EVIDENCE_DIR/source/harness-status-after.txt"
+          test ! -s "$EVIDENCE_DIR/source/harness-status-after.txt"
+          test "$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD)" = "$GITHUB_SHA"
 
       - name: Report outcomes and all check notes
         if: always()
@@ -198,7 +186,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: release-validation-${{ github.sha }}-attempt-${{ github.run_attempt }}
+          name: release143-validation-${{ github.sha }}-attempt-${{ github.run_attempt }}
           path: ${{ runner.temp }}/release-validation
           retention-days: 14
           if-no-files-found: error
