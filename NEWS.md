@@ -1,4 +1,4 @@
-# BreastSubtypeR (development)
+# BreastSubtypeR 1.5.12
 
 ## Interpretation and compatibility
 
