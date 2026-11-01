@@ -47,8 +47,10 @@
             next
         }
         gene <- tryCatch(collapse(), error = function(e) {
-            # duplicate_genes has one intentional unsupported-collapse error.
-            # Its full message is matched so unrelated failures are propagated.
+            if (method %in% c("stdev", "iqr") &&
+                inherits(e, "BreastSubtypeR_duplicate_undefined")) return(e)
+            # Preserve recognition of the existing max error by its full
+            # message. All unrelated failures must still propagate.
             expected <- sprintf(paste0(
                 "Cannot resolve Entrez ID %s with method = \"max\": ",
                 "none of its %d probes has a defined total across samples ",

@@ -147,6 +147,17 @@ NULL
 #'     `Inf - Inf`), `Mapping()` stops with an error naming the Entrez ID
 #'     instead of selecting a probe.
 #'
+#'   For `"stdev"` and `"iqr"`, missing observations are removed before computing
+#'   the existing sample SD or type-7 IQR. Selection skips `NA`/`NaN` statistics
+#'   and retains the first maximum in expression-row order, including infinite
+#'   statistics. A singleton probe passes through unchanged. A duplicate group
+#'   with no defined statistic raises `BreastSubtypeR_duplicate_undefined`, with
+#'   `entrez_id`, `method` and `n_probes` fields. Thus duplicate probes with zero
+#'   samples error for both methods; with one sample they error for `"stdev"`,
+#'   while defined zero IQRs retain the first-probe tie rule. No alternative
+#'   probe-selection method or imputation is substituted for an undefined ranking.
+#'   The default method remains `"max"`.
+#'
 #' @param impute Logical; default `FALSE` preserves missing measurements after
 #'   duplicate resolution. For nonraw input, `TRUE` requests optional gene-level
 #'   KNN with fixed `k = 10`, using the full eligible supplied donor matrix.
@@ -178,12 +189,14 @@ NULL
 #' BreastSubtypeR automatically applies method-specific preprocessing.
 #'
 #' **Missingness and optional imputation.** Absent genes are never synthesized.
-#' Duplicate methods retain their existing rules: mean/median use available
-#' probes, while max requires a defined total for a duplicate probe group.
+#' Mean/median use available probes. Max requires a defined total for a
+#' duplicate probe group; stdev/iqr require a defined variability statistic.
 #' Donors are prepared only when requested output measurements remain missing.
 #' Unusable nonprotected background genes (failed duplicate resolution,
 #' infinite observations or entirely missing profiles) are excluded with
-#' diagnostics; required genes are protected. Otherwise usable partially missing
+#' diagnostics; required genes are protected and their duplicate-resolution
+#' errors propagate. Only recognized unsupported duplicate groups are excluded;
+#' unrelated errors propagate. Otherwise usable partially missing
 #' donors are retained, including profiles with more than 50% missingness.
 #'
 #' KNN compares each target with every other eligible original gene profile.

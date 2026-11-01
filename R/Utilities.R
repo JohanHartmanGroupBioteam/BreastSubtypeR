@@ -24,6 +24,25 @@ NULL
     }
 }
 
+#' Select the first defined maximum for a duplicate variability statistic
+#' @noRd
+.duplicate_stat_index <- function(statistics, id, method) {
+    selected <- which.max(statistics)
+    if (length(selected) == 0L) {
+        diagnostic <- sprintf(paste0(
+            "Cannot resolve Entrez ID %s with method = \"%s\": ",
+            "none of its %d probes has a defined statistic across samples ",
+            "(all statistics are NA/NaN). Review the sample count, missing ",
+            "or nonfinite measurements and the preprocessing strategy. ",
+            "No probe was selected for this Entrez ID."),
+            id, method, length(statistics))
+        stop(structure(list(message = diagnostic, call = NULL,
+            entrez_id = id, method = method, n_probes = length(statistics)),
+            class = c("BreastSubtypeR_duplicate_undefined", "error", "condition")))
+    }
+    selected
+}
+
 #' Collapse duplicate genes by a summary statistic
 #'
 #' @param x Numeric matrix (rows = probes/genes, cols = samples).
@@ -50,6 +69,9 @@ duplicate_genes <- function(x, y, method) {
 
     # function to calculate the desired statistic
     calculate_stat <- function(mat, method, id) {
+        if (nrow(mat) == 1L && method %in% c("stdev", "iqr")) {
+            return(mat[1L, ])
+        }
         switch(method,
             "mean" = apply(mat, 2, mean, na.rm = TRUE),
             "median" = apply(mat, 2, median, na.rm = TRUE),
@@ -79,19 +101,15 @@ duplicate_genes <- function(x, y, method) {
                 }
             },
             "stdev" = {
-                temp <- mat
                 stdevs <- apply(mat, 1, sd, na.rm = TRUE)
-                vals <- temp[match(max(stdevs), stdevs), ]
-                return(vals)
+                mat[.duplicate_stat_index(stdevs, id, method), ]
             },
             "iqr" = {
-                temp <- mat
                 iqrs <- apply(mat, 1, function(x) {
                     quantile(x, 0.75, na.rm = TRUE) -
                         quantile(x, 0.25, na.rm = TRUE)
                 })
-                vals <- temp[match(max(iqrs), iqrs), ]
-                return(vals)
+                mat[.duplicate_stat_index(iqrs, id, method), ]
             }
         )
     }

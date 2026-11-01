@@ -1,3 +1,24 @@
+# BreastSubtypeR (development)
+
+## Bug fixes
+
+* Resolve duplicate probes with `method = "stdev"` or `"iqr"` using the first
+  maximum among statistics that are not `NA`/`NaN` (#218). The existing sample
+  SD and type-7 IQR calculations, expression-row tie order and infinite-statistic
+  ordering are retained; singleton probes pass through unchanged. Groups with
+  defined statistics retain identical numerical results. Mixed defined/undefined
+  groups now select a defined maximum instead of an undefined probe.
+* Duplicate groups with no defined statistic now raise
+  `BreastSubtypeR_duplicate_undefined`, identifying the Entrez ID, method and
+  probe count. This intentionally rejects zero-sample duplicate groups for both
+  methods and one-sample duplicate groups for `stdev`; defined zero IQRs still
+  select the first tied probe. No fallback method is substituted.
+* Optional KNN propagates these errors for protected required genes and excludes
+  recognized unsupported background groups with diagnostics. Existing `max`
+  error handling and propagation of unrelated errors are preserved. The default
+  `max` method, raw-count processing, KNN estimator, RNG behavior and output
+  schemas are unchanged.
+
 # BreastSubtypeR 1.5.12
 
 ## Interpretation and compatibility
