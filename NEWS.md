@@ -1,5 +1,21 @@
 # BreastSubtypeR (development)
 
+## New features
+
+* Add opt-in `Mapping(include_ssp_ror = TRUE)` preparation of a separate
+  `se_SSP_ROR` input (#131). Required Entrez IDs come from the bundled `ssp.ror`
+  gene-pair rules (currently 296 genes and 361 rules). Default Mapping outputs
+  and the existing NC/SSP gene sets remain unchanged; no packaged data change.
+* SSP-ROR uses the existing duplicate resolution and SSP expression scales:
+  linear FPKM for raw counts, or `2^x` for nonraw log2 input (FPKM+1 for
+  log2(FPKM+1)). Optional KNN includes represented SSP-ROR genes as protected
+  targets, using the same original donors and estimator. Absent genes are never
+  synthesized; unsupported requested genes can fail an opt-in call.
+* Existing subtype results, normalization and RNG behavior are preserved.
+  `BS_sspbc()` already executes `ssp.ror` with its native output; model-output
+  APIs, `BS_Multi()`, Ensemble voting and the four-model `InputCoverage()` report
+  are unchanged.
+
 ## Bug fixes
 
 * Resolve duplicate probes with `method = "stdev"` or `"iqr"` using the first

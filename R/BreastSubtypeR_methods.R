@@ -162,9 +162,13 @@ NULL
 #'   duplicate resolution. For nonraw input, `TRUE` requests optional gene-level
 #'   KNN with fixed `k = 10`, using the full eligible supplied donor matrix.
 #'   Only originally missing measurements in represented genes selected for the
-#'   existing NC/SSP outputs are estimated. Complete required outputs bypass KNN.
+#'   requested outputs are estimated. Complete required outputs bypass KNN.
 #'
 #' @param verbose Logical. If `TRUE`, prints progress messages during execution.
+#'
+#' @param include_ssp_ror Logical; default `FALSE`. If `TRUE`, also retain the
+#'   Entrez IDs used by the bundled `ssp.ror` gene-pair rules in a separate
+#'   `se_SSP_ROR` output. The existing `se_NC` and `se_SSP` gene sets are unchanged.
 #'
 #' @return A named list with:
 #' \describe{
@@ -172,6 +176,9 @@ NULL
 #'   (assay name: `counts`).}
 #'   \item{se_SSP}{`SummarizedExperiment` holding linear-scale data prepared for SSP-based methods
 #'   (assay name: `counts`).}
+#'   \item{se_SSP_ROR}{Only when `include_ssp_ror = TRUE`: a `SummarizedExperiment`
+#'   with linear-scale SSP-ROR input, unprefixed Entrez IDs as row names and assay
+#'   name `counts`. Sample order and column metadata match the existing outputs.}
 #' }
 #'
 #' @references
@@ -229,6 +236,27 @@ NULL
 #' uses upper-quartile log2-CPM with the existing prior count, and raw SSP uses
 #' linear FPKM. Nonraw NC retains collapsed log expression; SSP uses `2^x`, so
 #' log2(FPKM+1) input yields FPKM+1 without subtraction of one.
+#'
+#' **Optional SSP-ROR input.** `include_ssp_ror = TRUE` derives the required genes
+#' from the bundled `ssp.ror` model rather than the shared subtype signature.
+#' The current model uses 296 unique Entrez IDs in 361 gene-pair rules. Represented
+#' genes are returned in first-appearance order in those rules; absent genes are
+#' not synthesized. The separate `se_SSP_ROR` follows the same SSP scales above:
+#' raw counts yield linear FPKM, and nonraw input yields `2^x` after the existing
+#' duplicate resolution. For example, log2(FPKM+1) yields FPKM+1.
+#'
+#' With `impute = FALSE`, remaining missing measurements are preserved. With
+#' `impute = TRUE`, represented SSP-ROR genes join the protected genes and KNN
+#' targets; the same original donor profiles and estimator are used. Unsupported
+#' requested SSP-ROR inputs can therefore cause an opt-in call to fail even when
+#' the default outputs could be prepared. Raw-count imputation remains unsupported.
+#' Existing NC/SSP matrices and subtype results are unchanged for calls that succeed
+#' under both settings. No normalization, duplicate-selection or RNG policy changes.
+#'
+#' `BS_sspbc(result$se_SSP_ROR, ssp.name = "ssp.ror")` can already execute the
+#' bundled model with its native output. This option prepares input only; it does
+#' not add a score API, alter `BS_Multi()` or Ensemble voting, or extend
+#' `InputCoverage()` beyond its existing four-model report.
 #' 
 #' **Clinical ROR covariates.** With `hasClinical = TRUE`, NC method wrappers
 #' require both `TSIZE` and `NODE` columns and check that `NODE` is numeric.
@@ -422,10 +450,15 @@ Mapping <- function(se_obj,
     RawCounts = FALSE,
     method = c("max", "mean", "median", "iqr", "stdev"),
     impute = FALSE,
-    verbose = TRUE) {
+    verbose = TRUE,
+    include_ssp_ror = FALSE) {
     method <- match.arg(method)
     if (!is.logical(impute) || length(impute) != 1L || is.na(impute)) {
         stop("impute must be one nonmissing logical value.", call. = FALSE)
+    }
+    if (!is.logical(include_ssp_ror) || length(include_ssp_ror) != 1L ||
+        is.na(include_ssp_ror)) {
+        stop("include_ssp_ror must be one nonmissing logical value.", call. = FALSE)
     }
 
     ## --- Normalize ER/HER2/TN in colData ---
@@ -448,6 +481,7 @@ Mapping <- function(se_obj,
         method = method,
         impute = impute,
         verbose = verbose,
+        include_ssp_ror = include_ssp_ror,
         .homonyms = "last"
     )
 
@@ -470,6 +504,12 @@ Mapping <- function(se_obj,
     )
     # Keep reporting separate from the processed inputs and prediction results.
     result <- list(se_NC = se_NC, se_SSP = se_SSP)
+    if (include_ssp_ror) {
+        result$se_SSP_ROR <- SummarizedExperiment(
+            assays = list(counts = res$x_SSP_ROR),
+            colData = colData(se_obj)
+        )
+    }
     if (isTRUE(verbose)) {
         tryCatch(.message_input_coverage(InputCoverage(result)),
             error = function(e) message("Input coverage unavailable: ", conditionMessage(e)))
