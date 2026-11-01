@@ -172,13 +172,13 @@ run_environment <- function(source_dir, out_dir) {
     candidate_sha <- system2("git", c("-C", shQuote(source_dir), "rev-parse", "HEAD"), stdout = TRUE)
     candidate_tree <- system2("git", c("-C", shQuote(source_dir), "rev-parse", "HEAD^{tree}"), stdout = TRUE)
     candidate_version <- unname(read.dcf(file.path(source_dir, "DESCRIPTION"))[, "Version"])
-    if (!identical(candidate_sha, "8c319a50220685261c1ef6591fc1077b40168197") ||
-        !identical(candidate_tree, "443ffdeeb2d67d013e99bef819bb57cdd97f55d4") ||
+    if (!identical(candidate_sha, "99f148f9ede122aa3a120cf2869ced0990bcf740") ||
+        !identical(candidate_tree, "3987d2eac26a283d5e9398e58153c6449251396c") ||
         !identical(candidate_version, "1.4.3") ||
         !same_path(source_dir, Sys.getenv("CANDIDATE_DIR")))
         problems <- c(problems, "source is not the pinned 1.4.3 release candidate")
-    if (r_version < "4.6.0" || r_version >= "4.7.0")
-        problems <- c(problems, paste("expected R 4.6.x, found R", r_version))
+    if (r_version != "4.6.2")
+        problems <- c(problems, paste("expected R 4.6.2, found R", r_version))
     if (bioc_version < EXPECTED_BIOC || bioc_version >= "3.24")
         problems <- c(problems, paste(
             "expected BiocVersion 3.23.x, found", bioc_version

@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   release-validation:
-    name: Ubuntu (R 4.6, Bioc 3.23, TinyTeX)
+    name: Ubuntu (R 4.6.2, Bioc 3.23, TinyTeX)
     runs-on: ubuntu-latest
     timeout-minutes: 120
     defaults:
@@ -38,7 +38,7 @@ jobs:
 
       - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
         with:
-          r-version: "4.6"
+          r-version: "4.6.2"
           use-public-rspm: true
 
       - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
@@ -52,6 +52,7 @@ jobs:
             any::rcmdcheck
             any::jsonlite
             any::gert
+            any::V8
             bioc::BiocCheck
             bioc::BiocVersion
           needs: check
@@ -63,15 +64,17 @@ jobs:
       - name: Prepare and record PDF tooling
         run: |
           sudo apt-get update
-          sudo apt-get install -y texinfo ghostscript qpdf
+          sudo apt-get install -y texinfo ghostscript qpdf tidy
           tlmgr update --self 2>&1 | tee "$EVIDENCE_DIR/environment/tlmgr-update.log"
           tlmgr install collection-fontsrecommended collection-latexrecommended inconsolata \
             2>&1 | tee "$EVIDENCE_DIR/environment/tlmgr-install.log"
+          tidy -version | tee "$EVIDENCE_DIR/environment/tidy.txt"
+          Rscript -e 'stopifnot(requireNamespace("V8", quietly = TRUE)); print(packageVersion("V8")); stopifnot(V8::v8()$eval("1 + 1") == 2)' 2>&1 | tee "$EVIDENCE_DIR/environment/V8.txt"
           pdflatex --version | tee "$EVIDENCE_DIR/environment/pdflatex.txt"
           pandoc --version | tee "$EVIDENCE_DIR/environment/pandoc.txt"
           tlmgr list --only-installed > "$EVIDENCE_DIR/environment/tex-packages.txt"
 
-      - name: Verify R 4.6, Bioconductor 3.23, dependency provenance and candidate identity
+      - name: Verify R 4.6.2, Bioconductor 3.23, dependency provenance and candidate identity
         id: environment
         working-directory: ${{ runner.temp }}
         run: |
@@ -116,6 +119,9 @@ jobs:
             2>&1 | tee "$EVIDENCE_DIR/check/assessment.log"
           grep -E '^\* checking PDF version of manual \.\.\. (\[[^]]+\] )?OK$' \
             "$EVIDENCE_DIR/check/BreastSubtypeR.Rcheck/00check.log"
+          if grep -E 'Skipping checking (HTML validation|math rendering)' "$EVIDENCE_DIR/check/BreastSubtypeR.Rcheck/00check.log"; then
+            echo "::error::Optional HTML/math checks were unavailable"; exit 1
+          fi
 
       - name: Generate and verify the PDF manual from the same tarball
         id: manual
@@ -135,6 +141,14 @@ jobs:
           echo "qpdf --check BreastSubtypeR_1.4.3.pdf" >> "$EVIDENCE_DIR/commands.txt"
           qpdf --check BreastSubtypeR_1.4.3.pdf 2>&1 | tee pdf-check.log
           sha256sum BreastSubtypeR_1.4.3.pdf > manual.sha256
+
+      - name: Verify source and installed citations and preserved BibTeX
+        id: citation
+        if: ${{ !cancelled() && steps.assess.outcome == 'success' }}
+        run: |
+          echo "Rscript release143-citation.R $CANDIDATE_DIR $EVIDENCE_DIR/check/BreastSubtypeR.Rcheck $EVIDENCE_DIR/citation" >> "$EVIDENCE_DIR/commands.txt"
+          Rscript "$GITHUB_WORKSPACE/.github/scripts/release143-citation.R" "$CANDIDATE_DIR" "$EVIDENCE_DIR/check/BreastSubtypeR.Rcheck" "$EVIDENCE_DIR/citation" 2>&1 | tee "$EVIDENCE_DIR/citation/console.log"
+          cat "$EVIDENCE_DIR/citation/summary.txt" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Verify checkout integrity
         id: pristine

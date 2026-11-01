@@ -1,4 +1,4 @@
-# BiocCheck of the package on Linux (R 4.6.x, Bioconductor 3.23).
+# BiocCheck of the package on Linux (R 4.6.2, Bioconductor 3.23).
 #
 # Independent of R-CMD-check.yaml, which remains the required check; this job
 # is advisory (not a required status check for merging). Advisory does not
@@ -36,7 +36,7 @@ concurrency:
 
 jobs:
   BiocCheck:
-    name: BiocCheck (R 4.6, Bioc 3.23)
+    name: BiocCheck (R 4.6.2, Bioc 3.23)
     runs-on: ubuntu-latest
     timeout-minutes: 120
     # Explicit bash runs steps with -eo pipefail, so a failing command piped
@@ -63,7 +63,7 @@ jobs:
 
       - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
         with:
-          r-version: "4.6"
+          r-version: "4.6.2"
           use-public-rspm: true
 
       - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
@@ -80,7 +80,7 @@ jobs:
             bioc::BiocCheck
           needs: check
 
-      - name: Record and verify R 4.6.x, Bioconductor 3.23 and the library
+      - name: Record and verify R 4.6.2, Bioconductor 3.23 and the library
         id: environment
         working-directory: ${{ runner.temp }}
         run: >-
@@ -188,6 +188,14 @@ jobs:
             "$EVIDENCE_DIR/build/build-output.txt" "$EVIDENCE_DIR/bioccheck" \
             2>&1 | tee "$EVIDENCE_DIR/bioccheck/bioccheck-console.log"
 
+      - name: Verify source and installed citations and preserved BibTeX
+        id: citation
+        if: ${{ !cancelled() && steps.rcmdcheck.outcome == 'success' }}
+        run: |
+          echo "Rscript release143-citation.R $CANDIDATE_DIR $EVIDENCE_DIR/check/BreastSubtypeR.Rcheck $EVIDENCE_DIR/citation" >> "$EVIDENCE_DIR/commands.txt"
+          Rscript "$GITHUB_WORKSPACE/.github/scripts/release143-citation.R" "$CANDIDATE_DIR" "$EVIDENCE_DIR/check/BreastSubtypeR.Rcheck" "$EVIDENCE_DIR/citation" 2>&1 | tee "$EVIDENCE_DIR/citation/console.log"
+          cat "$EVIDENCE_DIR/citation/summary.txt" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Verify both checkouts were not modified
         id: pristine
         if: ${{ always() && steps.identity.outcome == 'success' }}
@@ -214,7 +222,7 @@ jobs:
           OUTCOME_PRISTINE: ${{ steps.pristine.outcome }}
         run: |
           if [ -z "${EVIDENCE_DIR:-}" ] || ! command -v Rscript > /dev/null; then
-            echo "## BiocCheck (R 4.6, Bioc 3.23)" >> "$GITHUB_STEP_SUMMARY"
+            echo "## BiocCheck (R 4.6.2, Bioc 3.23)" >> "$GITHUB_STEP_SUMMARY"
             echo "Setup did not complete (no R or no evidence directory); no check ran." >> "$GITHUB_STEP_SUMMARY"
             echo "Bioconductor mailing-list subscription: NOT checked." >> "$GITHUB_STEP_SUMMARY"
             echo "Support Site registration: NOT checked." >> "$GITHUB_STEP_SUMMARY"

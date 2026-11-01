@@ -3,6 +3,7 @@ NEWS.md
 R/BreastSubtypeR_methods.R
 R/experimental_ror_pc.R
 README.md
+inst/CITATION
 inst/ShinyBreastSubtypeR/server.R
 inst/ShinyBreastSubtypeR/ui.R
 man/BS_Multi.Rd
