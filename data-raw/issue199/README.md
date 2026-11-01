@@ -115,8 +115,17 @@ hash-pinned historical Shiny table; the six shared fields come from candidate
 `SummarizedExperiment`.
 
 Development version 1.5.13 is recommended after author approval.
-`DESCRIPTION` remains at 1.5.12 during this review. Do not publish these local
-candidates before the distribution gates are resolved.
+`DESCRIPTION` remains at 1.5.12 during this review.
+
+The completed public-source and field-level
+review has resolved the redistribution gate for these #199 candidates; source
+terms and attribution requirements continue to apply. This is not institutional
+approval or blanket clearance for future data, uses or releases. The historical
+derivation limitation for the three unchanged OSLO Shiny fields is recorded in
+the [data attribution and distribution review](../../inst/DATA-PROVENANCE.md).
+
+CI, Rscript launcher verification, PDF tooling and version-target decisions
+remain separate technical and release checks.
 
 The complete-generation dependency versions and build versions are recorded in manifests/reconstruction-software-v1.tsv (R 4.5.2 on Windows). This records the mixed dependency stack that reproduced the approved values; it is not a claim of a clean current Bioconductor environment. Source/model/artifact preflight alone can be run with the same command plus --verify-only=true.
 
