@@ -9,7 +9,8 @@ Mapping(
   RawCounts = FALSE,
   method = c("max", "mean", "median", "iqr", "stdev"),
   impute = FALSE,
-  verbose = TRUE
+  verbose = TRUE,
+  include_ssp_ror = FALSE
 )
 }
 \arguments{
@@ -105,9 +106,13 @@ The default method remains \code{"max"}.
 duplicate resolution. For nonraw input, \code{TRUE} requests optional gene-level
 KNN with fixed \code{k = 10}, using the full eligible supplied donor matrix.
 Only originally missing measurements in represented genes selected for the
-existing NC/SSP outputs are estimated. Complete required outputs bypass KNN.}
+requested outputs are estimated. Complete required outputs bypass KNN.}
 
 \item{verbose}{Logical. If \code{TRUE}, prints progress messages during execution.}
+
+\item{include_ssp_ror}{Logical; default \code{FALSE}. If \code{TRUE}, also retain the
+Entrez IDs used by the bundled \code{ssp.ror} gene-pair rules in a separate
+\code{se_SSP_ROR} output. The existing \code{se_NC} and \code{se_SSP} gene sets are unchanged.}
 }
 \value{
 A named list with:
@@ -116,6 +121,9 @@ A named list with:
 (assay name: \code{counts}).}
 \item{se_SSP}{\code{SummarizedExperiment} holding linear-scale data prepared for SSP-based methods
 (assay name: \code{counts}).}
+\item{se_SSP_ROR}{Only when \code{include_ssp_ror = TRUE}: a \code{SummarizedExperiment}
+with linear-scale SSP-ROR input, unprefixed Entrez IDs as row names and assay
+name \code{counts}. Sample order and column metadata match the existing outputs.}
 }
 }
 \description{
@@ -174,6 +182,27 @@ normalization, library sizes and gene-length handling are unchanged: raw NC
 uses upper-quartile log2-CPM with the existing prior count, and raw SSP uses
 linear FPKM. Nonraw NC retains collapsed log expression; SSP uses \code{2^x}, so
 log2(FPKM+1) input yields FPKM+1 without subtraction of one.
+
+\strong{Optional SSP-ROR input.} \code{include_ssp_ror = TRUE} derives the required genes
+from the bundled \code{ssp.ror} model rather than the shared subtype signature.
+The current model uses 296 unique Entrez IDs in 361 gene-pair rules. Represented
+genes are returned in first-appearance order in those rules; absent genes are
+not synthesized. The separate \code{se_SSP_ROR} follows the same SSP scales above:
+raw counts yield linear FPKM, and nonraw input yields \code{2^x} after the existing
+duplicate resolution. For example, log2(FPKM+1) yields FPKM+1.
+
+With \code{impute = FALSE}, remaining missing measurements are preserved. With
+\code{impute = TRUE}, represented SSP-ROR genes join the protected genes and KNN
+targets; the same original donor profiles and estimator are used. Unsupported
+requested SSP-ROR inputs can therefore cause an opt-in call to fail even when
+the default outputs could be prepared. Raw-count imputation remains unsupported.
+Existing NC/SSP matrices and subtype results are unchanged for calls that succeed
+under both settings. No normalization, duplicate-selection or RNG policy changes.
+
+\code{BS_sspbc(result$se_SSP_ROR, ssp.name = "ssp.ror")} can already execute the
+bundled model with its native output. This option prepares input only; it does
+not add a score API, alter \code{BS_Multi()} or Ensemble voting, or extend
+\code{InputCoverage()} beyond its existing four-model report.
 
 \strong{Clinical ROR covariates.} With \code{hasClinical = TRUE}, NC method wrappers
 require both \code{TSIZE} and \code{NODE} columns and check that \code{NODE} is numeric.

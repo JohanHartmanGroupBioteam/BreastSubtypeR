@@ -269,7 +269,8 @@ domapping <- function(
         RawCounts = FALSE,
         method = "max",
         impute = FALSE,
-        verbose = TRUE) {
+        verbose = TRUE,
+        include_ssp_ror = FALSE) {
     ## 1. Input raw counts
     if (RawCounts && !"Length" %in% colnames(rowData(se_obj))) {
         stop(
@@ -284,6 +285,7 @@ domapping <- function(
     data("BreastSubtypeRobj", envir = data_env, package = "BreastSubtypeR")
     BreastSubtypeRobj <- data_env[["BreastSubtypeRobj"]]
     genes.s <- BreastSubtypeRobj$genes.signature
+    ssp_ror_ids <- if (include_ssp_ror) .mapping_ssp_ror_ids() else character()
 
     # 3. Normalize raw counts (if applicable)
     if (RawCounts) {
@@ -339,7 +341,7 @@ domapping <- function(
 
     # 5. Preserve duplicate selection on each established expression scale.
     # Full-count normalization and library sizes above precede all exclusions.
-    target_y <- y[y$ENTREZID %in% genes.s$EntrezGene.ID, , drop = FALSE]
+    target_y <- y[y$ENTREZID %in% c(genes.s$EntrezGene.ID, ssp_ror_ids), , drop = FALSE]
     source_log <- x
     x <- duplicate_genes(x[target_y$probe, , drop = FALSE], target_y, method)
     if (RawCounts) {
@@ -348,6 +350,9 @@ domapping <- function(
 
     # Freeze represented output IDs before donor preparation/exclusion.
     targets <- .mapping_output_targets(x, BreastSubtypeRobj)
+    if (include_ssp_ror) {
+        targets <- rownames(x)[rownames(x) %in% c(targets, ssp_ror_ids)]
+    }
     if (impute && RawCounts && (anyNA(x) || anyNA(counts.fpkm))) {
         stop(paste0("Missing expression after raw-count normalization or duplicate ",
             "resolution is not supported for optional KNN. Review counts and ",
@@ -357,8 +362,9 @@ domapping <- function(
     # Complete required outputs bypass even background duplicate preparation.
     if (impute && !RawCounts && anyNA(x[targets, , drop = FALSE])) {
         donors <- .mapping_donor_matrix(source_log, y, method,
-            .mapping_required_ids(BreastSubtypeRobj))
-        ssp_targets <- as.character(genes.s$EntrezGene.ID[genes.s$SSP_based == "Yes"])
+            unique(c(.mapping_required_ids(BreastSubtypeRobj), ssp_ror_ids)))
+        ssp_targets <- c(as.character(genes.s$EntrezGene.ID[genes.s$SSP_based == "Yes"]),
+            ssp_ror_ids)
         accepted <- .mapping_impute_log(donors$matrix, targets,
             ssp_targets = intersect(targets, ssp_targets),
             exclusions = donors$exclusions, verbose = verbose)
@@ -379,6 +385,17 @@ domapping <- function(
     )
 
     result <- list(x_NC = x_NC, x_SSP = x_SSP)
+    if (include_ssp_ror) {
+        missing <- setdiff(ssp_ror_ids, rownames(x))
+        if (verbose && length(missing)) {
+            message("Absent Entrez IDs in the SSP-ROR input: ",
+                paste(missing, collapse = ", "))
+        }
+        source_ssp <- if (RawCounts) counts.fpkm else x
+        x_SSP_ROR <- source_ssp[intersect(ssp_ror_ids, rownames(source_ssp)), , drop = FALSE]
+        if (!RawCounts) x_SSP_ROR <- 2^x_SSP_ROR
+        result$x_SSP_ROR <- x_SSP_ROR
+    }
 
     return(result)
 }

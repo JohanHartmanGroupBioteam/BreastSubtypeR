@@ -1,6 +1,14 @@
 # Private Mapping preparation and acceptance around the frozen B3 estimator.
 # Donor policy, output projection and Mapping errors belong here, not in B3.
 
+.mapping_ssp_ror_ids <- function() {
+    models <- new.env(parent = emptyenv())
+    data("sspbc.models", envir = models, package = "BreastSubtypeR")
+    unique(sub("^e", "", unlist(strsplit(
+        models$sspbc.models$ssp.ror$all.pairs, "<", fixed = TRUE),
+        use.names = FALSE)))
+}
+
 .mapping_required_ids <- function(reference) {
     models <- new.env(parent = emptyenv())
     data(list = c("AIMSmodel", "sspbc.models"), envir = models,
