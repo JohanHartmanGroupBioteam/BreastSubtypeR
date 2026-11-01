@@ -151,6 +151,15 @@ bs_callout <- function(title, body, color = c("info","success","warning","danger
   list(calls = calls_tbl, full = full_tbl)
 }
 
+.experimental_ror_pc_export_note <- function(df) {
+  has_score <- getFromNamespace(".has_experimental_ror_pc", "BreastSubtypeR")
+  if (!has_score(df)) return(NULL)
+  fields <- getFromNamespace(".experimental_ror_pc_fields", "BreastSubtypeR")()
+  notice <- getFromNamespace(".experimental_ror_pc_notice", "BreastSubtypeR")()
+  paste(paste(sprintf("%s = %s", names(fields), fields), collapse = "; "),
+        notice, sep = ". ")
+}
+
 server <- function(input, output, session) {
   
   # --- small reactives ---
@@ -334,6 +343,26 @@ server <- function(input, output, session) {
     radioButtons("export_kind", "Export content", choices = choices, inline = TRUE, selected = sel)
   })
   
+  # Notice state only: keep the release's result/export flow unchanged.
+  ror_notice_context <- reactive({
+    list(input$BSmethod, input$k_subtypes, input$hasClinical,
+         input$calibration, input$internal, input$external, input$medians,
+         input$s, input$iteration, input$ratio, input$is_raw_counts,
+         input$GEX, input$clinic, input$anno, input$map, input$run,
+         input$load_example, input$load_example_step1)
+  })
+  ror_notice_result_context <- reactiveVal(NULL)
+  output$experimental_ror_pc_notice <- renderUI({
+    if (isTRUE(block_full()) || !identical(input$export_kind, "full"))
+      return(NULL)
+    if (is.null(ror_notice_result_context()) ||
+        !identical(ror_notice_result_context(), ror_notice_context()))
+      return(NULL)
+    note <- .experimental_ror_pc_export_note(reactive_files$download_full)
+    if (is.null(note)) return(NULL)
+    bs_callout("Experimental 18-gene ROR-PC", note, color = "warning")
+  })
+
   # --- AUTO preflight panel ---
   auto_requirements <- reactive({
     if (!identical(input$BSmethod, "AUTO Mode"))
@@ -559,6 +588,7 @@ server <- function(input, output, session) {
   }
   
   observeEvent(input$run, {
+    ror_notice_result_context(NULL)
     req(reactive_files$data_input)
     se_NC  <- reactive_files$data_input$x_NC  %||% reactive_files$data_input$se_NC
     se_SSP <- reactive_files$data_input$x_SSP %||% reactive_files$data_input$se_SSP
@@ -662,7 +692,8 @@ server <- function(input, output, session) {
         withCallingHandlers({
           res <- BreastSubtypeR::BS_ssBC(se_obj = se_NC, s = input$s, Subtype = want_4, hasClinical = use_clin)
         }, warning = function(w) {
-          showNotification(conditionMessage(w), type = "warning", duration = 15)
+          if (!inherits(w, "bsr_experimental_ror_pc_warning"))
+            showNotification(conditionMessage(w), type = "warning", duration = 15)
           invokeRestart("muffleWarning")
         })
       }
@@ -704,6 +735,7 @@ server <- function(input, output, session) {
         reactive_files$download_full  <- NULL
       }
       
+      ror_notice_result_context(ror_notice_context())
       output$download <- downloadHandler(
         filename = function() {
           kind <- if (!isTRUE(block_full()) && identical(input$export_kind, "full")) "full" else "calls"
@@ -721,6 +753,10 @@ server <- function(input, output, session) {
                            if (want_full) "full" else "calls",
                            format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"),
                            getRversion()))
+          if (want_full) {
+            note <- .experimental_ror_pc_export_note(obj)
+            if (!is.null(note)) hdr[2L] <- paste(hdr[2L], note, sep = " | ")
+          }
           .write_tsv_with_header(file, obj, header_lines = hdr)
         }
       )

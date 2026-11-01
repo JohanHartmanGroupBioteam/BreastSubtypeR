@@ -92,6 +92,42 @@ if (!require("remotes", quietly = TRUE)) install.packages("remotes")
 remotes::install_github("yqkiuo/BreastSubtypeR")
 ```
 
+## Release 1.4.3: experimental ROR interpretation
+
+This is the Bioconductor 3.23 release branch. Version 1.4.3 adds interpretation
+warnings while preserving the 1.4.2 calculations and output schema.
+
+**Experimental 18-gene ROR-PC** and **Experimental 18-gene ROR-PC group** are
+display labels for the unchanged legacy columns:
+
+```text
+ROR-PC (Subtype + Clinic + Prolif.Subtype)
+ROR-PC Group (Subtype + Clinic + Prolif.Subtype)
+```
+
+This research calculation differs from the published Lien implementation.
+Its prognostic performance and risk-category thresholds have not been
+independently validated. It is not a clinical Prosigna result and must not
+guide patient care. The groups are not validated patient-risk assignments.
+The original 11-gene Parker ROR-PC, stored under
+`ROR-PC (Subtype + Clinic + Prolif)`, remains a distinct output.
+
+Relevant public NC calls emit `bsr_experimental_ror_pc_warning` once when
+both experimental fields are returned; `BS_Multi()` aggregates this class
+once across its returned results. Clinical-off calls, SSP-only outputs and
+`Mapping()` do not emit it. With `options(warn = 2)`, the new warning becomes
+an error. Expert workflows can handle this class specifically with
+`withCallingHandlers()` and `invokeRestart("muffleWarning")`; unrelated
+warnings should remain visible.
+
+Shiny displays a persistent notice when corresponding Full metrics results
+are available and selected. Full metrics exports append the interpretation
+warning to an existing comment line, preserving the TSV schema, filenames
+and number of header lines. Calls-only and AUTO exports are unchanged.
+The release's Spearman correlations, calibration, both proliferation terms,
+coefficients, thresholds, NODE rules and legacy edge cases are retained.
+Development fixes #198 and #206 are not included.
+
 ## Quick start
 
 > *These examples use datasets shipped with the package. For your own data, provide a `SummarizedExperiment` **with clinical metadata in `colData`** (e.g., `PatientID`, `ER`, `HER2`; for ROR: `TSIZE`, `NODE`).*
