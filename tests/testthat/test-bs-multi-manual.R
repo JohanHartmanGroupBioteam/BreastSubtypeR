@@ -1,6 +1,7 @@
+# Historical example input is pinned independently of public data; see fixtures/README.md.
 test_that("BS_Multi performs subtyping correctly", {
     # Load required dataset
-    data("OSLO2EMIT0obj")
+    load_historical_example("OSLO2EMIT0obj")
 
     # Define methods to use for subtyping
     methods <- c("genefu.robust", "PCAPAM50", "ssBC", "AIMS")

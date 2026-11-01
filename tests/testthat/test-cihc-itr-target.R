@@ -1,3 +1,4 @@
+# Historical example input is pinned independently of public data; see fixtures/README.md.
 ## cIHC.itr ER subsampling: target-aware default (er_subsample = "target")
 ## and the behaviour of BreastSubtypeR <= 1.5.5 (er_subsample = "larger").
 ##
@@ -98,7 +99,7 @@ test_that("extreme finite ratios give valid integer sample sizes", {
 })
 
 ref <- readRDS(test_path("fixtures", "cihc_itr_1.5.5.rds"))
-data("OSLO2EMIT0obj", package = "BreastSubtypeR")
+load_historical_example("OSLO2EMIT0obj")
 se <- OSLO2EMIT0obj$data_input$se_NC
 parts <- c("BS.all", "score.ROR", "BS.itr.keep", "BS.itr.keep.Subtype")
 

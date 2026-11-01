@@ -1,3 +1,4 @@
+# Historical example input is pinned independently of public data; see fixtures/README.md.
 coverage_test_models <- function() {
     env <- new.env(parent = emptyenv())
     data(list = c("BreastSubtypeRobj", "AIMSmodel", "sspbc.models", "Gene.ID.ann"),
@@ -293,7 +294,7 @@ test_that("coverage does not call classifiers or repeat preprocessing", {
 })
 
 test_that("reporting does not modify inputs, models, RNG or native predictions", {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR")
+    load_historical_example("OSLO2EMIT0obj")
     input <- suppressMessages(Mapping(OSLO2EMIT0obj$se_obj[, 1:3], verbose = FALSE))
     models <- coverage_test_models()
     input_before <- serialize(input, NULL)
@@ -322,7 +323,7 @@ test_that("reporting does not modify inputs, models, RNG or native predictions",
 })
 
 test_that("Mapping uses the same descriptive report without changing its return", {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR")
+    load_historical_example("OSLO2EMIT0obj")
     source <- OSLO2EMIT0obj$se_obj[, 1:2]
     quiet_messages <- testthat::capture_messages(quiet <- Mapping(source, verbose = FALSE))
     messages <- testthat::capture_messages(loud <- Mapping(source, verbose = TRUE))

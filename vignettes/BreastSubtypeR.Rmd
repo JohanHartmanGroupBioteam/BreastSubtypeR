@@ -144,18 +144,64 @@ not replace validated clinical diagnostics.
 
 The examples below use small example datasets shipped with the package. For your own data, provide a `SummarizedExperiment` **with clinical metadata in `colData`** (e.g., `PatientID`, ER/HER2; for ROR: `TSIZE`, `NODE`).
 
-`OSLO2EMIT0obj$se_obj` contains expression values for 356 gene features from
-102 OSLO2-EMIT0 samples, calculated as `log2(FPKM + 1)` from
-library-protocol-adjusted FPKM. Clinical metadata are stored in `colData`,
-and feature annotations in `rowData`. The source is
-`OSLO2EMIT0.103.genematrix_noNeg.Rdata` in Mendeley Data, version 3
-([Vallon-Christersson, 2023](https://doi.org/10.17632/yzxtxn4nmd.3)).
-That source matrix has 19,675 features and 103 sample identifiers. The
-packaged subset retains source-relative order and omits `OSLO2EMIT0.073`.
-The historical sample-omission reason, feature-selection rationale and exact
-generating script are not established; the transformation is verified by
-matching source identifiers and numerical values.
-See `?OSLO2EMIT0obj` for the packaged example's source and structure.
+`OSLO2EMIT0obj$se_obj` contains 569 unique model genes from the original
+102 OSLO2-EMIT0 samples, consistently on `log2(FPKM + 1)` from
+library-protocol-adjusted FPKM. All 356 original rows and 36,312 values are
+preserved exactly; 213 genes are appended in source order. The original
+sample identifiers/order, clinical metadata and feature annotations are
+retained. The verified adjusted source is
+`OSLO2EMIT0.103.genematrix_noNeg.Rdata`, Mendeley Data, version 4
+([Vallon-Christersson, 2025](https://doi.org/10.17632/yzxtxn4nmd.4)).
+Its 19,675 features and 103 samples include `OSLO2EMIT0.073`, which remains
+absent from the package example. The historical omission rationale and original
+feature-selection recipe remain unknown. Independently transforming the adjusted
+source differs from the retained historical values by one ULP at 51 cells;
+those historical values were copied without recomputation.
+
+`TCGABRCAobj$se_obj` contains 5,350 versioned Ensembl features and the
+original 100 samples. Its integer assay retains recount3 G026 **base-pair
+coverage sums**, not transformed read counts, TPM or FPKM.
+All original 5,000 rows and 500,000 counts remain unchanged, followed by
+350 verified missing model genes in C-locale lexicographic Entrez-ID order.
+All 535,000 counts match the complete G026 source; gene lengths use the
+gene-sum GTF score field. No variance reranking or
+`recount3::transform_counts()` conversion was performed.
+
+The public object names and `se_obj`, `data_input` and `res` components
+are retained. Both examples map to 50 NC and 339 SSP genes with the existing
+registries. Stored mapped inputs and results were regenerated under source
+revision `cb7a7c70e0f94e1690d15ac2ec2b464a40934f36` (version 1.5.12).
+Mapping used `method = "max"`, `impute = TRUE` and seed 1992026, with
+`RawCounts = FALSE` for OSLO and `TRUE` for TCGA. Predictions used
+`BS_Multi(methods = "AUTO", Subtype = FALSE, hasClinical = FALSE,
+er_subsample = "target")`, seed 20260831 and unchanged method defaults.
+RNG kinds were Mersenne-Twister/Inversion/Rejection. Complete mapped inputs
+give identical results with imputation disabled, as in the examples below.
+
+The comparison distinguishes **A**, the historical stored objects; **B**,
+current-code predictions from the historical inputs; and **C**, current-code
+predictions from the expanded inputs. OSLO B-to-C mapped inputs and complete
+method results are identical; subtype calls and entropy also match A.
+TCGA B-to-C changes library sizes and upper-quartile factors before registry
+selection, changing 64 method calls across 40 samples (genefu.robust 8,
+ssBC 4, ssBC.v2 6, cIHC 5, cIHC.itr 6, PCAPAM50 8, AIMS 16, sspbc 11).
+Historical A-to-B differences are separate: these include original ROR
+standardization (#198), historical TCGA summary-method inclusion and
+eligibility/calibration differences. Exact original build/seed attribution
+is incomplete. Historical expectations, including incomplete-TCGA proliferation
+coverage, remain separately testable fixtures.
+
+The 569-gene union covers PAM50, AIMS and SSPBC subtype/ROR identifiers.
+This does **not** establish complete native SSP-ROR preparation:
+default Mapping still returns only its existing `se_NC` and `se_SSP`
+components. SSPBC models were developed using unadjusted StringTie FPKM;
+prediction equivalence with adjusted OSLO expression has not been established.
+Current nonraw SSP preprocessing uses `2^x`, retaining the `+1` offset
+for the OSLO input. Model-aware preparation remains #131 and normalization
+research remains #208. See `?OSLO2EMIT0obj`, `?TCGABRCAobj` and the source
+repository's `data-raw/issue199` scripts and manifests for provenance and
+reproduction requirements.
+
 
 ```{r pkgs-and-data, message=FALSE}
 library(BreastSubtypeR)
@@ -657,15 +703,26 @@ demo cohort (expression, clinical, annotation). After loading, click
 **Analysis settings** (Step 2), then click **Run subtyping**. Current plots and
 supported TSV exports appear under **Results and downloads**.
 
-The Shiny expression file contains the same 356 features and 102 samples as
-`OSLO2EMIT0obj$se_obj`, with `log2(FPKM + 1)` expression agreeing at text
-serialization precision. The expression values are not binary-identical.
-The Shiny annotation table covers 19,675 genes, including all 356 packaged
-features with matching annotations. Its clinical table has 12 fields rather
-than the packaged object's six; sample identifiers align, but PR labels use
-`Negative`/`Positive` instead of `PR-`/`PR+`. The full metadata tables therefore
-differ. Numerical agreement does not establish the exact historical
-generating or export script.
+The regenerated Shiny tables use the same authoritative input candidates:
+OSLO has 569 expression/annotation rows and 102 samples; TCGA has 5,350
+expression/annotation rows and 100 samples. OSLO expression is
+`log2(protocol-adjusted FPKM + 1)`; TCGA expression retains recount3 G026
+base-pair coverage sums. The 17-significant-digit text export was verified
+to recover every numeric value exactly on the recorded R runtime.
+
+The existing table schemas and sample identifiers/order are retained. OSLO
+annotation contains `probe`, `SYMBOL` and `ENTREZID`; TCGA also includes
+`Length`. OSLO clinical data retains 12 columns: its six shared fields
+come from the candidate, including canonical `PR-`/`PR+` labels, and six
+ancillary fields are preserved from the hash-pinned historical Shiny table
+(`IHC`, `Prosigna.Subtype`, `Prosigna.ROR`, `MKI67.corrected`,
+`Ki67.estimated`, `IHC.estimated`). Those ancillary fields are historical
+metadata, not regenerated predictions. The four TCGA clinical columns
+match the candidate. The OSLO annotation export now covers the 569 supplied
+features rather than the entire 19,675-gene source background. The source
+repository's `data-raw/issue199` directory records the export recipe and
+input hashes.
+
 
 Programmatic access to the same Shiny files:
 
@@ -725,7 +782,7 @@ clinical validation requires paired clinical assay data.\
 - Staaf J, Hakkinen J, Hegardt C, Saal LH, Kimbung S, Hedenfalk I, *et al.* (2022). RNA sequencing-based single sample predictors of molecular subtype and risk of recurrence for clinical assessment of early-stage breast cancer. *npj Breast Cancer*, 8:94. <https://doi.org/10.1038/s41523-022-00465-3>
 
 
-- Vallon-Christersson J (2023). RNA Sequencing-Based Single Sample Predictors of Molecular Subtype and Risk of Recurrence for Clinical Assessment of Early-Stage Breast Cancer. Mendeley Data, V3. <https://doi.org/10.17632/yzxtxn4nmd.3>
+- Vallon-Christersson J (2025). RNA Sequencing-Based Single Sample Predictors of Molecular Subtype and Risk of Recurrence for Clinical Assessment of Early-Stage Breast Cancer. Mendeley Data, V4. <https://doi.org/10.17632/yzxtxn4nmd.4>
 
 ## Session information
 

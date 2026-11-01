@@ -113,6 +113,41 @@ metadata. `RawCounts = FALSE` expects log2-normalized expression; raw RNA-seq
 counts require gene lengths. See the
 [release input preparation guide](https://bioconductor.org/packages/release/bioc/vignettes/BreastSubtypeR/inst/doc/BreastSubtypeR.html#quick-start).
 
+### Packaged examples
+
+This development source replaces the two example objects while preserving their
+names and `se_obj`, `data_input` and `res` components:
+
+| Object | Input | Preserved historical input |
+| --- | --- | --- |
+| `OSLO2EMIT0obj` | 569 genes x 102 samples; log2(protocol-adjusted FPKM + 1) | All 356 original rows/values, annotations and sample metadata; 213 genes appended |
+| `TCGABRCAobj` | 5,350 genes x 100 samples; recount3 G026 base-pair coverage sums | All 5,000 original rows/counts, annotations and sample metadata; 350 genes appended |
+
+Both examples now map to 50 NC and 339 SSP genes using the unchanged default
+registries. Their stored results were regenerated with `BS_Multi(methods = "AUTO",
+Subtype = FALSE, hasClinical = FALSE, er_subsample = "target")` under source
+revision `cb7a7c70`; reproducible settings and source hashes are recorded in
+[data-raw/issue199](data-raw/issue199/README.md). TCGA coverage sums have not
+been converted with `recount3::transform_counts()`.
+
+Comparing historical and expanded inputs under that same implementation isolates
+the dataset effect: OSLO mapped inputs and complete method results are identical;
+TCGA normalization changes and 64 method calls change across 40 samples.
+Historical stored results are a separate baseline: earlier implementation
+corrections, including original proliferation-score standardization (#198),
+also affect some recomputed outputs. Historical test fixtures are retained,
+including the incomplete TCGA proliferation example. Exact original save-event
+build/seed attribution remains incomplete.
+
+The verified OSLO source is [Mendeley Data V4](https://doi.org/10.17632/yzxtxn4nmd.4).
+SSPBC models were developed with unadjusted StringTie FPKM; equivalence with
+protocol-adjusted OSLO expression has not been established. A complete source
+gene union does not establish native SSP-ROR preparation or training-input
+compatibility. Default Mapping remains unchanged and returns no `se_SSP_ROR`;
+model-aware preparation (#131) and normalization research (#208) remain separate.
+See `?OSLO2EMIT0obj` and `?TCGABRCAobj` for details.
+
+
 ### Input coverage
 
 `InputCoverage()` and the Shiny coverage table are available in current GitHub

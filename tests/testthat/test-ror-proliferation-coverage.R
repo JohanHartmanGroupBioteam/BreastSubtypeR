@@ -1,3 +1,4 @@
+# Historical example input is pinned independently of public data; see fixtures/README.md.
 ## Proliferation panel coverage and nonfinite ROR outputs in RORgroup() (#206).
 ## The synthetic 'out' object fixes the centroid distances, so removing or
 ## perturbing proliferation genes changes only the proliferation-dependent
@@ -350,7 +351,7 @@ test_that("missing proliferation scores leave sample order, calls and RNG untouc
 })
 
 test_that("OSLO2EMIT0 retains historical outputs except corrected original ROR", {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR", envir = environment())
+    load_historical_example("OSLO2EMIT0obj", envir = environment())
     se <- OSLO2EMIT0obj$data_input$se_NC
     expect_true(all(prolif11 %in% rownames(se)) && all(prolif18 %in% rownames(se)))
     set.seed(1)
@@ -383,7 +384,7 @@ test_that("OSLO2EMIT0 retains historical outputs except corrected original ROR",
 })
 
 test_that("incomplete TCGABRCA panels run as a documented compatibility limitation", {
-    data("TCGABRCAobj", package = "BreastSubtypeR", envir = environment())
+    load_historical_example("TCGABRCAobj", envir = environment())
     se <- TCGABRCAobj$data_input$se_NC
     present11 <- intersect(prolif11, rownames(se))
     present18 <- intersect(prolif18, rownames(se))

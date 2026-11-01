@@ -1,3 +1,4 @@
+# Historical example input is pinned independently of public data; see fixtures/README.md.
 ## #221: signal at public return boundaries, never in the arithmetic helper.
 ror221_capture <- function(expr) {
     warnings <- list()
@@ -13,7 +14,7 @@ ror221_count <- function(x) sum(vapply(x$warnings, inherits, logical(1),
 
 ror221_fixture <- function() {
     env <- new.env()
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR", envir = env)
+    load_historical_example("OSLO2EMIT0obj", envir = env)
     env$OSLO2EMIT0obj$data_input
 }
 

@@ -1,3 +1,4 @@
+# Historical example input is pinned independently of public data; see fixtures/README.md.
 # Frozen outputs were captured from unmodified public commit
 # 6fbb1fb0c47c899d9159141136c481ac283ba644 under R 4.6.0 / Bioc 3.24.
 # The fixture contains complete AIMS and SSPBC results for deterministic
@@ -8,12 +9,12 @@ aims_regression_fixture <- function() {
 }
 
 aims_regression_input <- function() {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR", envir = environment())
+    load_historical_example("OSLO2EMIT0obj", envir = environment())
     suppressMessages(Mapping(OSLO2EMIT0obj$se_obj, RawCounts = FALSE))$se_SSP
 }
 
 test_that("AIMS accepts one mapped sample with complete result dimensions", {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR")
+    load_historical_example("OSLO2EMIT0obj")
     input <- suppressMessages(Mapping(
         OSLO2EMIT0obj$se_obj[, 1], RawCounts = FALSE
     ))$se_SSP

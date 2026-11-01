@@ -1,0 +1,5 @@
+"path"	"sha256"	"status"
+"package/data/OSLO2EMIT0obj.RData"	"1b7c1a6a2b1fb21f4968f185e6a64e90c0282ccdd7205aaf78a04cbdf75d6439"	"PASS"
+"package/data/TCGABRCAobj.RData"	"b4ac2d8c898557453d69f5c7a3da81a1fbce4db4486bf0623adffcb1597f5d7d"	"PASS"
+"historical/OSLO2EMIT0obj.RData"	"43393c2bf06f0ea44b262d5525b75154ab99162fac5de898433556b6805450ec"	"PASS"
+"historical/TCGABRCAobj.RData"	"b94309c6f915d5f5fcb18368f3876f281b2111acf50eeb25b167f201f499a45d"	"PASS"

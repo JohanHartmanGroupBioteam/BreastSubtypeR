@@ -1,3 +1,4 @@
+# Historical example input is pinned independently of public data; see fixtures/README.md.
 ## The packaged OSLO2-EMIT0 example ships a frozen AUTO result
 ## (OSLO2EMIT0obj$res). A fresh AUTO run must reproduce it. The cohort has 84
 ## ER+ and 18 ER- tumors, and the ER- count equals the ER- minimum of 18, so
@@ -6,7 +7,7 @@
 ## NA, which does not match the stored result.
 
 test_that("a fresh AUTO run reproduces the packaged frozen result", {
-    data("OSLO2EMIT0obj")
+    load_historical_example("OSLO2EMIT0obj")
 
     old_options <- options(BreastSubtypeR.verbose = FALSE)
     on.exit(options(old_options), add = TRUE)

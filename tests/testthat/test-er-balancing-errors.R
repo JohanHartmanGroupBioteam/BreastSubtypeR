@@ -1,9 +1,10 @@
+# Historical example input is pinned independently of public data; see fixtures/README.md.
 ## The ER-balancing methods need both ER groups. Without one of them they
 ## used to fail deep inside the median computation with messages such as
 ## "undefined columns selected" or "arguments imply differing number of rows".
 
 single_group_input <- function(er_value) {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR")
+    load_historical_example("OSLO2EMIT0obj")
     se <- OSLO2EMIT0obj$data_input$se_NC
     SummarizedExperiment::colData(se)$ER <- er_value
     se
@@ -36,7 +37,7 @@ test_that("cIHC, cIHC.itr and PCAPAM50 report a missing ER group clearly", {
 })
 
 test_that("cIHC still runs on a cohort with both ER groups", {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR")
+    load_historical_example("OSLO2EMIT0obj")
     se <- OSLO2EMIT0obj$data_input$se_NC
     res <- suppressMessages(BS_cIHC(se, Subtype = FALSE, hasClinical = FALSE))
     expect_identical(

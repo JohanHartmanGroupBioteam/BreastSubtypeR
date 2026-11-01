@@ -7,42 +7,83 @@
 \format{
 A list with:
 \describe{
-\item{\code{se_obj}}{A \code{SummarizedExperiment} containing expression
-values for 356 gene features from 102 OSLO2-EMIT0 samples, calculated as
-\code{log2(FPKM + 1)} from library-protocol-adjusted FPKM. Clinical metadata
-are stored in \code{colData}, and feature annotations in \code{rowData}.}
-\item{\code{data_input}}{Example output structure produced by \code{Mapping()}.}
-\item{\code{res}}{Example results from \code{BS_Multi()} run in \emph{AUTO} mode.}
+\item{\code{se_obj}}{A \code{SummarizedExperiment} with 569 unique model
+genes and 102 samples. The assay is \code{log2(FPKM + 1)} calculated from
+library-protocol-adjusted FPKM. The original 356 rows, all 36,312 values,
+feature annotations and sample metadata/order are retained exactly;
+213 genes are appended in adjusted-source order. Clinical metadata are in
+\code{colData}, feature annotations in \code{rowData}, and reconstruction
+provenance in \code{metadata(se_obj)$issue199_reconstruction}.}
+\item{\code{data_input}}{Regenerated \code{Mapping()} output containing
+\code{se_NC} (50 genes by 102 samples) and \code{se_SSP}
+(339 genes by 102 samples).}
+\item{\code{res}}{Regenerated \code{BS_Multi()} AUTO results, containing
+\code{res_subtypes} and \code{results}; the summary uses five classes
+and clinical ROR scoring is disabled.}
 }
 }
 \source{
-\code{OSLO2EMIT0.103.genematrix_noNeg.Rdata}, Mendeley Data, version 3,
-from the library-protocol-adjusted FPKM collection.
-\doi{10.17632/yzxtxn4nmd.3}
-The source matrix contains 19,675 features and 103 sample identifiers.
-The packaged subset retains 356 features and 102 samples in source-relative
-order; source sample \code{OSLO2EMIT0.073} is absent. The historical reason
-for that omission, the feature-selection rationale and the exact generating
-script are not established. The expression transformation was verified by
-matching source feature and sample identifiers, not inferred from the filename.
+\code{OSLO2EMIT0.103.genematrix_noNeg.Rdata}, the verified
+library-protocol-adjusted FPKM artifact in Mendeley Data, version 4,
+file identifier \code{216a4cc7-e688-4c72-9513-2ad081e2c801}.
+\doi{10.17632/yzxtxn4nmd.4}
+The source contains 19,675 features and 103 sample identifiers. The original
+102 sample identifiers/order are retained; \code{OSLO2EMIT0.073} is absent.
+Its historical omission rationale and the original feature-selection
+recipe are unresolved. Historical values were copied without recomputation:
+independently transforming the source differs by one ULP at 51 original
+cells. The new rows use the verified source transform consistently.
+MYO10 retains the verified Entrez identifier 4651.
 }
 \usage{
 data("OSLO2EMIT0obj")
 }
 \description{
 Example object derived from the OSLO2-EMIT0 cohort (Staaf et al., 2022).
-Includes a subset of normalized expression data, clinical metadata, feature
-annotations, and example outputs from \code{Mapping()} and \code{BS_Multi()}.
+Includes protocol-adjusted expression, historical clinical metadata and
+feature annotations, and regenerated \code{Mapping()} and \code{BS_Multi()}
+results. It retains the existing public object name and principal list schema.
+}
+\details{
+The 569-gene union covers the bundled PAM50, AIMS and SSPBC
+\code{ssp.subtype}, \code{ssp.pam50} and \code{ssp.ror} model identifiers.
+Default \code{Mapping()} still selects its existing NC/SSP registries;
+this object does not add \code{se_SSP_ROR} or establish complete native
+SSP-ROR preparation. SSPBC models were developed using unadjusted StringTie
+FPKM. Prediction equivalence with this protocol-adjusted input has not
+been established. Current nonraw SSP preprocessing uses \code{2^x},
+retaining the \code{+1} offset for this input. No unadjusted matrix is included.
+
+Complete results were regenerated under BreastSubtypeR 1.5.12 at source
+commit \code{cb7a7c70e0f94e1690d15ac2ec2b464a40934f36}.
+Mapping used \code{RawCounts = FALSE}, \code{method = "max"} and
+\code{impute = TRUE}, with seed 1992026. Prediction used
+\code{methods = "AUTO"}, \code{Subtype = FALSE},
+\code{hasClinical = FALSE} and \code{er_subsample = "target"},
+with seed 20260831 and unchanged method defaults. RNG kinds were
+Mersenne-Twister, Inversion and Rejection.
+
+Under that same implementation, expansion leaves both mapped inputs and
+every complete method result identical to recomputation from the historical
+356-row input. Subtype calls and entropy also match the historical stored
+object. Some stored historical ROR, Confidence and output-row details differ
+from current recomputation, including the original proliferation-score
+standardization correction (#198); these are not expansion effects.
+The exact original save-event environment and seed remain unknown.
+Reconstruction scripts and versioned manifests are in
+\code{data-raw/issue199} in the package source repository.
 }
 \examples{
 library(BreastSubtypeR)
 data("OSLO2EMIT0obj")
+dim(OSLO2EMIT0obj$se_obj) # 569 genes, 102 samples
+names(OSLO2EMIT0obj) # se_obj, data_input, res
 }
 \references{
-Vallon-Christersson J (2023). RNA Sequencing-Based Single Sample Predictors
+Vallon-Christersson J (2025). RNA Sequencing-Based Single Sample Predictors
 of Molecular Subtype and Risk of Recurrence for Clinical Assessment of
-Early-Stage Breast Cancer. Mendeley Data, V3.
-\doi{10.17632/yzxtxn4nmd.3}
+Early-Stage Breast Cancer. Mendeley Data, V4.
+\doi{10.17632/yzxtxn4nmd.4}
 
 Staaf J, Hakkinen J, Hegardt C, Saal LH, Kimbung S, Hedenfalk I, et al.
 RNA sequencing-based single sample predictors of molecular subtype and risk of

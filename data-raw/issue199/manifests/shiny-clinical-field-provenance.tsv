@@ -1,0 +1,18 @@
+dataset	field	provenance	transformation
+OSLO2EMIT0	PatientID	OSLO2EMIT0obj$se_obj colData	none
+OSLO2EMIT0	ER	OSLO2EMIT0obj$se_obj colData	none
+OSLO2EMIT0	PR	OSLO2EMIT0obj$se_obj colData	canonical PR+/PR- labels
+OSLO2EMIT0	HER2	OSLO2EMIT0obj$se_obj colData	none
+OSLO2EMIT0	TSIZE	OSLO2EMIT0obj$se_obj colData	none
+OSLO2EMIT0	NODE	OSLO2EMIT0obj$se_obj colData	none
+OSLO2EMIT0	IHC	historical Shiny clinical table SHA256 00a24cfde1bc7837a5f5cc46d9c2e4ce55a60a624b99caf5ee276005d89b8996	identity by PatientID
+OSLO2EMIT0	Prosigna.Subtype	historical Shiny clinical table SHA256 00a24cfde1bc7837a5f5cc46d9c2e4ce55a60a624b99caf5ee276005d89b8996	identity by PatientID
+OSLO2EMIT0	Prosigna.ROR	historical Shiny clinical table SHA256 00a24cfde1bc7837a5f5cc46d9c2e4ce55a60a624b99caf5ee276005d89b8996	identity by PatientID
+OSLO2EMIT0	MKI67.corrected	historical Shiny clinical table SHA256 00a24cfde1bc7837a5f5cc46d9c2e4ce55a60a624b99caf5ee276005d89b8996	identity by PatientID
+OSLO2EMIT0	Ki67.estimated	historical Shiny clinical table SHA256 00a24cfde1bc7837a5f5cc46d9c2e4ce55a60a624b99caf5ee276005d89b8996	identity by PatientID
+OSLO2EMIT0	IHC.estimated	historical Shiny clinical table SHA256 00a24cfde1bc7837a5f5cc46d9c2e4ce55a60a624b99caf5ee276005d89b8996	identity by PatientID
+TCGABRCA	PatientID	TCGABRCAobj$se_obj colData	none
+TCGABRCA	ER	TCGABRCAobj$se_obj colData	none
+TCGABRCA	PR	TCGABRCAobj$se_obj colData	none
+TCGABRCA	HER2	TCGABRCAobj$se_obj colData	none
+

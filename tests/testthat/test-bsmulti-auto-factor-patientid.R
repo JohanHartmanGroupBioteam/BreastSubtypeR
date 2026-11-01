@@ -1,3 +1,4 @@
+# Historical example input is pinned independently of public data; see fixtures/README.md.
 # Native AUTO restoration tests using public packaged expressions.
 m202_predictor_values <- function(predictors) {
     lapply(predictors, function(x) {
@@ -114,7 +115,7 @@ m202_make_cases <- function(original) {
 }
 
 test_that("native AUTO restoration keeps eligible calls with unused factor levels", {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR")
+    load_historical_example("OSLO2EMIT0obj")
     cs <- m202_make_cases(OSLO2EMIT0obj$data_input)[["both-TRUE-TRUE"]]
     reference <- m202_capture_run(m202_encode_input(cs$input, "character"))
     actual <- m202_capture_run(m202_encode_input(cs$input, "unused"))
@@ -177,7 +178,7 @@ m202_assert_restoration <- function(run, input, subtype) {
 }
 
 test_that("AUTO factor restoration preserves modes, clinical values and predictor results", {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR")
+    load_historical_example("OSLO2EMIT0obj")
     cases <- m202_make_cases(OSLO2EMIT0obj$data_input)
     cases <- cases[grepl("^both-", names(cases))]
     for (cs in cases) {
@@ -199,7 +200,7 @@ test_that("AUTO factor restoration preserves modes, clinical values and predicto
 })
 
 test_that("manual, TN and complete AUTO paths preserve routing and caller state", {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR")
+    load_historical_example("OSLO2EMIT0obj")
     cases <- m202_make_cases(OSLO2EMIT0obj$data_input)
     cases <- cases[c("subset-retained", "complete-auto", "tn-auto", "manual",
         "manual-nonclinical", "tn-manual")]

@@ -1,8 +1,9 @@
+# Historical example input is pinned independently of public data; see fixtures/README.md.
 ## Public NC wrappers keep rejecting nonnumeric NODE (test-node-message.R)
 ## and pass numeric invalid counts through to the RORgroup() warning and
 ## missing additional group (#187).
 test_that("BS_parker warns on invalid numeric NODE and leaves the group missing", {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR", envir = environment())
+    load_historical_example("OSLO2EMIT0obj", envir = environment())
     se <- OSLO2EMIT0obj$data_input$se_NC
     node <- as.numeric(SummarizedExperiment::colData(se)$NODE)
     node[1] <- -1

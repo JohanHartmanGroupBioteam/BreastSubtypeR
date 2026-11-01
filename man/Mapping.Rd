@@ -373,9 +373,11 @@ values, zero variance, or a nonfinite sample scale produce missing original
 proliferation-dependent scores and groups; no fallback score is substituted.
 Missing non-proliferation PAM50 genes also change the standardization mean
 and scale. Incomplete-panel scores are a compatibility limitation, not a
-validated partial-panel result; the packaged \code{TCGABRCAobj} example represents
-7 of 11 and 8 of 18 proliferation genes. For either panel, no observed panel
-value or a nonfinite panel estimate gives a missing (\code{NA}) proliferation
+validated partial-panel result. The historical incomplete TCGA regression
+fixture represents 7 of 11 and 8 of 18 proliferation genes; the expanded
+packaged \code{TCGABRCAobj} represents all 11 and 18 genes. For either panel,
+no observed panel value or a nonfinite panel estimate gives a missing
+(\code{NA}) proliferation
 score. Every exported numerical ROR score is finite or \code{NA}: a \code{NaN} or
 infinite result, including overflow in the final score transformation, has
 a missing group rather than \code{low}, \code{med} or \code{high}. The independent NODE >= 4
@@ -385,7 +387,7 @@ size. The deferred exact-boundary behavior of the original groups is unchanged.
 
 \examples{
 if (requireNamespace("SummarizedExperiment", quietly = TRUE)) {
-    # Using example raw RNA-seq counts (with gene lengths)
+    # TCGA recount3 base-pair coverage sums (with G026 gene lengths)
     data("TCGABRCAobj")
     se_obj_counts <- TCGABRCAobj$se_obj[, 1:3] # tiny subset to keep checks fast
     res <- Mapping(se_obj_counts, RawCounts = TRUE)

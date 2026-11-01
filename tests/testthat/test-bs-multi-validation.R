@@ -1,3 +1,4 @@
+# Historical example input is pinned independently of public data; see fixtures/README.md.
 ## Invalid method vectors must fail before the input promise is evaluated.
 ## This also prevents partial classifier execution for a late AUTO entry.
 expect_bs_multi_method_error <- function(methods, expected, clean_call = FALSE) {
@@ -98,7 +99,7 @@ test_that("single AUTO and distinct manual vectors pass method validation", {
 
 test_that("valid manual selections preserve order and native SSP calls", {
     data_env <- new.env(parent = emptyenv())
-    data("OSLO2EMIT0obj", envir = data_env, package = "BreastSubtypeR")
+    load_historical_example("OSLO2EMIT0obj", envir = data_env)
     original <- data_env[["OSLO2EMIT0obj"]]$data_input
     input <- list(
         se_NC = original$se_NC[, c(3, 1, 2)],

@@ -1,3 +1,4 @@
+# Historical example input is pinned independently of public data; see fixtures/README.md.
 ## Regression tests for probe-to-gene collapsing and Mapping() with a single
 ## sample. duplicate_genes() used to drop the matrix dimensions of one-sample
 ## input and then fail in apply() ("dim(X) must have a positive length"), so
@@ -53,7 +54,7 @@ test_that("duplicate_genes() handles a single-sample matrix", {
 })
 
 test_that("Mapping() accepts a SummarizedExperiment with one sample", {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR")
+    load_historical_example("OSLO2EMIT0obj")
     se <- OSLO2EMIT0obj$se_obj
     full <- suppressMessages(Mapping(
         se_obj = se, RawCounts = FALSE, method = "max",
