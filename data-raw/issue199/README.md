@@ -29,8 +29,10 @@ objects using R `identical()`. The script never overwrites packaged data.
 Serialization hashes can differ for identical R values; the approved artifact
 hashes identify the actual integrated bytes.
 
-Historical complete objects are self-contained regression fixtures in
-`tests/testthat/fixtures/historical-cb7a7c70`, not additional public datasets.
+Compact historical fixtures are bundled in
+`tests/testthat/fixtures/historical-cb7a7c70` for regression reconstruction,
+not as additional public datasets. The original complete historical objects
+remain archived externally and are not included in the package.
 Do not run the historical frozen-fixture generators.
 
 ## Required external sources
