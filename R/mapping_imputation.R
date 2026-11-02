@@ -42,16 +42,63 @@
     y <- y[!is.na(y$ENTREZID), , drop = FALSE]
     groups <- split(seq_len(nrow(y)),
         factor(y$ENTREZID, levels = unique(y$ENTREZID)))
-    values <- list()
-    excluded <- data.frame(gene = character(), reason = character(),
-        stringsAsFactors = FALSE)
-    for (id in names(groups)) {
+    ids <- as.character(names(groups))
+    values <- vector("list", length(groups))
+    reasons <- rep(NA_character_, length(groups))
+    batched <- rep(FALSE, length(groups))
+    singletons <- NULL
+
+    # A singleton needs no probe selection. On ordinary numeric matrices the
+    # selector methods copy its observations; finite singleton means/medians
+    # do too. Keep exceptional inputs on the established resolver, including
+    # nonfinite mean/median rows (whose NA/NaN conversions differ by method).
+    if (is.matrix(x) && !is.object(x) &&
+        typeof(x) %in% c("double", "integer") && ncol(x) > 0L &&
+        all(names(attributes(x)) %in% c("dim", "dimnames")) &&
+        !anyNA(colnames(x)) && all(nzchar(colnames(x))) &&
+        identical(class(y), "data.frame") &&
+        # Classed metadata can signal conditions when subset one group at a time.
+        all(vapply(y, function(column) !is.object(column) ||
+            identical(class(column), "factor"), logical(1))) &&
+        typeof(y$ENTREZID) %in% c("character", "integer", "double") &&
+        is.character(y$probe) && is.null(attributes(y$probe)) &&
+        !anyNA(y$probe) && all(nzchar(y$probe)) &&
+        all(y$probe %in% rownames(x)) && all(nzchar(ids)) &&
+        is.character(method) && length(method) == 1L &&
+        is.null(attributes(method)) && !is.na(method) &&
+        method %in% c("max", "stdev", "iqr", "mean", "median")) {
+        singleton_groups <- which(lengths(groups) == 1L)
+        probes <- y$probe[unlist(groups[singleton_groups], use.names = FALSE)]
+        singletons <- x[probes, , drop = FALSE]
+        if (method %in% c("mean", "median")) {
+            finite <- rowSums(!is.finite(singletons)) == 0L
+            singleton_groups <- singleton_groups[finite]
+            singletons <- singletons[finite, , drop = FALSE]
+        }
+        # duplicate_genes() always returns double storage and rebuilds dimnames.
+        storage.mode(singletons) <- "double"
+        dimnames(singletons) <- list(ids[singleton_groups], colnames(x))
+        batched[singleton_groups] <- TRUE
+        missing <- is.na(singletons)
+        singleton_reasons <- rep(NA_character_, nrow(singletons))
+        singleton_reasons[rowSums(missing) == ncol(x)] <- "entirely_missing"
+        singleton_reasons[rowSums(!is.finite(singletons) & !missing) > 0L] <-
+            "input_infinity"
+        singleton_reasons[ids[singleton_groups] %in% required] <- NA_character_
+        reasons[singleton_groups] <- singleton_reasons
+        singletons <- singletons[is.na(singleton_reasons), , drop = FALSE]
+    }
+
+    # Duplicate groups and exceptional singletons retain the original calls,
+    # error recognition and evaluation order. Collect exclusions once at the end.
+    for (i in which(!batched)) {
+        id <- ids[[i]]
         annotation <- y[groups[[id]], , drop = FALSE]
         collapse <- function() duplicate_genes(
             x[annotation$probe, , drop = FALSE], annotation, method)
         if (id %in% required) {
             # Never drop a protected row or conceal its duplicate-resolution error.
-            values[[id]] <- collapse()
+            values[[i]] <- collapse()
             next
         }
         gene <- tryCatch(collapse(), error = function(e) {
@@ -74,20 +121,28 @@
             if (all(is.na(gene))) "entirely_missing" else NULL
         if (is.null(reason)) {
             # No missing-fraction cutoff: otherwise usable partial rows remain.
-            values[[id]] <- gene
+            values[[i]] <- gene
         } else {
-            excluded[nrow(excluded) + 1L, ] <- list(id, reason)
+            reasons[[i]] <- reason
         }
     }
+    excluded <- data.frame(gene = ids[!is.na(reasons)],
+        reason = reasons[!is.na(reasons)], stringsAsFactors = FALSE)
     if (nrow(excluded)) warning(structure(list(
         message = paste0("Optional KNN excluded unusable background genes: ",
             paste0(excluded$gene, " (", excluded$reason, ")", collapse = "; "),
             ". Protected genes were retained."),
         call = NULL, exclusions = excluded),
         class = c("BreastSubtypeR_knn_donor_exclusion", "warning", "condition")))
+    # Remove unused slots, but retain protected zero-column matrices.
+    values <- values[!vapply(values, is.null, logical(1))]
+    if (!is.null(singletons) && nrow(singletons))
+        values <- c(list(singletons), values)
     matrix <- if (length(values)) do.call(rbind, unname(values)) else
         matrix(numeric(), nrow = 0L, ncol = ncol(x),
             dimnames = list(NULL, colnames(x)))
+    if (any(batched))
+        matrix <- matrix[order(match(rownames(matrix), ids)), , drop = FALSE]
     list(matrix = matrix, exclusions = excluded)
 }
 

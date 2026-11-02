@@ -1,0 +1,182 @@
+Issue #219: validated local implementation for review
+
+At 20,000 singleton genes x 100 samples, median donor preparation fell from
+39.92 s to 0.08 s (about 499x); end-to-end Mapping fell from 40.95 s to 0.32 s
+(about 128x). All full-size donor/exclusion and public Mapping comparisons were
+identical(), and the scientific/diagnostic regression gates passed.
+
+The improvement is not uniform: 5,000-row duplicate-heavy preparation had a
+slower median, 5.04 s to 5.79 s (about 15% slower), with mixed paired results.
+No improvement is claimed for that case. Duplicate-heavy Mapping and 20,000-row
+duplicate-heavy preparation showed modest gains in this run, not a universal
+speed guarantee.
+
+Base: f878f58c1c12ca6f1cd5bf4489667935bf25969b (latest origin/main at fetch,
+2026-11-01). Branch: issue-219. Isolated checkout:
+C:/Users/emmsif/.codex/worktrees/issue-219/BreastSubtypeR
+The original checkout and its unrelated changes were left untouched.
+
+Final paired measurements
+-------------------------
+Median elapsed seconds, three alternating paired replicates per case/stage.
+B/C is baseline median divided by candidate median; below 1 means slower.
+
+Rows   Shape             Stage          Baseline   Candidate    B/C
+ 5000  singleton-heavy   preparation       7.48        0.01     ~748x (*)
+ 5000  singleton-heavy   Mapping           7.49        0.13      57.62x
+ 5000  duplicate-heavy   preparation       5.04        5.79       0.87x
+ 5000  duplicate-heavy   Mapping           5.45        4.45       1.22x
+20000  singleton-heavy   preparation      39.92        0.08     ~499x
+20000  singleton-heavy   Mapping          40.95        0.32     ~128x
+20000  duplicate-heavy   preparation      27.75       22.42       1.24x
+20000  duplicate-heavy   Mapping          27.08       22.89       1.18x
+
+(*) Optimized 5,000-row preparation is at the observed 0.01 s timer granularity;
+its ratio is only approximate. Raw timings and all medians are in measurements.csv.
+For the 5,000-row duplicate preparation, baseline/candidate pairs were
+4.91/6.28, 5.50/5.79, 5.04/4.54 s. The other duplicate-heavy stage/size comparisons
+were faster in all three pairs, but only three replicates and uncontrolled
+background activity limit generalization. No selective rerun replaced the slower
+result. The unchanged estimator was separately timed/profiled as a control;
+its timing variation is not an estimator improvement (speedup is NA in the CSV).
+
+Measured allocation effects (20,000 rows)
+----------------------------------------
+One Rprofmem capture per stage/shape/implementation, outside timed replicates.
+Only allocations larger than 10,000 bytes are summed. GB below means 10^9 bytes:
+these are cumulative tracked allocations, not peak RAM or all allocations.
+
+Shape             Stage          Baseline GB   Candidate GB   Reduction
+singleton-heavy   preparation       4.899          0.114        97.7%
+singleton-heavy   Mapping           5.370          0.585        89.1%
+duplicate-heavy   preparation       4.636          3.831        17.4%
+duplicate-heavy   Mapping           4.897          4.091        16.5%
+
+Result object sizes were unchanged: donor results 17,288,816 bytes (singletons)
+and 9,584,816 bytes (duplicate-heavy); public Mapping results 65,424 bytes.
+Exact byte/count values are in measurements.csv; 5,000-row allocations and peak
+resident memory were not measured. Baseline allocation captures came from the
+initial baseline process; candidate captures came from the final paired process.
+
+Baseline reproduction and profiling
+----------------------------------
+Before production edits, 20,000-row singleton preparation took 40.48, 40.49 and
+45.10 s (median 40.49), and the first duplicate-heavy preparation took 45.91 s.
+The singleton profile measured duplicate_genes at 79.58% of inclusive samples
+and [.data.frame at 69.58%, identifying repeated per-group resolution and
+splitting/indexing/data-frame allocations as the bottleneck before modification.
+The same frozen baseline closure subsequently completed the remaining cases;
+duplicate-heavy preparation median was 45.91 s (45.91, 47.76, 45.78).
+The issue's approximately 57 s was not numerically reproduced on this machine
+and R 4.6.2, but the substantial preparation bottleneck was reproduced.
+
+Additional inclusive sample percentages (overlapping, not additive):
+- Baseline duplicate-heavy preparation: duplicate_genes 89.82%, [.data.frame 48.46%.
+- Baseline Mapping: preparation 99.32% (singletons), 99.52% (duplicate-heavy).
+- Candidate singleton Mapping: preparation 23.24%; unchanged imputation adapter
+  68.31%, including the frozen estimator at 32.39%.
+- Candidate duplicate-heavy preparation: established duplicate_genes 93.04%.
+  Preparation still occupied 99.34% of candidate duplicate-heavy Mapping.
+Rprof sampling time is not elapsed time (e.g. the initial singleton profile
+sampled 28.01 s). Fast candidate profiles repeated calls for at least 2 elapsed
+seconds; iteration counts are in the archived profile summaries.
+
+The timing fixtures have no excluded donors: every Entrez group remains eligible.
+Exclusion-data-frame growth was an inspected allocation issue, not the measured
+primary hotspot. Its behavior is covered by exact tests; no separate exclusion-
+heavy performance gain is claimed.
+
+Implementation and exact validation
+-----------------------------------
+Safe singleton groups are batched; duplicate groups and exceptional inputs retain
+the established resolver. Nonfinite mean/median rows, zero-column boundaries and
+custom annotation-column classes use the established path. Results/exclusion
+collection avoids repeated list/data-frame growth without changing donor policy.
+
+- New exact suite: 8 tests, 978 expectations, no failures or warnings on both
+  R 4.6.1 and R 4.6.2. identical() covers all five methods, missing/nonfinite
+  values and ties, protected/background genes, orders and boundaries, complete
+  structured conditions, frozen estimates/diagnostics, public Mapping including
+  opt-in SSP-ROR/default/complete-target behavior, and RNG state/absence.
+- Existing Mapping regressions passed. Existing tests and mocks were not changed;
+  real error propagation is retained, including custom metadata warnings/errors.
+- Final rebuilt R 4.6.1 R CMD check --no-manual: Status OK, exit 0. Vignettes and
+  examples passed; full installed package suite: 21,921 passed, 0 failures,
+  0 warnings, 0 skips. Only the PDF manual was skipped. Logs:
+  C:/Users/emmsif/.codex/worktrees/issue-219/validation/final-check/check.log
+  C:/Users/emmsif/.codex/worktrees/issue-219/validation/final-check/BreastSubtypeR.Rcheck/tests/testthat.Rout
+- The source-loaded full suite was not clean: existing Shiny source-harness
+  failures were reproduced identically on the pinned baseline and candidate.
+  On R 4.6.1, both summaries had 112 assertion failures, 22 errors, 436 passes,
+  0 warnings and 0 skips. Comparison evidence:
+  C:/Users/emmsif/.codex/worktrees/issue-219/validation/shiny-comparison-r461.log
+  The source-full R 4.6.2 attempt also encountered the blocked Rscript binary;
+  this is separate from the matched source-state failures on working R 4.6.1.
+  Existing tests were not changed to hide failures. Installed-package validation
+  above is clean; source-loaded failures remain a local validation limitation.
+- Final paired benchmark exited 0, with 72 timed calls and all four full-size
+  donor/exclusion and public Mapping identical() gates passing.
+
+Environment, method and reproduction
+------------------------------------
+Windows 11 x64 build 26200; R 4.6.2 (2026-10-29 ucrt); LC_ALL=C. Intel Core
+i9-11950H (8 physical/16 logical cores), 68,425,691,136 bytes RAM.
+Synthetic rnorm(mean=5, sd=1), seed=219+row_count; 100 samples, method=max,
+RawCounts=FALSE, impute=TRUE, verbose=FALSE. Entrez 596 is the sole represented
+shared NC/SSP target; sample 50 is missing. All background donors are eligible.
+Singleton-heavy means 100% singleton groups (5,000/20,000 Entrez genes).
+Duplicate-heavy means 90% of feature rows in pairs, 10% singletons, giving
+2,750/11,000 Entrez groups in 5,000/20,000 feature rows. The target is a singleton.
+
+The baseline donor function is loaded from the pinned commit; the candidate is
+loaded from the checkout. All other code, data, frozen estimator and inputs are
+shared. Exact donor/Mapping gates warm each implementation. The estimator is
+warmed separately. Timings alternate B/C, C/B, B/C with gc() before each call;
+profiling/allocation capture runs separately. Other desktop activity was not
+controlled, including a pre-existing unrelated R process that was left untouched.
+
+PowerShell, from the checkout root:
+$env:LC_ALL='C'
+& 'C:/Program Files/R/R-4.6.2/bin/x64/Rterm.exe' --vanilla --slave -f tools/issue-219/benchmark.R --args baseline tools/issue-219/results 3
+& 'C:/Program Files/R/R-4.6.2/bin/x64/Rterm.exe' --vanilla --slave -f tools/issue-219/benchmark.R --args both tools/issue-219/results 3
+
+The final local run used the identical immutable validation/benchmark-final.R
+snapshot, with the same working directory/arguments. Raw profiles, sessions,
+timings, allocations, logs and snapshot are archived outside the package:
+C:/Users/emmsif/.codex/worktrees/issue-219/validation/performance
+
+Procedural limitations: the initial baseline process completed all 36 timings,
+four profiles, four allocation captures and its median CSV, then exited with a
+parser error because the script was edited while Rterm was still reading it.
+Those completed records remain preliminary evidence. Final performance claims
+use the later clean paired run from an immutable snapshot. No scientific
+mismatch or approximate equivalence was accepted.
+Rscript execution was blocked for installed R 4.6.2: performance/source tests
+used Rterm; an initial vignette build failed when launching its Rscript child.
+The working portable R 4.6.1 runtime was used for the complete final build/check.
+Source Shiny failures were separately compared with baseline, not attributed
+wholesale to the blocked binary.
+
+Validated SHA256 fingerprints (unchanged after the final benchmark)
+-----------------------------------------------------------------
+R/mapping_imputation.R:
+EF16D6A42B86B8957807ECC21CFE92B6E83C6038B645D422B5CF253FC8C05C77
+tests/testthat/test-mapping-donor-equivalence.R:
+54BBB86907A1C1517FD1F5C89978F2EBEF6301BD01AB0F9CF6FB74A7A77A03B6
+benchmark.R and executed immutable snapshot:
+94A2FA638A11629ABB703E39F2211E1AA490DD2AB0D9503C4FAD3D8D52EF8AF9
+
+Exact changed files
+-------------------
+.Rbuildignore
+R/mapping_imputation.R
+tests/testthat/helper-mapping-donor-baseline.R
+tests/testthat/test-mapping-donor-equivalence.R
+tools/issue-219/benchmark.R
+tools/issue-219/measurements.csv
+tools/issue-219/RESULTS.txt
+
+No version bump, push, PR, merge or release. R/optimized.R, duplicate_genes(),
+normalization, the public Mapping API, Ensemble work, datasets and manuscript
+outputs are unchanged. Manual performance tooling is excluded from package
+builds and routine CRAN checks by .Rbuildignore.
