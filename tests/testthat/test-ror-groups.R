@@ -66,8 +66,8 @@ test_that("ROR-C group follows the ROR-C score, not the ROR-PC score", {
         hasClinical = TRUE
     ))
 
-    ## S1: combined = 0.2348 (high), combined + prolif = -0.2459 (low)
-    ## S2: combined = -0.2348 (low), combined + prolif = 0.2459 (high)
+    ## S1: combined = 0.2348 (high), standardized combined + prolif is med.
+    ## S2: combined = -0.2348 (low), standardized combined + prolif is med.
     ## S3: both scores are 0 (med)
     expect_identical(
         unname(as.character(res[["ROR-C Group (Subtype + Clinic)"]])),
@@ -75,7 +75,7 @@ test_that("ROR-C group follows the ROR-C score, not the ROR-PC score", {
     )
     expect_identical(
         unname(as.character(res[["ROR-PC Group (Subtype + Clinic + Prolif)"]])),
-        c("low", "high", "med")
+        c("med", "med", "med")
     )
 
     ## The group must be reproducible from the reported ROR-C score. The score
@@ -138,10 +138,10 @@ test_that("NODE changes only the subtype-specific ROR-PC risk group", {
 
     ## Fixed numerical expectations also protect the NODE-independent scores.
     expect_equal(unname(as.matrix(baseline[, score_cols])), rbind(
-        c(3.86822953, -48.54809056, 13.55824471, -45.40136640, 11.00418748),
-        c(20.44967000, 15.66693021, 25.83301176, 16.60612406, 34.22788655),
+        c(3.86822953, 3.42357780, 13.55824471, 4.84274279, 11.00418748),
+        c(20.44967000, 15.34831079, 25.83301176, 16.29809568, 34.22788655),
         c(49.46719082, 43.41530702, 47.31385412, 43.30438861, 51.81366476),
-        c(78.48471165, 91.07613314, 68.79469647, 89.25320464, 74.82431242)
+        c(78.48471165, 75.68667686, 68.79469647, 74.37530008, 74.82431242)
     ), tolerance = 1e-7)
     expect_identical(unname(as.matrix(baseline[, group_cols])), rbind(
         c("low", "low", "low", "low"),
@@ -223,9 +223,11 @@ test_that("subtype-specific ROR-PC endpoints include the upper cutoff", {
         setNames(expected_n0, names(score)))
     expect_identical(BreastSubtypeR:::.ror_pc_subtype_labels(score, 15, 40),
         setNames(expected_n1_3, names(score)))
+    ## Nonfinite scores have no category (#206); see
+    ## test-ror-proliferation-coverage.R.
     expect_identical(BreastSubtypeR:::.ror_pc_subtype_labels(
         c(NA_real_, NaN, -Inf, Inf), 15, 40),
-        c(NA_character_, NA_character_, "low", "high"))
+        rep(NA_character_, 4))
 })
 
 test_that("undefined additional ROR-PC scores have missing categories", {
@@ -249,7 +251,8 @@ test_that("undefined additional ROR-PC scores have missing categories", {
             expect_identical(actual[3:4, c(score, group)],
                 reference[3:4, c(score, group)], info = info)
             if (!is.na(tsize)) {
-                expect_true(is.nan(actual[[score]][1]), info = info)
+                ## Undefined scores are exported as NA, never NaN (#206).
+                expect_true(is.na(actual[[score]][1]) && !is.nan(actual[[score]][1]), info = info)
                 expect_true(is.na(actual[[score]][2]), info = info)
                 expect_false(is.nan(actual[[score]][2]), info = info)
             }
@@ -310,10 +313,13 @@ test_that("NODE boundary labels leave scores and other outputs unchanged", {
     standard_groups <- c("ROR-S Group (Subtype Only)",
         "ROR-P Group (Subtype + Prolif)", "ROR-C Group (Subtype + Clinic)",
         "ROR-PC Group (Subtype + Clinic + Prolif)")
-    expected_prolif <- c(rep("low", 5), "high", "high",
+    ## Original P/PC now use standardized proliferation (#198); the retained
+    ## additional-score doubles and all NODE boundary expectations stay exact.
+    expected_p <- c(rep("med", 5), "high", "high", "med", "med", "med", "high")
+    expected_pc <- c("low", "low", "med", "med", "med", "high", "high",
         "low", "low", "med", "high")
     expect_identical(unname(as.matrix(baseline[, standard_groups])),
-        unname(cbind(rep("med", 11), expected_prolif, rep("med", 11), expected_prolif)))
+        unname(cbind(rep("med", 11), expected_p, rep("med", 11), expected_pc)))
     expected_n0 <- c("low", "low", "low", "low", "med", "med", "high",
         "low", "low", "med", "high")
     expected_n1_3 <- c("low", "med", "med", "med", "high", "high", "high",
@@ -361,5 +367,205 @@ test_that("boundary correction preserves missing clinical output", {
             input$out, input$df.cln, hasClinical = FALSE
         ))
         expect_false(any(clinical_cols %in% names(no_clinical)), info = info)
+    }
+})
+
+## Invalid NODE counts (#187): negative, fractional or infinite values must
+## give a genuine missing additional group with one warning per call, while
+## NA/NaN stay silently missing and every other output is untouched.
+node_group_col <- "ROR-PC Group (Subtype + Clinic + Prolif.Subtype)"
+invalid_node_pattern <- "finite nonnegative integer"
+
+run_ror_capturing <- function(input, hasClinical = TRUE) {
+    warnings <- character()
+    res <- withCallingHandlers(
+        suppressMessages(BreastSubtypeR:::RORgroup(
+            input$out, input$df.cln, hasClinical = hasClinical
+        )),
+        warning = function(w) {
+            warnings <<- c(warnings, conditionMessage(w))
+            invokeRestart("muffleWarning")
+        }
+    )
+    list(res = res, warnings = warnings)
+}
+
+expect_missing_group <- function(x, info = NULL) {
+    expect_type(x, "character")
+    expect_true(all(is.na(x)), info = info)
+    expect_false(any(x %in% c("NA", "NaN")), info = info)
+    expect_false(any(grepl("[0-9]", x)), info = info)
+}
+
+test_that("valid NODE counts are accepted as integers and integer-valued doubles", {
+    input <- make_node_ror_input()
+    baseline <- run_ror_capturing(input)
+    expect_length(baseline$warnings, 0)
+    expected <- list(
+        `0` = c("low", "low", "med", "high"),
+        `1` = c("low", "med", "high", "high"),
+        `2` = c("low", "med", "high", "high"),
+        `3` = c("low", "med", "high", "high"),
+        `4` = rep("high", 4),
+        `12` = rep("high", 4)
+    )
+    other <- setdiff(names(baseline$res), node_group_col)
+    for (node in names(expected)) {
+        for (storage in c("double", "integer")) {
+            value <- as.numeric(node)
+            if (storage == "integer") value <- as.integer(value)
+            input$df.cln$NODE <- value
+            out <- run_ror_capturing(input)
+            info <- paste("NODE =", node, storage)
+            expect_length(out$warnings, 0)
+            expect_type(out$res[[node_group_col]], "character")
+            expect_identical(unname(out$res[[node_group_col]]),
+                expected[[node]], info = info)
+            expect_identical(out$res[, other], baseline$res[, other], info = info)
+        }
+    }
+})
+
+test_that("missing NODE gives a silent missing character group", {
+    input <- make_node_ror_input()
+    reference <- run_ror_capturing(input)
+    other <- setdiff(names(reference$res), node_group_col)
+    for (node in list(NA_real_, NaN, c(NA, 0, NaN, 4))) {
+        input$df.cln$NODE <- node
+        out <- run_ror_capturing(input)
+        info <- paste("NODE =", paste(node, collapse = ","))
+        expect_length(out$warnings, 0)
+        expect_type(out$res[[node_group_col]], "character")
+        expect_identical(out$res[, other], reference$res[, other], info = info)
+    }
+    input$df.cln$NODE <- NA_real_
+    expect_missing_group(run_ror_capturing(input)$res[[node_group_col]])
+    input$df.cln$NODE <- NaN
+    expect_missing_group(run_ror_capturing(input)$res[[node_group_col]])
+    input$df.cln$NODE <- c(NA, 0, NaN, 4)
+    mixed <- run_ror_capturing(input)$res[[node_group_col]]
+    expect_identical(unname(mixed), c(NA, "low", NA, "high"))
+})
+
+test_that("invalid NODE values give one warning and missing groups", {
+    input <- make_node_ror_input()
+    reference <- run_ror_capturing(input)
+    other <- setdiff(names(reference$res), node_group_col)
+    invalid <- c(-1, -0.5, 0.5, 2.5, 4.5, Inf, -Inf)
+    for (value in invalid) {
+        input$df.cln$NODE <- value
+        out <- run_ror_capturing(input)
+        info <- paste("NODE =", value)
+        expect_length(out$warnings, 1)
+        expect_match(out$warnings, invalid_node_pattern, info = info)
+        expect_match(out$warnings, "4 sample", info = info)
+        expect_missing_group(out$res[[node_group_col]], info = info)
+        expect_identical(out$res[, other], reference$res[, other], info = info)
+        expect_identical(out$res$patientID, reference$res$patientID, info = info)
+        expect_identical(dim(out$res), dim(reference$res), info = info)
+        expect_identical(names(out$res), names(reference$res), info = info)
+    }
+})
+
+test_that("mixed valid and invalid NODE values are handled per sample", {
+    input <- make_node_ror_input()
+    reference <- run_ror_capturing(input)
+    other <- setdiff(names(reference$res), node_group_col)
+    cases <- list(
+        list(node = c(-1, 0.5, 4.5, Inf), groups = rep(NA_character_, 4), n = 4),
+        list(node = c(-0.5, 2.5, -Inf, 2), groups = c(NA, NA, NA, "high"), n = 3),
+        list(node = c(0, -1, 3, 4), groups = c("low", NA, "high", "high"), n = 1),
+        list(node = c(2.5, 1, NA, 4), groups = c(NA, "med", NA, "high"), n = 1)
+    )
+    for (case in cases) {
+        input$df.cln$NODE <- case$node
+        out <- run_ror_capturing(input)
+        info <- paste("NODE =", paste(case$node, collapse = ","))
+        expect_length(out$warnings, 1)
+        expect_match(out$warnings, paste(case$n, "sample"), info = info)
+        group <- out$res[[node_group_col]]
+        expect_type(group, "character")
+        expect_identical(unname(group), case$groups, info = info)
+        expect_false(any(group %in% c("NA", "NaN")), info = info)
+        expect_false(any(grepl("[0-9]", group)), info = info)
+        expect_identical(out$res[, other], reference$res[, other], info = info)
+    }
+})
+
+test_that("invalid NODE groups stay missing after text round-trip", {
+    input <- make_node_ror_input()
+    input$df.cln$NODE <- c(-1, 2.5, Inf, 2)
+    out <- run_ror_capturing(input)$res
+    path <- tempfile(fileext = ".txt")
+    utils::write.table(out, path, sep = "\t", quote = FALSE, row.names = FALSE)
+    restored <- utils::read.delim(path, check.names = FALSE)
+    unlink(path)
+    expect_identical(is.na(restored[[node_group_col]]), c(TRUE, TRUE, TRUE, FALSE))
+    expect_false(any(restored[[node_group_col]] %in% c("NA", "NaN")))
+})
+
+test_that("shuffled clinical rows keep NODE validity aligned by PatientID", {
+    input <- make_node_ror_input()
+    input$df.cln$NODE <- c(0, -1, 3, 4)
+    ordered <- run_ror_capturing(input)
+    shuffled <- input
+    shuffled$df.cln <- shuffled$df.cln[c(3, 1, 4, 2), ]
+    rownames(shuffled$df.cln) <- NULL
+    out <- run_ror_capturing(shuffled)
+    expect_length(out$warnings, 1)
+    expect_identical(out$res, ordered$res)
+    expect_identical(unname(out$res[[node_group_col]]),
+        c("low", NA, "high", "high"))
+    expect_identical(out$res$patientID, paste0("N", 1:4))
+})
+
+test_that("missing TSIZE overrides valid and invalid NODE alike", {
+    input <- make_node_ror_input()
+    input$df.cln$NODE <- c(4, -1, 2.5, 0)
+    input$df.cln$TSIZE <- c(NA, NA, 0, 0)
+    out <- run_ror_capturing(input)
+    expect_length(out$warnings, 1)
+    group <- out$res[[node_group_col]]
+    expect_type(group, "character")
+    expect_identical(unname(group), c(NA, NA, NA, "high"))
+    expect_true(is.na(out$res[["ROR-C (Subtype + Clinic)"]][1]))
+    expect_true(is.na(out$res[["ROR-PC (Subtype + Clinic + Prolif.Subtype)"]][2]))
+})
+
+test_that("valid NODE >= 4 keeps high risk with an undefined additional score", {
+    input <- make_node_ror_input()
+    input$out$dist.RORSubtype[1, 1] <- NaN
+    input$out$dist.RORSubtype[2, 1] <- NA_real_
+    score <- "ROR-PC (Subtype + Clinic + Prolif.Subtype)"
+    input$df.cln$NODE <- c(4, 5L, -1, 4.5)
+    out <- run_ror_capturing(input)
+    expect_length(out$warnings, 1)
+    expect_true(is.na(out$res[[score]][1]) && !is.nan(out$res[[score]][1]))
+    expect_true(is.na(out$res[[score]][2]))
+    expect_identical(unname(out$res[[node_group_col]]),
+        c("high", "high", NA, NA))
+})
+
+test_that("invalid NODE is irrelevant when hasClinical = FALSE", {
+    input <- make_node_ror_input()
+    reference <- run_ror_capturing(input, hasClinical = FALSE)
+    input$df.cln$NODE <- c(-1, 2.5, Inf, -Inf)
+    out <- run_ror_capturing(input, hasClinical = FALSE)
+    expect_length(out$warnings, 0)
+    expect_identical(out$res, reference$res)
+    expect_false(node_group_col %in% names(out$res))
+})
+
+test_that("all-invalid and all-missing batches return a character group column", {
+    input <- make_node_ror_input()
+    reference <- run_ror_capturing(input)
+    other <- setdiff(names(reference$res), node_group_col)
+    for (node in list(rep(-1, 4), rep(Inf, 4), rep(0.5, 4), rep(NA_real_, 4))) {
+        input$df.cln$NODE <- node
+        out <- run_ror_capturing(input)
+        info <- paste("NODE =", paste(node, collapse = ","))
+        expect_missing_group(out$res[[node_group_col]], info = info)
+        expect_identical(out$res[, other], reference$res[, other], info = info)
+        expect_identical(nrow(out$res), 4L, info = info)
     }
 })

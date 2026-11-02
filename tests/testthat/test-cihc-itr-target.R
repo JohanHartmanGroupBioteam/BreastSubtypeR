@@ -1,3 +1,4 @@
+# Historical example input is pinned independently of public data; see fixtures/README.md.
 ## cIHC.itr ER subsampling: target-aware default (er_subsample = "target")
 ## and the behaviour of BreastSubtypeR <= 1.5.5 (er_subsample = "larger").
 ##
@@ -98,7 +99,7 @@ test_that("extreme finite ratios give valid integer sample sizes", {
 })
 
 ref <- readRDS(test_path("fixtures", "cihc_itr_1.5.5.rds"))
-data("OSLO2EMIT0obj", package = "BreastSubtypeR")
+load_historical_example("OSLO2EMIT0obj")
 se <- OSLO2EMIT0obj$data_input$se_NC
 parts <- c("BS.all", "score.ROR", "BS.itr.keep", "BS.itr.keep.Subtype")
 
@@ -110,7 +111,7 @@ run_case <- function(nm, er_subsample) {
     if (grepl("ratio1", nm)) args$ratio <- 1
     if (grepl("ratio2", nm)) args$ratio <- 2
     res <- withr::with_options(list(BreastSubtypeR.verbose = FALSE),
-        do.call(BS_cIHC.itr, args))
+        expect_experimental_ror_pc(do.call(BS_cIHC.itr, args)))
     out <- res$outList
     confidence_reference <- vapply(seq_along(out$predictions), function(j) {
         suppressWarnings(round(1 - cor.test(out$testData[, j],
@@ -127,12 +128,17 @@ expect_as_1.5.5 <- function(new, old) {
     expect_identical(new$BS.itr.keep, old$BS.itr.keep)
     expect_identical(new$BS.itr.keep.Subtype, old$BS.itr.keep.Subtype)
     # Retain the historical fixture, whose Confidence contains false zeros.
-    # Compare every other score unchanged; test Confidence against Parker.
-    other_scores <- setdiff(colnames(old$score.ROR), "Confidence")
+    # Keep original ROR-P/PC in the historical fixture as well; #198 changes
+    # only these four columns. Test their new values on the final averaged
+    # matrix while retaining every iteration/consensus/averaging assertion.
+    other_scores <- setdiff(colnames(old$score.ROR), c("Confidence", ror198_changed))
     expect_identical(colnames(new$score.ROR), colnames(old$score.ROR))
     expect_equal(new$score.ROR[, other_scores, drop = FALSE],
         old$score.ROR[, other_scores, drop = FALSE], tolerance = 1e-12)
     expect_identical(new$score.ROR$Confidence, new$confidence_reference)
+    clinical <- as.data.frame(SummarizedExperiment::colData(se))
+    ror198_expect_reference(list(score.ROR = new$score.ROR,
+        outList = list(testData = new$testData, distances = new$distances)), clinical)
     expect_equal(new$testData, old$testData, tolerance = 1e-12)
     expect_equal(new$distances, old$distances, tolerance = 1e-12)
 }

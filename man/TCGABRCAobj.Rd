@@ -7,44 +7,95 @@
 \format{
 A list with:
 \describe{
-\item{\code{se_obj}}{A \code{SummarizedExperiment} containing the integer raw-count matrix
-(top 5,000 variable genes), \code{rowData} with \code{probe}, \code{SYMBOL}, \code{ENTREZID},
-\code{Length}, and \code{colData} with \code{PatientID}, \code{ER}, \code{PR}, \code{HER2}.}
-\item{\code{data_input}}{Example \code{Mapping()} output created from \code{se_obj}.}
-\item{\code{res}}{Example \code{BS_Multi()} results (e.g., run in \emph{AUTO} mode).}
+\item{\code{se_obj}}{A \code{SummarizedExperiment} with 5,350 versioned
+Ensembl features and 100 samples. The integer assay retains the recount3
+G026 base-pair coverage-sum convention, not transformed read counts, TPM
+or FPKM. All original 5,000 rows and 500,000 values are unchanged, followed
+by 350 missing model genes in C-locale lexicographic Entrez-ID order.
+\code{rowData} contains \code{probe}, \code{SYMBOL}, \code{ENTREZID} and
+\code{Length}; \code{colData} contains \code{PatientID}, \code{ER},
+\code{PR} and \code{HER2}. Original annotations, sample metadata and
+order are preserved. Reconstruction provenance is in
+\code{metadata(se_obj)$issue199_reconstruction}.}
+\item{\code{data_input}}{Regenerated \code{Mapping()} output containing
+\code{se_NC} (50 genes by 100 samples) and \code{se_SSP}
+(339 genes by 100 samples).}
+\item{\code{res}}{Regenerated \code{BS_Multi()} AUTO results, containing
+\code{res_subtypes} and \code{results}; the summary uses five classes
+and clinical ROR scoring is disabled.}
 }
 }
 \source{
-The Cancer Genome Atlas (TCGA) BRCA via GDC; counts summarized with \code{recount3};
-clinical data retrieved with \code{TCGAbiolinks}.
+TCGA-BRCA recount3 G026 gene sums
+(\code{tcga.gene_sums.BRCA.G026.gz}) and gene-sum annotation
+(\code{human.gene_sums.G026.gtf.gz}). The complete count source contains
+63,856 features and 1,256 samples; the original 100-sample selection is
+preserved, with source UUIDs resolved against historical count vectors.
+Clinical metadata originally retrieved with \code{TCGAbiolinks} are
+retained without reacquisition or recoding.
 }
 \usage{
 data("TCGABRCAobj")
 }
 \description{
-Example object derived from TCGA-BRCA. Includes a subset of normalized metadata
-\itemize{
-\item raw counts (as a SummarizedExperiment), and example outputs from \code{Mapping()}
-and \code{BS_Multi()} to facilitate runnable examples.
+Example object containing recount3 TCGA-BRCA base-pair coverage sums,
+historical clinical metadata and feature annotations, and regenerated
+\code{Mapping()} and \code{BS_Multi()} outputs. The existing public object
+name and principal list schema are retained.
 }
+\details{
+The historical 5,000-gene selection is retained without variance reranking.
+Added genes complete the verified 569-gene PAM50/AIMS/SSPBC model union.
+All 535,000 counts agree with the original G026 source. Gene lengths come
+from the G026 gene-sum GTF score field, not genomic spans. Versioned
+Ensembl mappings are retained, including the documented Entrez 9906
+recovery to \code{ENSG00000215790.6} (SLC35E2; length 3264).
+Historical missing or repeated Entrez annotations remain unchanged;
+the 5,350 versioned feature identifiers are unique.
+No \code{recount3::transform_counts()} conversion was applied.
+
+Complete results were regenerated under BreastSubtypeR 1.5.12 at source
+commit \code{cb7a7c70e0f94e1690d15ac2ec2b464a40934f36}.
+Mapping used \code{RawCounts = TRUE}, \code{method = "max"} and
+\code{impute = TRUE}, with seed 1992026. Prediction used
+\code{methods = "AUTO"}, \code{Subtype = FALSE},
+\code{hasClinical = FALSE} and \code{er_subsample = "target"},
+with seed 20260831 and unchanged method defaults. RNG kinds were
+Mersenne-Twister, Inversion and Rejection.
+
+Expansion changes full-input library sizes and upper-quartile factors
+before Mapping selects its existing registries. Relative to recomputation
+of the historical input under the same implementation, 64 method calls
+change across 40 samples: genefu.robust 8, ssBC 4, ssBC.v2 6, cIHC 5,
+cIHC.itr 6, PCAPAM50 8, AIMS 16 and sspbc 11. This comparison separates
+dataset effects from earlier implementation and summary-schema changes.
+The original stored object has additional differences, including
+15 ssBC.v2 calls and one PCAPAM50 call on current-code recomputation;
+exclusive historical build/seed attribution is unresolved.
+
+The historical incomplete mapped input (37 NC and 178 SSP genes) remains
+an immutable test fixture. The current input maps to all 50 PAM50 genes
+and both proliferation panels (11 and 18 genes). Complete source-gene
+coverage does not establish native SSP-ROR preparation or equivalence to
+unadjusted StringTie FPKM training input. No \code{se_SSP_ROR} is provided.
+Reconstruction scripts and versioned manifests are in
+\code{data-raw/issue199} in the package source repository.
 }
 \examples{
 library(BreastSubtypeR)
 data("TCGABRCAobj")
-names(TCGABRCAobj)
-# str(TCGABRCAobj$se_obj); head(colData(TCGABRCAobj$se_obj))
+dim(TCGABRCAobj$se_obj) # 5350 genes, 100 samples
+names(TCGABRCAobj) # se_obj, data_input, res
 }
 \references{
 The Cancer Genome Atlas Network.
 Comprehensive molecular portraits of human breast tumors.
-\emph{Nature}. 2012;490(7418):61–70. https://doi.org/10.1038/nature11412
+\emph{Nature}. 2012;490(7418):61-70. https://doi.org/10.1038/nature11412
 
 Colaprico A, Silva TC, Olsen C, Garofano L, Cava C, Garolini D, et al.
 TCGAbiolinks: an R/Bioconductor package for integrative analysis of TCGA data.
 \emph{Nucleic Acids Res}. 2016;44(8):e71. https://doi.org/10.1093/nar/gkv1507
 
-Collado-Torres L, Nellore A, Kammers K, Ellis SE, Taub MA, Hansen KD, et al.
-Reproducible RNA-seq analysis using recount2.
-\emph{Nat Biotechnol}. 2017;35(4):319–321. https://doi.org/10.1038/nbt.3838
+recount3 project: \url{https://rna.recount.bio/}
 }
 \keyword{datasets}

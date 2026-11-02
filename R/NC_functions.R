@@ -1,7 +1,6 @@
 #'
 #' Functions adapted from NC-based subtyping methods
 #' @import magrittr
-#' @import impute
 #' @importFrom withr with_seed
 #' @importFrom dplyr select
 #' @importFrom tidyselect everything
@@ -416,9 +415,54 @@ sspPredict <- function(x, y, std = FALSE, distm = "spearman", Subtype = TRUE) {
 # or otherwise transforming scores. This is separate from the Parker groups.
 .ror_pc_subtype_labels <- function(score, low, high) {
     group <- setNames(rep(NA_character_, length(score)), names(score))
-    group[!is.na(score) & score <= low] <- "low"
-    group[!is.na(score) & score > low & score <= high] <- "med"
-    group[!is.na(score) & score > high] <- "high"
+    ## Only finite scores receive a category (#206): NA, NaN and +/-Inf stay
+    ## missing. The independent NODE >= 4 rule is applied by the caller.
+    ok <- is.finite(score)
+    group[ok & score <= low] <- "low"
+    group[ok & score > low & score <= high] <- "med"
+    group[ok & score > high] <- "high"
+    group
+}
+
+# Per-sample proliferation score for one panel (#206). The panel subset is
+# kept as a matrix (drop = FALSE) so one represented gene or one sample cannot
+# collapse to a vector. Represented genes are averaged with the original
+# mean(..., na.rm = TRUE); no gene-count threshold is imposed and absent genes
+# are never synthesized. A sample with no observed panel value, or a nonfinite
+# estimate, gets a genuine NA_real_ instead of NaN or +/-Inf.
+.proliferation_score <- function(testData, genes) {
+    if (!is.matrix(testData)) {
+        testData <- as.matrix(testData)
+    }
+    score <- setNames(rep(NA_real_, ncol(testData)), colnames(testData))
+    panel <- testData[rownames(testData) %in% genes, , drop = FALSE]
+    if (nrow(panel) > 0L && ncol(panel) > 0L) {
+        estimate <- apply(panel, 2, mean, na.rm = TRUE)
+        estimate[!is.finite(estimate)] <- NA_real_
+        score[] <- estimate
+    }
+    score
+}
+
+# Exported numerical ROR scores are finite or genuine NA_real_ (#206): NaN and
+# +/-Inf, including overflow produced by the final 100 * (x + 0.35) / 0.85
+# scaling, become NA. Applied to the final reported score, never to inputs.
+.finite_score <- function(score) {
+    nonfinite <- !is.finite(score)
+    if (any(nonfinite)) {
+        score[nonfinite] <- NA_real_
+    }
+    score
+}
+
+# Nonfinite (now NA) numerical ROR scores have no valid risk category (#206).
+# Finite scores keep the original strict-comparison labels assigned by the
+# caller, including the exact-equality text deferred in #172.
+.finite_group <- function(group, score) {
+    nonfinite <- !is.finite(score)
+    if (any(nonfinite)) {
+        group[nonfinite] <- NA_character_
+    }
     group
 }
 
@@ -432,7 +476,9 @@ sspPredict <- function(x, y, std = FALSE, distm = "spearman", Subtype = TRUE) {
 #' - "NODE": Numeric number of positive lymph nodes; use actual nonnegative
 #'   integer counts when available. Binary 0/1 cannot distinguish 1--3 from
 #'   4 or more positive nodes for the additional subtype-specific ROR-PC group.
-#'   Integer counts are not validated; see [Mapping()] for details.
+#'   Finite nonnegative integer-valued counts are required for that group:
+#'   negative, fractional or infinite values give a warning and a missing
+#'   group, while NA and NaN give a missing group silently. See [Mapping()].
 #' @return ROR, ROR risk group and other indications
 #' @noRd
 
@@ -542,14 +588,17 @@ RORgroup <- function(
     )
 
 
-    # calculate the proliferation score
-    # Filter test data for proliferation genes
-    prolifG_data <- out$testData[rownames(out$testData) %in% prolifG, ]
-    prolifScore <- apply(prolifG_data, 2, mean, na.rm = TRUE)
-
-    # Filter test data for proliferation Subtype genes
-    prolifG_Subtype <- out$testData[rownames(out$testData) %in% prolifG.Subtype, ]
-    prolifScore_Subtype <- apply(prolifG_Subtype, 2, mean, na.rm = TRUE)
+    # Original Parker ROR-P/PC (#198): standardize a separate copy across the
+    # represented PAM50 genes within each sample, after method calibration
+    # and centroid intersection. For cIHC.itr this is the final averaged matrix.
+    # Keep out$testData, correlations and the separate 18-gene score untouched.
+    prolifData <- standardize(out$testData)
+    sampleScale <- attr(prolifData, "scaled:scale")
+    # Undefined SD (including overflow) must not produce a fallback score.
+    prolifData[, !is.finite(sampleScale) | sampleScale <= 0] <- NA_real_
+    # Retain represented-panel means and finite-or-NA handling (#206).
+    prolifScore <- .proliferation_score(prolifData, prolifG)
+    prolifScore_Subtype <- .proliferation_score(out$testData, prolifG.Subtype)
 
     ## confidence
     call.conf <- data.frame(
@@ -586,6 +635,12 @@ RORgroup <- function(
 
     genomic <- 100 * (genomic + 0.35) / 0.85
     genomicWprolif <- 100 * (genomicWprolif + 0.35) / 0.85
+    ## exported scores are finite or NA, and a nonfinite result, including
+    ## overflow in the scaling above, has a missing category (#206)
+    genomic <- .finite_score(genomic)
+    genomicWprolif <- .finite_score(genomicWprolif)
+    griskgroups <- .finite_group(griskgroups, genomic)
+    gpriskgroups <- .finite_group(gpriskgroups, genomicWprolif)
 
     ROR.genomic <- data.frame(
         "ROR-S (Subtype Only)" = genomic,
@@ -627,6 +682,13 @@ RORgroup <- function(
 
             combined <- 100 * (combined + 0.35) / 0.85
             combinedWprolif <- 100 * (combinedWprolif + 0.35) / 0.85
+            ## exported scores are finite or NA, and a nonfinite result,
+            ## including overflow in the scaling above, has a missing
+            ## category (#206)
+            combined <- .finite_score(combined)
+            combinedWprolif <- .finite_score(combinedWprolif)
+            criskgroups <- .finite_group(criskgroups, combined)
+            cpriskgroups <- .finite_group(cpriskgroups, combinedWprolif)
 
             ROR.combined <- data.frame(
                 "ROR-C (Subtype + Clinic)" = combined,
@@ -641,6 +703,10 @@ RORgroup <- function(
                     0.3172 * out$dist.RORSubtype[, 3] + 0.4894 * out$dist.RORSubtype[, 4] +
                     0.1981 * prolifScore_Subtype + 0.1133 * xT + 0.8826
             )
+            ## the exported additional score is finite or NA (#206); its
+            ## NODE-dependent labels below only categorize finite scores and
+            ## the independent NODE >= 4 high-risk rule is unchanged
+            cmbWprolif.Subtype <- .finite_score(cmbWprolif.Subtype)
 
 
             ## check NODE
@@ -648,23 +714,46 @@ RORgroup <- function(
             if ("NODE" %in% colnames(Clinical)) {
                 Clinical$NODE <- as.numeric(Clinical$NODE)
 
-                cprskg.Subtype <- cmbWprolif.Subtype
+                ## The additional group starts as a genuine missing category
+                ## with the score's length and sample names, so a sample that
+                ## matches no nodal branch never retains its numeric score.
+                cprskg.Subtype <- setNames(
+                    rep(NA_character_, length(cmbWprolif.Subtype)),
+                    names(cmbWprolif.Subtype)
+                )
 
-                patients.NODE <- rownames(Clinical)[!is.na(Clinical$NODE)]
+                ## Valid positive-node counts are finite, nonnegative and
+                ## integer-valued doubles or integers (e.g. 2 or 2.0). NA and
+                ## NaN remain ordinary missing values. The supplied count is
+                ## never rounded, truncated or otherwise replaced.
+                node <- Clinical$NODE
+                node.valid <- !is.na(node) & is.finite(node) & node >= 0 &
+                    node == trunc(node)
+                node.invalid <- !is.na(node) & !node.valid
 
-                if (length(patients.NODE) > 0) {
+                if (any(node.invalid)) {
+                    warning(
+                        "NODE must give the number of positive lymph nodes ",
+                        "as finite nonnegative integer values; ",
+                        sum(node.invalid), " sample(s) with negative, ",
+                        "fractional or infinite NODE values receive a ",
+                        "missing 'ROR-PC Group (Subtype + Clinic + ",
+                        "Prolif.Subtype)'. Numerical ROR scores are unaffected.",
+                        call. = FALSE
+                    )
+                }
+
+                if (any(node.valid)) {
                     ## NODE >= 4
-                    patients.NODE.4 <- rownames(Clinical)[Clinical$NODE >= 4 &
-                        !is.na(Clinical$NODE)]
+                    patients.NODE.4 <- rownames(Clinical)[node.valid & node >= 4]
 
                     if (length(patients.NODE.4) > 0) {
                         cprskg.Subtype[patients.NODE.4] <- "high"
                     }
 
                     ## NODE < 4 & >0
-                    pts.NODE.3 <- rownames(Clinical)[Clinical$NODE < 4 &
-                        Clinical$NODE > 0 &
-                        !is.na(Clinical$NODE)]
+                    pts.NODE.3 <- rownames(Clinical)[node.valid & node < 4 &
+                        node > 0]
 
                     if (length(pts.NODE.3) > 0) {
                         temp <- cmbWprolif.Subtype[pts.NODE.3]
@@ -674,8 +763,7 @@ RORgroup <- function(
                     }
 
                     ## negative node
-                    pts.NODE.0 <- rownames(Clinical)[Clinical$NODE == 0 &
-                        !is.na(Clinical$NODE)]
+                    pts.NODE.0 <- rownames(Clinical)[node.valid & node == 0]
 
                     if (length(pts.NODE.0) > 0) {
                         tmp <- cmbWprolif.Subtype[pts.NODE.0]
@@ -691,7 +779,7 @@ RORgroup <- function(
                     is.na(Clinical$TSIZE)]
 
                 if (length(patients.NA) > 0) {
-                    cprskg.Subtype[patients.NA] <- NA
+                    cprskg.Subtype[patients.NA] <- NA_character_
                 }
 
                 ROR.combined.Subtype <- data.frame(
@@ -905,7 +993,8 @@ makeCalls.parker <- function(
 #' - "NODE": Numeric number of positive lymph nodes; use actual nonnegative
 #'   integer counts when available. Binary 0/1 cannot distinguish 1--3 from
 #'   4 or more positive nodes for the additional subtype-specific ROR-PC group.
-#'   Integer counts are not validated; see [Mapping()] for details.
+#'   `RORgroup()` requires finite nonnegative integer-valued counts for that
+#'   group; see [Mapping()] for details.
 #' @param seed An integer value is used to set the random seed.
 #' @noRd
 
@@ -1373,7 +1462,8 @@ makeCalls_ihc.iterative <- function(
 #' - "NODE": Numeric number of positive lymph nodes; use actual nonnegative
 #'   integer counts when available. Binary 0/1 cannot distinguish 1--3 from
 #'   4 or more positive nodes for the additional subtype-specific ROR-PC group.
-#'   Integer counts are not validated; see [Mapping()] for details.
+#'   `RORgroup()` requires finite nonnegative integer-valued counts for that
+#'   group; see [Mapping()] for details.
 #' @param seed An integer value is used to set the random seed.
 #' @noRd
 
@@ -1604,7 +1694,8 @@ makeCalls.PC1ihc <- function(mat,
 #' - "NODE": Numeric number of positive lymph nodes; use actual nonnegative
 #'   integer counts when available. Binary 0/1 cannot distinguish 1--3 from
 #'   4 or more positive nodes for the additional subtype-specific ROR-PC group.
-#'   Integer counts are not validated; see [Mapping()] for details.
+#'   `RORgroup()` requires finite nonnegative integer-valued counts for that
+#'   group; see [Mapping()] for details.
 #' @param seed An integer value is used to set the random seed.
 #' @noRd
 
@@ -1744,7 +1835,8 @@ makeCalls.v1PAM <- function(mat,
 #' - "NODE": Numeric number of positive lymph nodes; use actual nonnegative
 #'   integer counts when available. Binary 0/1 cannot distinguish 1--3 from
 #'   4 or more positive nodes for the additional subtype-specific ROR-PC group.
-#'   Integer counts are not validated; see [Mapping()] for details.
+#'   `RORgroup()` requires finite nonnegative integer-valued counts for that
+#'   group; see [Mapping()] for details.
 #' @noRd
 
 makeCalls.ssBC <- function(mat,

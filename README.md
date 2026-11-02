@@ -1,6 +1,6 @@
 # BreastSubtypeR <img src="inst/ShinyBreastSubtypeR/logo.svg" alt="BreastSubtypeR logo" align="right" height="120"/>
 
-Release&nbsp;[![Bioconductor release package build status](https://bioconductor.org/shields/build/release/bioc/BreastSubtypeR.svg)](https://bioconductor.org/checkResults/release/bioc-LATEST/BreastSubtypeR/) Devel&nbsp;[![Bioconductor development package build status](https://bioconductor.org/shields/build/devel/bioc/BreastSubtypeR.svg)](https://bioconductor.org/checkResults/devel/bioc-LATEST/BreastSubtypeR/) [![License: GPL-3](https://img.shields.io/badge/license-GPL--3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.html) [![NAR Genomics and Bioinformatics: Editor's Choice](https://img.shields.io/badge/NAR_Genomics_and_Bioinformatics-Editor%27s_Choice-1f6feb)](https://doi.org/10.1093/nargab/lqaf131)
+[![In Bioc](https://bioconductor.org/shields/years-in-bioc/BreastSubtypeR.svg)](https://bioconductor.org/packages/BreastSubtypeR/) [![Bioconductor release package build status](https://bioconductor.org/shields/build/release/bioc/BreastSubtypeR.svg)](https://bioconductor.org/checkResults/release/bioc-LATEST/BreastSubtypeR/) [![Bioconductor development package build status](https://bioconductor.org/shields/build/devel/bioc/BreastSubtypeR.svg)](https://bioconductor.org/checkResults/devel/bioc-LATEST/BreastSubtypeR/) [![NAR Genomics and Bioinformatics: Editor's Choice](https://img.shields.io/badge/NAR_Genomics_and_Bioinformatics-Editor%27s_Choice-1f6feb)](https://doi.org/10.1093/nargab/lqaf131) [![License: GPL-3](https://img.shields.io/badge/license-GPL--3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
 
 **BreastSubtypeR** is an R/Bioconductor package for intrinsic molecular
 subtyping of breast cancer gene-expression data. It provides a common
@@ -73,7 +73,7 @@ mapped <- Mapping(
     OSLO2EMIT0obj$se_obj,
     RawCounts = FALSE,
     method = "max",
-    impute = TRUE
+    impute = FALSE
 )
 result <- BS_Multi(
     data_input = mapped,
@@ -83,6 +83,20 @@ result <- BS_Multi(
 )
 head(result$res_subtypes)
 ```
+
+`Mapping()` preserves missing measurements by default and resolves duplicate
+probes before optional imputation. For nonraw input, `impute = TRUE` uses ten
+supported other gene profiles from the full eligible supplied input, filling
+only original holes in represented genes selected for existing NC/SSP outputs.
+Absent genes are not added. Unsupported or partially unresolved targets produce
+a structured error with internal diagnostics; observed values are preserved.
+Missing raw counts are rejected, and no raw-derived expression is imputed.
+Existing scales are unchanged, including `2^x` for nonraw SSP input.
+Each hole uses one to ten original observed contributors among the ten selected
+profiles. Retained infinities are rejected when optional KNN runs; disabled and
+complete-output bypasses introduce no new infinity filter. This revised
+implementation differs from the original publication's pipeline. Incomplete-input
+estimates and downstream predictions may change even with explicit `impute = TRUE`.
 
 `Subtype = FALSE` requests the five-class summary; `hasClinical = FALSE`
 disables clinical ROR outputs. Rows are samples and method columns contain
@@ -99,14 +113,46 @@ metadata. `RawCounts = FALSE` expects log2-normalized expression; raw RNA-seq
 counts require gene lengths. See the
 [release input preparation guide](https://bioconductor.org/packages/release/bioc/vignettes/BreastSubtypeR/inst/doc/BreastSubtypeR.html#quick-start).
 
+### Packaged examples
+
+This development source replaces the two example objects while preserving their
+names and `se_obj`, `data_input` and `res` components:
+
+| Object | Input | Preserved historical input |
+| --- | --- | --- |
+| `OSLO2EMIT0obj` | 569 genes x 102 samples; log2(protocol-adjusted FPKM + 1) | All 356 original rows/values, annotations and sample metadata; 213 genes appended |
+| `TCGABRCAobj` | 5,350 genes x 100 samples; recount3 G026 base-pair coverage sums | All 5,000 original rows/counts, annotations and sample metadata; 350 genes appended |
+
+Both examples now map to 50 NC and 339 SSP genes using the unchanged default
+registries. Their stored results were regenerated with `BS_Multi(methods = "AUTO",
+Subtype = FALSE, hasClinical = FALSE, er_subsample = "target")` under source
+revision `cb7a7c70`; reproducible settings and source hashes are recorded in
+[data-raw/issue199](data-raw/issue199/README.md). TCGA coverage sums have not
+been converted with `recount3::transform_counts()`.
+
+Comparing historical and expanded inputs under that same implementation isolates
+the dataset effect: OSLO mapped inputs and complete method results are identical;
+TCGA normalization changes and 64 method calls change across 40 samples.
+Historical stored results are a separate baseline: earlier implementation
+corrections, including original proliferation-score standardization (#198),
+also affect some recomputed outputs. Historical test fixtures are retained,
+including the incomplete TCGA proliferation example. Exact original save-event
+build/seed attribution remains incomplete.
+
+The verified OSLO source is [Mendeley Data V4](https://doi.org/10.17632/yzxtxn4nmd.4).
+SSPBC models were developed with unadjusted StringTie FPKM; equivalence with
+protocol-adjusted OSLO expression has not been established. A complete source
+gene union does not establish native SSP-ROR preparation or training-input
+compatibility. Default Mapping remains unchanged and returns no `se_SSP_ROR`;
+model-aware preparation (#131) and normalization research (#208) remain separate.
+See `?OSLO2EMIT0obj` and `?TCGABRCAobj` for details.
+
+
 ### Input coverage
 
 `InputCoverage()` and the Shiny coverage table are available in current GitHub
-source. As of 18 October 2026, the published source packages for
-[Bioconductor release 3.23](https://bioconductor.org/packages/release/bioc/html/BreastSubtypeR.html)
-(BreastSubtypeR 1.4.1) and
-[Bioconductor devel 3.24](https://bioconductor.org/packages/devel/bioc/html/BreastSubtypeR.html)
-(1.5.7) do not include them. Matching package version numbers do not establish
+source. Availability in installed packages can differ between distribution
+channels and source revisions. Matching package version numbers do not establish
 feature availability. Check your installed version with
 `"InputCoverage" %in% getNamespaceExports("BreastSubtypeR")` before running
 this additional example.
@@ -144,7 +190,29 @@ AUTO rules and threshold provenance remain in the
 Research ROR outputs use Spearman centroid correlations. Commercial
 Prosigna uses Pearson correlations within its validated assay workflow;
 BreastSubtypeR scores and groups are not clinical Prosigna results.
-Version 1.5.8 preserves the original Parker-derived grouping comparisons:
+
+**Experimental 18-gene ROR-PC** labels the existing
+`ROR-PC (Subtype + Clinic + Prolif.Subtype)` output; its companion is
+**Experimental 18-gene ROR-PC group**, stored under
+`ROR-PC Group (Subtype + Clinic + Prolif.Subtype)`. Legacy column names,
+types and values remain unchanged. This is separate from the original
+11-gene Parker ROR-PC.
+
+Experimental 18-gene ROR-PC: this research calculation differs from the
+published Lien implementation. Its prognostic performance and risk-category
+thresholds have not been independently validated. It is not a clinical
+Prosigna result and must not guide patient care.
+
+The package retains a calibrated, unstandardized 18-gene mean; Lien's
+published calculation standardizes each gene across patients. Reproducing
+Lien's results does not validate this package variant. Relevant public NC
+calls emit one `bsr_experimental_ror_pc_warning`; `BS_Multi()` aggregates the
+notice once when a returned component contains the experimental outputs.
+No such warning is emitted by package loading, `Mapping()`,
+`hasClinical = FALSE`, or AIMS/SSPBC-only results. See the ROR guide below for
+warning handling, including `options(warn = 2)`.
+
+The package retains the original Parker-derived grouping comparisons:
 exact equality at an unscaled cutoff can return numeric text instead of a
 valid risk category. This known defect is temporarily deferred for separate
 scientific review, not endorsed as a valid category. The corrected
@@ -180,6 +248,11 @@ have an older interface.
    tab-separated text (TSV), saved with a `.txt` extension. AUTO exports
    separate method calls and entropy;
    **Full metrics** are available for supported single NC methods.
+
+Relevant selected Full metrics carry the experimental 18-gene ROR-PC notice
+and display labels. Exports retain their existing column names and data,
+with the interpretation recorded in the existing provenance comments.
+Calls-only and AUTO exports do not acquire this score-specific notice.
 
 Changing inputs or relevant settings clears stale predictions and downloads.
 See the [development Shiny guide source](vignettes/BreastSubtypeR.Rmd#shiny-app)

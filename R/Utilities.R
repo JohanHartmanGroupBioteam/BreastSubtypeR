@@ -5,7 +5,6 @@
 #' @import RColorBrewer
 #' @import circlize
 #' @import magrittr
-#' @import impute
 #' @importFrom dplyr mutate across everything
 #' @importFrom ggplot2 ggplot aes geom_point geom_bar geom_text geom_line geom_vline geom_hline
 #' @importFrom ggplot2 geom_boxplot scale_x_continuous scale_color_manual scale_fill_manual
@@ -25,25 +24,24 @@ NULL
     }
 }
 
-#' Impute missing values using k-nearest neighbors
-#'
-#' @param x Numeric matrix with missing values (NA).
-#' @param verbose Logical; if TRUE, prints missing probes/samples.
-#' @return Imputed matrix.
+#' Select the first defined maximum for a duplicate variability statistic
 #' @noRd
-impute_missing <- function(x, verbose = FALSE) {
-    if (anyNA(x)) {
-        if (verbose) {
-            probeid_NA <- rownames(x)[rowSums(is.na(x)) > 0]
-            sample_NA <- colnames(x)[colSums(is.na(x)) > 0]
-            message("Missing probes: ", paste(probeid_NA, collapse = ", "))
-            message("Missing samples: ", paste(sample_NA, collapse = ", "))
-        }
-        x <- impute::impute.knn(x)$data
+.duplicate_stat_index <- function(statistics, id, method) {
+    selected <- which.max(statistics)
+    if (length(selected) == 0L) {
+        diagnostic <- sprintf(paste0(
+            "Cannot resolve Entrez ID %s with method = \"%s\": ",
+            "none of its %d probes has a defined statistic across samples ",
+            "(all statistics are NA/NaN). Review the sample count, missing ",
+            "or nonfinite measurements and the preprocessing strategy. ",
+            "No probe was selected for this Entrez ID."),
+            id, method, length(statistics))
+        stop(structure(list(message = diagnostic, call = NULL,
+            entrez_id = id, method = method, n_probes = length(statistics)),
+            class = c("BreastSubtypeR_duplicate_undefined", "error", "condition")))
     }
-    x
+    selected
 }
-
 
 #' Collapse duplicate genes by a summary statistic
 #'
@@ -70,33 +68,57 @@ duplicate_genes <- function(x, y, method) {
     split_mat <- split.data.frame(as.data.frame(x), entrezid, drop = FALSE)
 
     # function to calculate the desired statistic
-    calculate_stat <- function(mat, method) {
+    calculate_stat <- function(mat, method, id) {
+        if (nrow(mat) == 1L && method %in% c("stdev", "iqr")) {
+            return(mat[1L, ])
+        }
         switch(method,
             "mean" = apply(mat, 2, mean, na.rm = TRUE),
             "median" = apply(mat, 2, median, na.rm = TRUE),
-            "max" = mat[which.max(rowSums(mat)), ],
+            "max" = {
+                if (nrow(mat) == 1L) {
+                    mat[1L, ]
+                } else {
+                    ## which.max() skips undefined totals (NA, NaN, Inf - Inf)
+                    ## and returns integer(0) when every probe has one; stop
+                    ## here instead of failing later with a dimnames error
+                    selected <- which.max(rowSums(mat))
+                    if (length(selected) == 0L) {
+                        diagnostic <- sprintf(
+                            paste0(
+                                "Cannot resolve Entrez ID %s with method = ",
+                                "\"max\": none of its %d probes has a defined ",
+                                "total across samples (all row sums are ",
+                                "NA/NaN). Review missing or nonfinite ",
+                                "measurements and the preprocessing strategy. ",
+                                "No probe was selected for this Entrez ID."
+                            ),
+                            id, nrow(mat)
+                        )
+                        stop(diagnostic, call. = FALSE)
+                    }
+                    mat[selected, ]
+                }
+            },
             "stdev" = {
-                temp <- mat
                 stdevs <- apply(mat, 1, sd, na.rm = TRUE)
-                vals <- temp[match(max(stdevs), stdevs), ]
-                return(vals)
+                mat[.duplicate_stat_index(stdevs, id, method), ]
             },
             "iqr" = {
-                temp <- mat
                 iqrs <- apply(mat, 1, function(x) {
                     quantile(x, 0.75, na.rm = TRUE) -
                         quantile(x, 0.25, na.rm = TRUE)
                 })
-                vals <- temp[match(max(iqrs), iqrs), ]
-                return(vals)
+                mat[.duplicate_stat_index(iqrs, id, method), ]
             }
         )
     }
 
     ## one row per Entrez ID, one column per sample; built explicitly so that
     ## single-sample matrices keep their dimensions
-    collapsed <- lapply(split_mat, function(mat) {
-        as.numeric(unlist(calculate_stat(mat, method), use.names = FALSE))
+    collapsed <- lapply(names(split_mat), function(id) {
+        as.numeric(unlist(calculate_stat(split_mat[[id]], method, id),
+            use.names = FALSE))
     })
     out <- do.call(rbind, collapsed)
     dimnames(out) <- list(names(split_mat), colnames(x))
@@ -246,8 +268,9 @@ domapping <- function(
         se_obj,
         RawCounts = FALSE,
         method = "max",
-        impute = TRUE,
-        verbose = TRUE) {
+        impute = FALSE,
+        verbose = TRUE,
+        include_ssp_ror = FALSE) {
     ## 1. Input raw counts
     if (RawCounts && !"Length" %in% colnames(rowData(se_obj))) {
         stop(
@@ -262,11 +285,16 @@ domapping <- function(
     data("BreastSubtypeRobj", envir = data_env, package = "BreastSubtypeR")
     BreastSubtypeRobj <- data_env[["BreastSubtypeRobj"]]
     genes.s <- BreastSubtypeRobj$genes.signature
+    ssp_ror_ids <- if (include_ssp_ror) .mapping_ssp_ror_ids() else character()
 
     # 3. Normalize raw counts (if applicable)
     if (RawCounts) {
         # Pull counts from SummarizedExperiment and build a DGEList
         counts <- SummarizedExperiment::assay(se_obj)
+        if (anyNA(counts)) {
+            stop("NA counts not allowed: RawCounts=TRUE requires complete counts; raw-count imputation is not supported.",
+                call. = FALSE)
+        }
         y_all <- edgeR::DGEList(counts = round(as.matrix(counts)))
 
         # Light positive-only subset (very gentle): CPM > 0 in ≥30% samples
@@ -311,19 +339,39 @@ domapping <- function(
     }
     samplenames <- colnames(x)
 
-    # 5. Filter by signature genes and impute
-    ## filter by ENTREZID
-    y <- y[y$ENTREZID %in% genes.s$EntrezGene.ID, ]
-    x <- x[y$probe, , drop = FALSE]
-    if (impute && anyNA(x)) x <- impute_missing(x, verbose)
-    if (RawCounts && impute && anyNA(counts.fpkm)) {
-        counts.fpkm <- impute_missing(counts.fpkm, verbose)
+    # 5. Preserve duplicate selection on each established expression scale.
+    # Full-count normalization and library sizes above precede all exclusions.
+    target_y <- y[y$ENTREZID %in% c(genes.s$EntrezGene.ID, ssp_ror_ids), , drop = FALSE]
+    source_log <- x
+    x <- duplicate_genes(x[target_y$probe, , drop = FALSE], target_y, method)
+    if (RawCounts) {
+        counts.fpkm <- duplicate_genes(counts.fpkm, target_y, method)
     }
 
-    # 6. Deduplicate by EntrezID
-    x <- duplicate_genes(x, y, method)
-    if (RawCounts) {
-        counts.fpkm <- duplicate_genes(counts.fpkm, y, method)
+    # Freeze represented output IDs before donor preparation/exclusion.
+    targets <- .mapping_output_targets(x, BreastSubtypeRobj)
+    if (include_ssp_ror) {
+        targets <- rownames(x)[rownames(x) %in% c(targets, ssp_ror_ids)]
+    }
+    if (impute && RawCounts && (anyNA(x) || anyNA(counts.fpkm))) {
+        stop(paste0("Missing expression after raw-count normalization or duplicate ",
+            "resolution is not supported for optional KNN. Review counts and ",
+            "gene lengths; neither counts nor linear FPKM will be imputed."),
+            call. = FALSE)
+    }
+    # Complete required outputs bypass even background duplicate preparation.
+    if (impute && !RawCounts && anyNA(x[targets, , drop = FALSE])) {
+        donors <- .mapping_donor_matrix(source_log, y, method,
+            unique(c(.mapping_required_ids(BreastSubtypeRobj), ssp_ror_ids)))
+        ssp_targets <- c(as.character(genes.s$EntrezGene.ID[genes.s$SSP_based == "Yes"]),
+            ssp_ror_ids)
+        accepted <- .mapping_impute_log(donors$matrix, targets,
+            ssp_targets = intersect(targets, ssp_targets),
+            exclusions = donors$exclusions, verbose = verbose)
+        # Change only original holes of the frozen targets in the output source.
+        holes <- is.na(x) & (rownames(x) %in% targets)
+        estimates <- accepted$matrix[match(rownames(x), rownames(accepted$matrix)), , drop = FALSE]
+        x[holes] <- estimates[holes]
     }
 
     # 7. Prepare output (NC and SSP matrices)
@@ -337,6 +385,17 @@ domapping <- function(
     )
 
     result <- list(x_NC = x_NC, x_SSP = x_SSP)
+    if (include_ssp_ror) {
+        missing <- setdiff(ssp_ror_ids, rownames(x))
+        if (verbose && length(missing)) {
+            message("Absent Entrez IDs in the SSP-ROR input: ",
+                paste(missing, collapse = ", "))
+        }
+        source_ssp <- if (RawCounts) counts.fpkm else x
+        x_SSP_ROR <- source_ssp[intersect(ssp_ror_ids, rownames(source_ssp)), , drop = FALSE]
+        if (!RawCounts) x_SSP_ROR <- 2^x_SSP_ROR
+        result$x_SSP_ROR <- x_SSP_ROR
+    }
 
     return(result)
 }

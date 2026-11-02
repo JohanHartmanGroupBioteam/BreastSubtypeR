@@ -91,7 +91,13 @@ citation("BreastSubtypeR")
 
 Breast cancer (BC) is a biologically heterogeneous disease with intrinsic molecular subtypes (e.g., Luminal A, Luminal B, HER2-enriched, Basal-like, Normal-like) that inform biological interpretation and clinical decision-making. While clinical assays such as **Prosigna** provide standardized subtyping in the clinic, research implementations have proliferated and diverge in pre-processing, gene mapping, and algorithmic assumptions—reducing reproducibility and complicating cross-cohort analyses.
 
-**BreastSubtypeR** consolidates multiple published gene-expression signature classifiers into a unified, assumption-aware Bioconductor package with: - a unified multi-method API (run many classifiers in one call), - **AUTO** mode for cohort-aware method selection, - standardized, method-specific pre-processing for multiple input types (raw counts, log2-normalized RNA-seq expression, log2-processed arrays), - Entrez ID–based probe/gene mapping, - and a local Shiny app (`iBreastSubtypeR`) for non-programmers.
+**BreastSubtypeR** consolidates multiple published gene-expression signature classifiers into a unified, assumption-aware Bioconductor package with:
+
+- a unified multi-method API (run many classifiers in one call),
+- **AUTO** mode for cohort-aware method selection,
+- standardized, method-specific pre-processing for multiple input types (raw counts, log2-normalized RNA-seq expression, log2-processed arrays),
+- Entrez ID–based probe/gene mapping,
+- and a local Shiny app (`iBreastSubtypeR`) for non-programmers.
 
 
 ## Features
@@ -138,18 +144,64 @@ not replace validated clinical diagnostics.
 
 The examples below use small example datasets shipped with the package. For your own data, provide a `SummarizedExperiment` **with clinical metadata in `colData`** (e.g., `PatientID`, ER/HER2; for ROR: `TSIZE`, `NODE`).
 
-`OSLO2EMIT0obj$se_obj` contains expression values for 356 gene features from
-102 OSLO2-EMIT0 samples, calculated as `log2(FPKM + 1)` from
-library-protocol-adjusted FPKM. Clinical metadata are stored in `colData`,
-and feature annotations in `rowData`. The source is
-`OSLO2EMIT0.103.genematrix_noNeg.Rdata` in Mendeley Data, version 3
-([Vallon-Christersson, 2023](https://doi.org/10.17632/yzxtxn4nmd.3)).
-That source matrix has 19,675 features and 103 sample identifiers. The
-packaged subset retains source-relative order and omits `OSLO2EMIT0.073`.
-The historical sample-omission reason, feature-selection rationale and exact
-generating script are not established; the transformation is verified by
-matching source identifiers and numerical values.
-See `?OSLO2EMIT0obj` for the packaged example's source and structure.
+`OSLO2EMIT0obj$se_obj` contains 569 unique model genes from the original
+102 OSLO2-EMIT0 samples, consistently on `log2(FPKM + 1)` from
+library-protocol-adjusted FPKM. All 356 original rows and 36,312 values are
+preserved exactly; 213 genes are appended in source order. The original
+sample identifiers/order, clinical metadata and feature annotations are
+retained. The verified adjusted source is
+`OSLO2EMIT0.103.genematrix_noNeg.Rdata`, Mendeley Data, version 4
+([Vallon-Christersson, 2025](https://doi.org/10.17632/yzxtxn4nmd.4)).
+Its 19,675 features and 103 samples include `OSLO2EMIT0.073`, which remains
+absent from the package example. The historical omission rationale and original
+feature-selection recipe remain unknown. Independently transforming the adjusted
+source differs from the retained historical values by one ULP at 51 cells;
+those historical values were copied without recomputation.
+
+`TCGABRCAobj$se_obj` contains 5,350 versioned Ensembl features and the
+original 100 samples. Its integer assay retains recount3 G026 **base-pair
+coverage sums**, not transformed read counts, TPM or FPKM.
+All original 5,000 rows and 500,000 counts remain unchanged, followed by
+350 verified missing model genes in C-locale lexicographic Entrez-ID order.
+All 535,000 counts match the complete G026 source; gene lengths use the
+gene-sum GTF score field. No variance reranking or
+`recount3::transform_counts()` conversion was performed.
+
+The public object names and `se_obj`, `data_input` and `res` components
+are retained. Both examples map to 50 NC and 339 SSP genes with the existing
+registries. Stored mapped inputs and results were regenerated under source
+revision `cb7a7c70e0f94e1690d15ac2ec2b464a40934f36` (version 1.5.12).
+Mapping used `method = "max"`, `impute = TRUE` and seed 1992026, with
+`RawCounts = FALSE` for OSLO and `TRUE` for TCGA. Predictions used
+`BS_Multi(methods = "AUTO", Subtype = FALSE, hasClinical = FALSE,
+er_subsample = "target")`, seed 20260831 and unchanged method defaults.
+RNG kinds were Mersenne-Twister/Inversion/Rejection. Complete mapped inputs
+give identical results with imputation disabled, as in the examples below.
+
+The comparison distinguishes **A**, the historical stored objects; **B**,
+current-code predictions from the historical inputs; and **C**, current-code
+predictions from the expanded inputs. OSLO B-to-C mapped inputs and complete
+method results are identical; subtype calls and entropy also match A.
+TCGA B-to-C changes library sizes and upper-quartile factors before registry
+selection, changing 64 method calls across 40 samples (genefu.robust 8,
+ssBC 4, ssBC.v2 6, cIHC 5, cIHC.itr 6, PCAPAM50 8, AIMS 16, sspbc 11).
+Historical A-to-B differences are separate: these include original ROR
+standardization (#198), historical TCGA summary-method inclusion and
+eligibility/calibration differences. Exact original build/seed attribution
+is incomplete. Historical expectations, including incomplete-TCGA proliferation
+coverage, remain separately testable fixtures.
+
+The 569-gene union covers PAM50, AIMS and SSPBC subtype/ROR identifiers.
+This does **not** establish complete native SSP-ROR preparation:
+default Mapping still returns only its existing `se_NC` and `se_SSP`
+components. SSPBC models were developed using unadjusted StringTie FPKM;
+prediction equivalence with adjusted OSLO expression has not been established.
+Current nonraw SSP preprocessing uses `2^x`, retaining the `+1` offset
+for the OSLO input. Model-aware preparation remains #131 and normalization
+research remains #208. See `?OSLO2EMIT0obj`, `?TCGABRCAobj` and the source
+repository's `data-raw/issue199` scripts and manifests for provenance and
+reproduction requirements.
+
 
 ```{r pkgs-and-data, message=FALSE}
 library(BreastSubtypeR)
@@ -168,7 +220,7 @@ data_input <- Mapping(
     OSLO2EMIT0obj$se_obj,
     method = "max", # mapping strategy (example)
     RawCounts = FALSE,
-    impute = TRUE,
+    impute = FALSE,
     verbose = FALSE
 )
 ```
@@ -182,20 +234,45 @@ data_input <- Mapping(
         -   **Microarray/nCounter (log₂-processed):** used directly for NC-based methods; back-transformed to linear scale (`2^x`) for SSP-based methods.\
     -   resolving probe/ID → Entrez mappings,\
     -   selecting or collapsing multiple probes per gene (`method` argument),\
-    -   optionally imputing missing marker values,\
+    -   retaining missing measurements by default, with optional target-only
+        imputation after duplicate resolution for nonraw expression,\
     -   and returning a packaged object ready for `BS_Multi` or single-method callers.
--   See `?Mapping` for the full parameter list (e.g., `RawCounts`, `method`, `impute`, `verbose`) and [Methods (Sections 2.3–2.4) in the paper](https://doi.org/10.1093/nargab/lqaf131) for a complete description of the input/normalization pipeline.
+-   See `?Mapping` for the current preprocessing and optional-imputation
+    behavior. The original published pipeline is described in Methods
+    Sections 2.3–2.4 of the [package paper](https://doi.org/10.1093/nargab/lqaf131).
+
+With `impute = TRUE`, complete required outputs bypass donor preparation and
+KNN, including holes resolved by duplicate collapsing. Otherwise, the full
+eligible supplied gene-level log-expression matrix supplies donors, including
+usable partially missing background genes. Exactly ten other profiles with
+finite shared-observation distances are selected; each hole uses available
+original values from one to ten contributors among those ten selected profiles. No fallback or reuse of estimates occurs.
+Only represented genes selected for existing NC/SSP outputs are targets; absent
+genes are never synthesized and unrelated background holes remain unchanged.
+Unusable nonprotected donors are excluded with diagnostics, while protected
+genes cannot be silently dropped to obtain success.
+
+Unsupported or partly unresolved targets stop Mapping with a structured error;
+the condition retains full internal estimator diagnostics. Newly imputed values
+must remain finite on the existing output scales. Raw counts with NA/NaN are
+rejected with either setting, and missing raw-derived expression is never
+imputed. Normalization and library sizes are unchanged. Nonraw SSP remains
+`2^x`, yielding FPKM+1 for log2(FPKM+1) input, without subtraction of one.
+
+Retained infinities are rejected when optional KNN runs; disabled or complete-output
+bypasses introduce no new infinity filter. This is a revised implementation,
+distinct from the original publication's pipeline linked above. Incomplete-input
+estimates and downstream predictions may change even with explicit `impute = TRUE`.
 
 ## Descriptive input coverage
 
 `InputCoverage()` reports the current processed inputs independently of which
 methods are selected or run. It uses the same calculation as the current
-GitHub Shiny coverage table. These features are available in current GitHub
-source. As of 18 October 2026, the published source packages for
+Shiny coverage table. Feature availability can differ between GitHub source,
 [Bioconductor release 3.23](https://bioconductor.org/packages/release/bioc/html/BreastSubtypeR.html)
-(BreastSubtypeR 1.4.1) and
-[Bioconductor devel 3.24](https://bioconductor.org/packages/devel/bioc/html/BreastSubtypeR.html)
-(1.5.7) do not include them. Check your installed namespace with
+and
+[Bioconductor devel 3.24](https://bioconductor.org/packages/devel/bioc/html/BreastSubtypeR.html).
+Check your installed namespace with
 `"InputCoverage" %in% getNamespaceExports("BreastSubtypeR")`; matching package
 version numbers alone do not establish feature availability.
 
@@ -383,10 +460,14 @@ nodes as numeric values when available. Only the additional risk group
 `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)` distinguishes 0, 1--3 and
 4 or more positive nodes. With nonmissing `TSIZE`, 4 or more nodes receive high
 risk; 0 and 1--3 use different score cutoffs. Binary 0/1 coding is accepted,
-but cannot distinguish 1--3 from 4 or more positive nodes. The current R API
-checks numeric type without enforcing nonnegative integer counts.
+but cannot distinguish 1--3 from 4 or more positive nodes. The NC wrappers
+check that `NODE` is numeric; the additional group then requires finite
+nonnegative integer-valued counts. Negative, fractional or infinite numeric
+`NODE` values give a warning and a missing additional group, while all
+numerical ROR scores remain available. `NODE` is never rounded or recoded.
 
-In the R API, `NA` in `NODE` makes only this additional risk group missing.
+In the R API, `NA` or `NaN` in `NODE` makes only this additional risk group
+missing, without a NODE warning.
 `NA` in `TSIZE` makes all clinical ROR scores and groups missing, while ROR-S
 and ROR-P remain available. These are missing values within required columns;
 the columns themselves must still be supplied. The additional subtype-specific
@@ -408,7 +489,50 @@ within its validated assay workflow
 ([Wallden et al., 2015](https://doi.org/10.1186/s12920-015-0129-6)). Shared
 coefficients do not establish equivalent preprocessing, calibration or
 clinical validation. These research scores and groups are not clinical
-Prosigna results; version 1.5.8 does not change these calculations.
+Prosigna results. The 1.5.10 maintenance fixes preserve the ROR formulas,
+but corrected sample selection and centering can change their inputs and
+the resulting scores.
+
+**Experimental 18-gene ROR-PC** is the display label for the existing
+`ROR-PC (Subtype + Clinic + Prolif.Subtype)` column. Its companion,
+`ROR-PC Group (Subtype + Clinic + Prolif.Subtype)`, is labeled
+**Experimental 18-gene ROR-PC group**. These legacy data keys, column types
+and values remain unchanged. The original 11-gene Parker
+`ROR-PC (Subtype + Clinic + Prolif)` remains a separate output.
+
+Experimental 18-gene ROR-PC: this research calculation differs from the
+published Lien implementation. Its prognostic performance and risk-category
+thresholds have not been independently validated. It is not a clinical
+Prosigna result and must not guide patient care.
+
+The package retains the calibrated, unstandardized 18-gene mean. The
+[published Lien calculation](https://doi.org/10.3390/cancers13236118)
+standardizes each proliferation gene across patients before averaging.
+Independent numerical reproduction of Lien's results does not validate the
+package's different implementation. Its `low`, `med` and `high` outputs are
+experimental threshold assignments, not validated clinical risk strata.
+
+Public NC wrappers emit one warning of class
+`bsr_experimental_ror_pc_warning` when their nonempty returned `score.ROR`
+contains both experimental columns. `BS_Multi()` aggregates this notice once
+per top-level call when a returned component contains them, not per method,
+patient or iteration. Package loading, `Mapping()`, `hasClinical = FALSE`
+and AIMS/SSPBC-only results do not emit this warning. The notice also applies
+when all numerical values are missing: NODE >= 4 with nonmissing tumor size
+can still produce the existing `high` category.
+
+`options(warn = 2)` intentionally converts this warning to an error. An
+expert workflow that has recorded the interpretation can handle this class
+alone, leaving other warnings, such as invalid NODE counts, visible:
+
+```{r experimental-ror-warning-handler, eval=FALSE}
+res <- withCallingHandlers(
+    BS_parker(se_obj, hasClinical = TRUE),
+    bsr_experimental_ror_pc_warning = function(w) {
+        invokeRestart("muffleWarning")
+    }
+)
+```
 
 **Known exact-equality limitation.** The original Parker-derived ROR-S,
 ROR-P, ROR-C and `ROR-PC (Subtype + Clinic + Prolif)` groups retain strict
@@ -417,8 +541,8 @@ text instead of `low`, `med` or `high`. The unscaled pairs are -0.15/0.10,
 -0.25/0.10, -0.10/0.20 and -0.20/0.20, respectively, before
 `100 * (score + 0.35) / 0.85`. They are not cutoffs on the displayed scaled
 scores. Numeric-text labels are invalid categories, not an additional risk
-group; do not infer an assignment by rounding. Version 1.5.8 temporarily
-defers this known defect pending scientific review of exact-equality
+group; do not infer an assignment by rounding. This known defect remains
+deferred pending scientific review of exact-equality
 assignments. The corrected NODE-dependent additional ROR-PC grouping from
 issue #154 remains unchanged.
 
@@ -428,31 +552,56 @@ issue #154 remains unchanged.
 model from [Staaf et al. (2022)](https://doi.org/10.1038/s41523-022-00465-3).
 It returns categorical bin labels (`c005`, `c010`, ..., `c090`), with 18
 classes in the fitted model. These are distinct from the NC-method ROR
-scores above, continuous ROR scores, tumor-size-adjusted values,
+scores above, continuous or Parker-derived ROR scores, tumor-size-adjusted values,
 nodal-status-specific risk categories and clinical Prosigna outputs.
 `BS_sspbc()` preserves the native model calculations and does not perform
 numerical bin conversion or clinical adjustment.
 
-The public OSLO2-EMIT0 object below illustrates the API and sample alignment.
-Its compact gene set lacks many SSP-ROR gene pairs. Unavailable rules remain
-`NA` under native handling; obtaining predictions does not establish adequate
-input coverage or clinical validity. Use appropriate expression inputs for
-the full model in a research analysis.
+The expanded public OSLO (569 genes, 102 samples) and TCGA (5,350 genes,
+100 samples) inputs cover all 296 required SSP-ROR genes and 361 rules per
+sample when prepared with `Mapping(include_ssp_ror = TRUE)$se_SSP_ROR`.
+Use `RawCounts = FALSE` for OSLO and `RawCounts = TRUE` for TCGA. Default
+`data_input$se_SSP` objects still contain only subtype genes and are not the
+complete SSP-ROR inputs.
+
+Complete coverage does not establish training-input equivalence or clinical
+validity. OSLO stores log2(protocol-adjusted FPKM + 1); Mapping returns
+protocol-adjusted FPKM + 1 for SSP-ROR. SSPBC development used original
+unadjusted StringTie FPKM. This example neither reverses the protocol
+adjustment nor establishes SSP-ROR calibration on the adjusted scale.
+For incomplete inputs, SSP-ROR retains native missing-rule handling rather
+than the subtype models' zero-evidence safeguard; a returned label or high
+posterior probability does not establish adequate coverage.
 
 ```{r ssp-ror, eval=TRUE}
 data("OSLO2EMIT0obj")
+se_obj <- OSLO2EMIT0obj$se_obj
+se_ror <- Mapping(se_obj, RawCounts = FALSE,
+    include_ssp_ror = TRUE)$se_SSP_ROR
 ssp_ror <- BS_sspbc(
-    OSLO2EMIT0obj$data_input$se_SSP,
+    se_ror,
     ssp.name = "ssp.ror"
 )
 ror_bins <- data.frame(
     SampleID = rownames(ssp_ror$cl),
     ROR_bin = ssp_ror$cl[, "21"],
     Bin_probability = ssp_ror$prob[, "21"],
-    row.names = NULL
+    ssp_ror$all.probs[["21"]],
+    row.names = NULL, check.names = FALSE
 )
 head(ror_bins)
 ```
+
+The same pathway accepts the public TCGA coverage-sum input with gene lengths:
+
+```{r ssp-ror-tcga, eval=TRUE}
+data("TCGABRCAobj")
+tcga_ror_input <- Mapping(TCGABRCAobj$se_obj, RawCounts = TRUE,
+    include_ssp_ror = TRUE)$se_SSP_ROR
+tcga_ror <- BS_sspbc(tcga_ror_input, ssp.name = "ssp.ror")
+stopifnot(all(colSums(!is.na(tcga_ror$rules.matrix)) == 361L))
+```
+
 
 `cl` is a character matrix and `prob` a numeric matrix, each with one row per
 sample and one column named `"21"` (the fitted model's `k` setting).
@@ -588,6 +737,14 @@ supported. AUTO reports separate method predictions and raw Shannon entropy,
 not consensus calls or calibrated confidence. Research ROR outputs are not
 clinical Prosigna results.
 
+When current **Full metrics** contain both experimental 18-gene ROR-PC
+columns, the selected export has a persistent experimental notice and the
+score/group display labels. The TSV retains its existing column names,
+types, data and provenance-comment line count; those comments identify the
+experimental outputs and their interpretation. **Calls only**, AUTO and
+other results without these columns do not receive this score-specific
+notice. Changing the export selection does not recalculate scores.
+
 Replacing any expression, clinical or annotation file, reloading the example,
 or changing the data type clears the mapped inputs, predictions, plots and
 downloads. Preprocess and run again. Changes to relevant prediction settings clear old
@@ -620,15 +777,26 @@ demo cohort (expression, clinical, annotation). After loading, click
 **Analysis settings** (Step 2), then click **Run subtyping**. Current plots and
 supported TSV exports appear under **Results and downloads**.
 
-The Shiny expression file contains the same 356 features and 102 samples as
-`OSLO2EMIT0obj$se_obj`, with `log2(FPKM + 1)` expression agreeing at text
-serialization precision. The expression values are not binary-identical.
-The Shiny annotation table covers 19,675 genes, including all 356 packaged
-features with matching annotations. Its clinical table has 12 fields rather
-than the packaged object's six; sample identifiers align, but PR labels use
-`Negative`/`Positive` instead of `PR-`/`PR+`. The full metadata tables therefore
-differ. Numerical agreement does not establish the exact historical
-generating or export script.
+The regenerated Shiny tables use the same authoritative input candidates:
+OSLO has 569 expression/annotation rows and 102 samples; TCGA has 5,350
+expression/annotation rows and 100 samples. OSLO expression is
+`log2(protocol-adjusted FPKM + 1)`; TCGA expression retains recount3 G026
+base-pair coverage sums. The 17-significant-digit text export was verified
+to recover every numeric value exactly on the recorded R runtime.
+
+The existing table schemas and sample identifiers/order are retained. OSLO
+annotation contains `probe`, `SYMBOL` and `ENTREZID`; TCGA also includes
+`Length`. OSLO clinical data retains 12 columns: its six shared fields
+come from the candidate, including canonical `PR-`/`PR+` labels, and six
+ancillary fields are preserved from the hash-pinned historical Shiny table
+(`IHC`, `Prosigna.Subtype`, `Prosigna.ROR`, `MKI67.corrected`,
+`Ki67.estimated`, `IHC.estimated`). Those ancillary fields are historical
+metadata, not regenerated predictions. The four TCGA clinical columns
+match the candidate. The OSLO annotation export now covers the 569 supplied
+features rather than the entire 19,675-gene source background. The source
+repository's `data-raw/issue199` directory records the export recipe and
+input hashes.
+
 
 Programmatic access to the same Shiny files:
 
@@ -688,7 +856,7 @@ clinical validation requires paired clinical assay data.\
 - Staaf J, Hakkinen J, Hegardt C, Saal LH, Kimbung S, Hedenfalk I, *et al.* (2022). RNA sequencing-based single sample predictors of molecular subtype and risk of recurrence for clinical assessment of early-stage breast cancer. *npj Breast Cancer*, 8:94. <https://doi.org/10.1038/s41523-022-00465-3>
 
 
-- Vallon-Christersson J (2023). RNA Sequencing-Based Single Sample Predictors of Molecular Subtype and Risk of Recurrence for Clinical Assessment of Early-Stage Breast Cancer. Mendeley Data, V3. <https://doi.org/10.17632/yzxtxn4nmd.3>
+- Vallon-Christersson J (2025). RNA Sequencing-Based Single Sample Predictors of Molecular Subtype and Risk of Recurrence for Clinical Assessment of Early-Stage Breast Cancer. Mendeley Data, V4. <https://doi.org/10.17632/yzxtxn4nmd.4>
 
 ## Session information
 

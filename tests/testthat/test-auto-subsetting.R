@@ -1,3 +1,4 @@
+# Historical example input is pinned independently of public data; see fixtures/README.md.
 ## Regression tests for the AUTO-mode ssBC / ssBC.v2 sample subsets returned by
 ## get_methods(). Samples whose ER (or HER2) status is missing must not appear
 ## in the subsets: a missing value used to produce an NA sample name, which
@@ -113,7 +114,7 @@ test_that("the packaged OSLO2-EMIT0 cohort runs ssBC on all tumors", {
     old <- options(BreastSubtypeR.verbose = FALSE)
     on.exit(options(old), add = TRUE)
 
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR")
+    load_historical_example("OSLO2EMIT0obj")
     pheno <- as.data.frame(SummarizedExperiment::colData(OSLO2EMIT0obj$data_input$se_NC))
     ## 84 ER+ and 18 ER- tumors; the ER- count equals the ER- minimum of 18.
     expect_identical(sum(pheno$ER == "ER-"), 18L)

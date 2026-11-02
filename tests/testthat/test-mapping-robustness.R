@@ -1,3 +1,4 @@
+# Historical example input is pinned independently of public data; see fixtures/README.md.
 ## Regression tests for probe-to-gene collapsing and Mapping() with a single
 ## sample. duplicate_genes() used to drop the matrix dimensions of one-sample
 ## input and then fail in apply() ("dim(X) must have a positive length"), so
@@ -38,7 +39,7 @@ test_that("duplicate_genes() returns a gene-by-sample matrix with dimnames", {
 test_that("duplicate_genes() handles a single-sample matrix", {
     input <- make_probe_input()
     x1 <- input$x[, "s1", drop = FALSE]
-    for (method in c("max", "mean", "median", "stdev", "iqr")) {
+    for (method in c("max", "mean", "median", "iqr")) {
         res <- BreastSubtypeR:::duplicate_genes(x1, input$y, method)
         expect_true(is.matrix(res), info = method)
         expect_identical(dim(res), c(2L, 1L), info = method)
@@ -47,10 +48,13 @@ test_that("duplicate_genes() handles a single-sample matrix", {
     }
     res_max <- BreastSubtypeR:::duplicate_genes(x1, input$y, "max")
     expect_identical(unname(res_max["100", "s1"]), 10)
+    ## SD is undefined for each duplicate probe with only one sample (#218).
+    expect_error(BreastSubtypeR:::duplicate_genes(x1, input$y, "stdev"),
+        class = "BreastSubtypeR_duplicate_undefined")
 })
 
 test_that("Mapping() accepts a SummarizedExperiment with one sample", {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR")
+    load_historical_example("OSLO2EMIT0obj")
     se <- OSLO2EMIT0obj$se_obj
     full <- suppressMessages(Mapping(
         se_obj = se, RawCounts = FALSE, method = "max",

@@ -5,3 +5,6 @@
 ^doc$
 ^Meta$
 ^MANIFEST\.txt$
+^data-raw$
+^\.git$
+^tools/issue-219$

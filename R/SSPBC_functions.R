@@ -88,15 +88,30 @@ applySSP <- function(tsv,
         }
     }
 
+    ## Fullname copies differ only in e1071 compatibility metadata. Identify
+    ## the resolved fitted model independently of the selection argument.
+    model.identity <- function(model) {
+        for (ki in model$k) model$one.vs.all.tsp[[ki]]$isnumeric <- NULL
+        model
+    }
+    zero.rules.na <- any(vapply(
+        sspbc.models[c("ssp.pam50", "ssp.subtype")],
+        function(model) identical(model.identity(aims.gs), model.identity(model)),
+        logical(1)
+    ))
+
     # fix issue with $isnumeric
     # add logi (aims.gs$ all.pairs), i.e, one TRUE for each aims.gs$ all.pairs
     if (add.is.num) {
         one_vs_all_tsp <- aims.gs$one.vs.all.tsp[[aims.gs$k]]
         one_vs_all_tsp$isnumeric[names(one_vs_all_tsp$tables)] <- TRUE
+        if (zero.rules.na) aims.gs$one.vs.all.tsp[[aims.gs$k]] <- one_vs_all_tsp
     }
 
     # apply ssp model
-    resultslist <- applyAIMS(mymatrix, myid, aims.gs)
+    ## Restrict the zero-evidence correction to the two subtype models.
+    resultslist <- applyAIMS(mymatrix, myid, aims.gs,
+        zero.rules.na = zero.rules.na)
 
     names(resultslist)
 
@@ -421,7 +436,7 @@ translate_id2entrez <- function(id,
     to.ret
 }
 
-.one.vs.all.tsp <- function(D, GeneName, one.vs.all.tsp) {
+.one.vs.all.tsp <- function(D, GeneName, one.vs.all.tsp, zero.rules.na = FALSE) {
     ## Need to add some QC
     ## First compute
     train.pairs <- .comp.sel.pairs(
@@ -440,6 +455,11 @@ translate_id2entrez <- function(id,
     all.probs <- list()
     for (ki in one.vs.all.tsp$k) {
         message(sprintf("Current k = %d", ki))
+        if (zero.rules.na) {
+            model.rules <- .rule_predictor_rows(
+                one.vs.all.tsp$one.vs.all.tsp[[ki]], train.pairs, nb.d
+            )
+        }
         prob.train <- predict(
             one.vs.all.tsp$one.vs.all.tsp[[ki]],
             nb.d,
@@ -451,6 +471,14 @@ translate_id2entrez <- function(id,
         cur.prob <- apply(prob.train, 1, function(prob.cur) {
             max(prob.cur)
         })
+        if (zero.rules.na) {
+            ## Count observed comparisons (both 0 and 1) used by this model.
+            evaluable <- colSums(!is.na(train.pairs[model.rules, , drop = FALSE]))
+            no.rules <- evaluable == 0L
+            cur.cl[no.rules] <- NA_character_
+            cur.prob[no.rules] <- NA_real_
+            prob.train[no.rules, ] <- NA_real_
+        }
         prob[, as.character(ki)] <- cur.prob
         classes[, as.character(ki)] <- cur.cl
         all.probs[[as.character(ki)]] <- prob.train
@@ -512,7 +540,7 @@ translate_id2entrez <- function(id,
     }
 }
 
-.apply.nbc <- function(D, EntrezID, sel.nbc) {
+.apply.nbc <- function(D, EntrezID, sel.nbc, zero.rules.na = FALSE) {
     ## Verify the number of rows of D and EntrezIDs have the same length
     if (nrow(D) != length(EntrezID)) {
         stop(
@@ -526,7 +554,7 @@ translate_id2entrez <- function(id,
     }
     ## AIMS needs to be applied on expression values > 0.
     ## Require 95% of the values to be > 0
-    if (!all(apply(D, 2, function(x) {
+    if (!(zero.rules.na && nrow(D) == 0L) && !all(apply(D, 2, function(x) {
         (sum(x < 0, na.rm = TRUE) / length(x)) < 0.05
     }))) {
         stop(
@@ -544,7 +572,13 @@ translate_id2entrez <- function(id,
         )
     }
 
-    D <- apply(D, 2, as.numeric)
+    if (zero.rules.na) {
+        ## Keep zero/one-row inputs as matrices when model genes are absent.
+        D <- matrix(as.numeric(D), nrow = nrow(D), ncol = ncol(D),
+            dimnames = list(NULL, colnames(D)))
+    } else {
+        D <- apply(D, 2, as.numeric)
+    }
     EntrezID <- as.character(EntrezID)
     sel.ids.nb <- .get.all.pairs.genes(sel.nbc$all.pairs)
     sel.gn <- EntrezID %in% sel.ids.nb
@@ -554,7 +588,8 @@ translate_id2entrez <- function(id,
     pred.test <- .one.vs.all.tsp(
         D = col.D.test$dataset,
         GeneName = col.D.test$EntrezID,
-        sel.nbc
+        sel.nbc,
+        zero.rules.na = zero.rules.na
     )
 
     ## Add more information to the output variable
@@ -564,7 +599,7 @@ translate_id2entrez <- function(id,
     invisible(pred.test)
 }
 
-applyAIMS <- function(eset, EntrezID, AIMSmodel) {
+applyAIMS <- function(eset, EntrezID, AIMSmodel, zero.rules.na = FALSE) {
     D <- NA
     if (!is(eset, "ExpressionSet") & !is(eset, "matrix")) {
         stop(
@@ -579,5 +614,5 @@ applyAIMS <- function(eset, EntrezID, AIMSmodel) {
         D <- eset
     }
 
-    .apply.nbc(D, EntrezID, AIMSmodel)
+    .apply.nbc(D, EntrezID, AIMSmodel, zero.rules.na = zero.rules.na)
 }

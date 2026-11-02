@@ -24,7 +24,13 @@ genes (Gene Symbols) as rows and samples as columns.
 \item \code{"PatientID"}: Unique sample or patient identifier.
 \item \code{"ER"}: Estrogen receptor status, coded as \code{"ER+"} or \code{"ER-"}.
 }
-}}
+}
+
+\code{PatientID} values are converted to character before selecting expression
+columns in every iteration. Factor labels, including unused levels, are
+accepted. IDs must be non-missing, non-empty, unique and present in the
+assay column names. Valid character-ID results, ER balancing, RNG behavior
+and numerical ROR formulas are unchanged.}
 
 \item{iteration}{Integer. Number of iterations for the ER-balancing procedure.
 Default: 100.}
@@ -72,10 +78,13 @@ integer count as a numeric value when available. Binary 0/1 is accepted
 but cannot distinguish 1--3 from 4 or more positive nodes.
 }
 
-\code{NODE} affects only the additional subtype-specific risk group,
-\verb{ROR-PC Group (Subtype + Clinic + Prolif.Subtype)}, using categories
+\code{NODE} affects only the additional subtype-specific risk group
+(Experimental 18-gene ROR-PC group), using categories
 0, 1--3 and 4 or more. It does not enter any numerical ROR score.
-The current R API does not enforce nonnegative integer values for \code{NODE}.
+This group requires finite nonnegative integer-valued counts. Negative,
+fractional or infinite numeric \code{NODE} values give a warning and a missing
+additional group; numerical ROR scores remain available. Missing \code{NODE}
+(\code{NA}/\code{NaN}) gives a missing additional group without a NODE warning.
 See \code{\link[=Mapping]{Mapping()}} for clinical missing-value behavior.}
 
 \item{seed}{Integer. Random seed for reproducibility.}
@@ -139,6 +148,53 @@ Pearson correlations within its validated assay workflow (Wallden et al.,
 do not establish equivalence of preprocessing, calibration or clinical
 validation. These scores and groups are research outputs, not clinical
 Prosigna results. No correlation calculation is changed in version 1.5.8.
+
+\strong{Experimental 18-gene ROR-PC} and
+\strong{Experimental 18-gene ROR-PC group} identify the existing score and group
+columns, respectively:
+
+\preformatted{
+ROR-PC (Subtype + Clinic + Prolif.Subtype)
+ROR-PC Group (Subtype + Clinic + Prolif.Subtype)
+}
+
+Both legacy column names, their types and values are retained for
+compatibility. The original 11-gene
+Parker \code{ROR-PC (Subtype + Clinic + Prolif)} is a different output.
+
+Experimental 18-gene ROR-PC: this research calculation differs from the
+published Lien implementation. Its prognostic performance and risk-category
+thresholds have not been independently validated. It is not a clinical
+Prosigna result and must not guide patient care.
+The published Lien implementation (2021,
+\url{https://doi.org/10.3390/cancers13236118}) standardizes each proliferation
+gene across patients; this package's additional score retains its calibrated,
+unstandardized 18-gene mean. Reproducing Lien's published results therefore
+does not validate this package variant. The categorical labels are
+experimental threshold assignments, not validated clinical risk strata.
+
+Relevant public NC wrappers signal a warning of class
+\code{bsr_experimental_ror_pc_warning} once per top-level call when a nonempty
+returned \code{score.ROR} contains both legacy columns. \code{\link[=BS_Multi]{BS_Multi()}} aggregates
+this notice once per call when a returned component contains them, rather
+than once per method, sample or iteration. There is no such warning on
+package loading, in \code{\link[=Mapping]{Mapping()}}, with \code{hasClinical = FALSE}, or for
+AIMS/SSPBC-only results. An all-NA score column does not establish
+that its companion category is absent: the existing NODE >= 4 rule can
+still assign \code{high} with nonmissing tumor size.
+
+This is an intentional warning: \code{options(warn = 2)} turns it into an error.
+An expert workflow can handle only the
+\code{bsr_experimental_ror_pc_warning} class:
+\itemize{
+\item Establish a handler with \code{withCallingHandlers()}.
+\item Within that handler, call \code{invokeRestart("muffleWarning")}.
+}
+
+Unrelated warnings, including invalid NODE counts, should remain visible.
+Shiny identifies relevant selected Full metrics with the experimental labels
+and notice. Its TSV export preserves the existing tabular schema and
+provenance-comment layout while recording this interpretation.
 }
 
 \section{Known original ROR boundary limitation}{
@@ -155,9 +211,72 @@ as an additional category or infer an assignment by rounding.
 Version 1.5.8 temporarily defers this known categorical-output defect
 pending scientific review of the intended equality convention. Scores,
 coefficients and thresholds are preserved. This limitation is separate
-from the corrected NODE-dependent
-\verb{ROR-PC Group (Subtype + Clinic + Prolif.Subtype)} boundaries described
-in \code{\link[=Mapping]{Mapping()}}, which remain unchanged.
+from the corrected NODE-dependent Experimental 18-gene ROR-PC group
+boundaries described in \code{\link[=Mapping]{Mapping()}}, which remain unchanged.
+}
+
+\section{Proliferation panel coverage}{
+
+Two distinct proliferation calculations are used and are never
+interchanged. For the original Parker-derived ROR-P and
+\code{ROR-PC (Subtype + Clinic + Prolif)}, a separate copy of the calibrated
+expression matrix is standardized with column-wise \code{scale()}: each sample
+is centered at its mean across the represented PAM50 genes and divided by
+its sample standard deviation (denominator \code{n - 1} for \code{n}
+observed genes). The original 11-gene proliferation panel is then averaged
+on this standardized scale with \code{mean(..., na.rm = TRUE)}. The existing
+five-class centroid correlations, coefficients, cutoffs and final
+\code{100 * (score + 0.35) / 0.85} transformation are retained.
+
+This PAM50-only standardization is a chosen, reproducible convention
+matching the complete 50-gene Perou Lab executable example distributed
+with the Parker bioclassifier (also bundled in PCAPAM50 1.0.4). It is not
+a universal requirement inferred from the publication. The distributed
+script scales all rows present at its standardization step, before the
+centroid intersection; its behavior on arbitrary expanded gene sets is
+therefore not equivalent to this convention. BreastSubtypeR uses only
+the represented PAM50 genes in \code{outList$testData}, after its existing gene
+selection, duplicate resolution and method-specific calibration. No
+background genes are added. For \code{cIHC.itr}, standardization is applied to
+the final averaged matrix used for ROR scoring, not to each iteration.
+The classifier input retained in \code{outList$testData}, subtype predictions,
+correlations, Confidence and RNG behavior are unchanged.
+
+Earlier implementations averaged the calibrated but unstandardized
+original proliferation values. Original ROR-P and ROR-PC scores and risk
+groups can consequently change substantially, even for complete panels.
+Historical saved ROR outputs are not automatically equivalent to newly
+computed outputs; comparisons require the implementation version, gene
+coverage, calibration and input provenance. Bundled examples and historical
+research results are not automatically recalculated. Reference agreement
+on complete PAM50 input does not establish clinical validation or validate
+every calibration-specific extension of the shared ROR formulas.
+
+The additional research \code{ROR-PC (Subtype + Clinic + Prolif.Subtype)} is a
+separate definition: it continues to average the represented 18-gene panel
+on the calibrated, unstandardized expression scale, with the four-class
+correlations that exclude BIRC5, CCNB1, GRB7 and MYBL2, its own coefficients
+and the NODE-dependent groups described above. The panels share nine genes
+but are evaluated independently. This additional score and its groups,
+ROR-S and ROR-C are unchanged by the original proliferation correction.
+
+Absent genes are never synthesized and no new panel coverage threshold is
+imposed. One represented proliferation gene can contribute when sample-wise
+PAM50 standardization is defined. Fewer than two observed finite PAM50
+values, zero variance, or a nonfinite sample scale produce missing original
+proliferation-dependent scores and groups; no fallback score is substituted.
+Missing non-proliferation PAM50 genes also change the standardization mean
+and scale. Incomplete-panel scores are a compatibility limitation, not a
+validated partial-panel result. The historical incomplete TCGA regression
+fixture represents 7 of 11 and 8 of 18 proliferation genes; the expanded
+packaged \code{TCGABRCAobj} represents all 11 and 18 genes. For either panel,
+no observed panel value or a nonfinite panel estimate gives a missing
+(\code{NA}) proliferation
+score. Every exported numerical ROR score is finite or \code{NA}: a \code{NaN} or
+infinite result, including overflow in the final score transformation, has
+a missing group rather than \code{low}, \code{med} or \code{high}. The independent NODE >= 4
+high-risk rule for the additional score still applies with nonmissing tumor
+size. The deferred exact-boundary behavior of the original groups is unchanged.
 }
 
 \examples{

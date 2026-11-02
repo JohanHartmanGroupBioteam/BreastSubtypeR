@@ -107,8 +107,9 @@ NULL
 #'       * `TSIZE`: Tumor size (0 = \eqn{\le 2}{<= 2} cm; 1 = \eqn{> 2}{> 2} cm). Must be numeric (0/1).
 #'       * `NODE`: Number of positive lymph nodes. Supply the actual nonnegative
 #'         integer count as a numeric value when available. Binary 0/1 is accepted
-#'         but cannot distinguish 1--3 from 4 or more positive nodes. The current
-#'         R API does not enforce nonnegative integer counts; see Details.
+#'         but cannot distinguish 1--3 from 4 or more positive nodes. The
+#'         additional ROR-PC group requires finite nonnegative integer-valued
+#'         counts; see Details.
 #'
 #'     - **Preferred canonical receptor coding**:
 #'       * `ER`: `ER+`, `ER-`
@@ -140,11 +141,34 @@ NULL
 #'     (short-oligo arrays, e.g., Affymetrix).
 #'   - `"stdev"`: keeps the single probe with the highest standard deviation.
 #'   - `"max"`: keeps the single probe with the largest row sum across samples
-#'     (often used for RNA-seq).
+#'     (often used for RNA-seq). A group with one row is retained without
+#'     ranking, including any remaining `NA` or `NaN` measurements. If every
+#'     probe of a multi-probe group has an undefined row sum (`NA`, `NaN` or
+#'     `Inf - Inf`), `Mapping()` stops with an error naming the Entrez ID
+#'     instead of selecting a probe.
 #'
-#' @param impute Logical. If `TRUE`, applies KNN-based imputation to missing values.
+#'   For `"stdev"` and `"iqr"`, missing observations are removed before computing
+#'   the existing sample SD or type-7 IQR. Selection skips `NA`/`NaN` statistics
+#'   and retains the first maximum in expression-row order, including infinite
+#'   statistics. A singleton probe passes through unchanged. A duplicate group
+#'   with no defined statistic raises `BreastSubtypeR_duplicate_undefined`, with
+#'   `entrez_id`, `method` and `n_probes` fields. Thus duplicate probes with zero
+#'   samples error for both methods; with one sample they error for `"stdev"`,
+#'   while defined zero IQRs retain the first-probe tie rule. No alternative
+#'   probe-selection method or imputation is substituted for an undefined ranking.
+#'   The default method remains `"max"`.
+#'
+#' @param impute Logical; default `FALSE` preserves missing measurements after
+#'   duplicate resolution. For nonraw input, `TRUE` requests optional gene-level
+#'   KNN with fixed `k = 10`, using the full eligible supplied donor matrix.
+#'   Only originally missing measurements in represented genes selected for the
+#'   requested outputs are estimated. Complete required outputs bypass KNN.
 #'
 #' @param verbose Logical. If `TRUE`, prints progress messages during execution.
+#'
+#' @param include_ssp_ror Logical; default `FALSE`. If `TRUE`, also retain the
+#'   Entrez IDs used by the bundled `ssp.ror` gene-pair rules in a separate
+#'   `se_SSP_ROR` output. The existing `se_NC` and `se_SSP` gene sets are unchanged.
 #'
 #' @return A named list with:
 #' \describe{
@@ -152,6 +176,9 @@ NULL
 #'   (assay name: `counts`).}
 #'   \item{se_SSP}{`SummarizedExperiment` holding linear-scale data prepared for SSP-based methods
 #'   (assay name: `counts`).}
+#'   \item{se_SSP_ROR}{Only when `include_ssp_ror = TRUE`: a `SummarizedExperiment`
+#'   with linear-scale SSP-ROR input, unprefixed Entrez IDs as row names and assay
+#'   name `counts`. Sample order and column metadata match the existing outputs.}
 #' }
 #'
 #' @references
@@ -167,19 +194,90 @@ NULL
 #'
 #' This design allows users to supply a single expression format, while
 #' BreastSubtypeR automatically applies method-specific preprocessing.
+#'
+#' **Missingness and optional imputation.** Absent genes are never synthesized.
+#' Mean/median use available probes. Max requires a defined total for a
+#' duplicate probe group; stdev/iqr require a defined variability statistic.
+#' Donors are prepared only when requested output measurements remain missing.
+#' Unusable nonprotected background genes (failed duplicate resolution,
+#' infinite observations or entirely missing profiles) are excluded with
+#' diagnostics; required genes are protected and their duplicate-resolution
+#' errors propagate. Only recognized unsupported duplicate groups are excluded;
+#' unrelated errors propagate. Otherwise usable partially missing
+#' donors are retained, including profiles with more than 50% missingness.
+#'
+#' KNN compares each target with every other eligible original gene profile.
+#' Distance is the mean squared difference over shared finite observations,
+#' accumulated in input sample order. Exactly ten distinct other profiles with
+#' finite distances and positive overlap are selected; exact ties use original
+#' donor row order. Each missing coordinate uses the available original values
+#' among those ten neighbors (one to ten observed contributors per coordinate). No estimated value is reused, and there is no
+#' adaptive k, mean fallback or zero filling. `NA` and `NaN` are both missing,
+#' with separate internal counts. Observed and nontarget measurements and caller
+#' RNG state are preserved. When optional KNN runs, retained input infinities
+#' are unsupported; disabled/complete-output bypasses add no infinity filter. Nonfinite
+#' calculated distances are diagnosed and excluded individually.
+#'
+#' Unsupported or partly unresolved represented targets stop the call with a
+#' structured error identifying target genes and reasons. Full estimator
+#' diagnostics remain available on the condition for inspection, without adding
+#' fields to successful Mapping outputs. Newly estimated values must also remain
+#' finite on their existing NC/SSP output scales. Integer diagnostic/work limits
+#' are checked before estimation; workload is never silently reduced.
+#'
+#' This revised implementation differs from the original publication's pipeline.
+#' Incomplete-input estimates and downstream predictions may change, including
+#' calls that explicitly set `impute = TRUE`.
+#'
+#' **Raw counts and exact output scales.** Raw `NA`/`NaN` counts are rejected with
+#' either impute setting. KNN is never used on raw counts or raw-derived outputs;
+#' `impute = TRUE` errors if missing raw-derived expression remains. Full-count
+#' normalization, library sizes and gene-length handling are unchanged: raw NC
+#' uses upper-quartile log2-CPM with the existing prior count, and raw SSP uses
+#' linear FPKM. Nonraw NC retains collapsed log expression; SSP uses `2^x`, so
+#' log2(FPKM+1) input yields FPKM+1 without subtraction of one.
+#'
+#' **Optional SSP-ROR input.** `include_ssp_ror = TRUE` derives the required genes
+#' from the bundled `ssp.ror` model rather than the shared subtype signature.
+#' The current model uses 296 unique Entrez IDs in 361 gene-pair rules. Represented
+#' genes are returned in first-appearance order in those rules; absent genes are
+#' not synthesized. The separate `se_SSP_ROR` follows the same SSP scales above:
+#' raw counts yield linear FPKM, and nonraw input yields `2^x` after the existing
+#' duplicate resolution. For example, log2(FPKM+1) yields FPKM+1.
+#'
+#' With `impute = FALSE`, remaining missing measurements are preserved. With
+#' `impute = TRUE`, represented SSP-ROR genes join the protected genes and KNN
+#' targets; the same original donor profiles and estimator are used. Unsupported
+#' requested SSP-ROR inputs can therefore cause an opt-in call to fail even when
+#' the default outputs could be prepared. Raw-count imputation remains unsupported.
+#' Existing NC/SSP matrices and subtype results are unchanged for calls that succeed
+#' under both settings. No normalization, duplicate-selection or RNG policy changes.
+#'
+#' `BS_sspbc(result$se_SSP_ROR, ssp.name = "ssp.ror")` can already execute the
+#' bundled model with its native output. This option prepares input only; it does
+#' not add a score API, alter `BS_Multi()` or Ensemble voting, or extend
+#' `InputCoverage()` beyond its existing four-model report.
 #' 
 #' **Clinical ROR covariates.** With `hasClinical = TRUE`, NC method wrappers
-#' require both `TSIZE` and `NODE` columns and check that `NODE` is numeric;
-#' they do not enforce nonnegative integer counts. ROR-S and ROR-P scores and
-#' groups use neither covariate. ROR-C and both ROR-PC scores use `TSIZE`,
+#' require both `TSIZE` and `NODE` columns and check that `NODE` is numeric.
+#' ROR-S and ROR-P scores and groups use neither covariate. ROR-C and both
+#' ROR-PC scores use `TSIZE`,
 #' but no numerical ROR score uses `NODE`. Only the additional risk group
 #' `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)` uses `NODE` categories
 #' 0, 1--3 and 4 or more. With nonmissing `TSIZE`, 4 or more positive nodes
 #' receive high risk; the other categories use different score cutoffs.
 #'
-#' In the R API, an `NA` value in `NODE` makes only this additional group
-#' missing. An `NA` value in `TSIZE` makes all clinical ROR scores and groups
-#' missing; ROR-S and ROR-P remain available. These are missing values within
+#' `NODE` is the number of positive lymph nodes. For this additional group,
+#' the NC methods accept only finite nonnegative integer-valued counts,
+#' stored as doubles or integers. Negative, fractional or infinite numeric values
+#' give one NODE warning per call and a missing additional group, while all
+#' numerical ROR scores and the other groups remain available. `NODE` is
+#' never rounded, truncated or recoded. `Mapping()` itself performs no
+#' `NODE` validation.
+#'
+#' In the R API, an `NA` or `NaN` value in `NODE` makes only this additional
+#' group missing, without a NODE warning. An `NA` value in `TSIZE` makes all
+#' clinical ROR scores and groups missing; ROR-S and ROR-P remain available. These are missing values within
 #' required columns, not permission to omit the columns. The additional
 #' subtype-specific ROR-PC group uses inclusive upper boundaries: NODE = 0
 #' has low <= 40, intermediate > 40 and <= 60, high > 60; NODE = 1--3 has
@@ -205,6 +303,51 @@ NULL
 #' validation. These scores and groups are research outputs, not clinical
 #' Prosigna results. No correlation calculation is changed in version 1.5.8.
 #'
+#' **Experimental 18-gene ROR-PC** and
+#' **Experimental 18-gene ROR-PC group** identify the existing score and group
+#' columns, respectively:
+#'
+#' \preformatted{
+#' ROR-PC (Subtype + Clinic + Prolif.Subtype)
+#' ROR-PC Group (Subtype + Clinic + Prolif.Subtype)
+#' }
+#'
+#' Both legacy column names, their types and values are retained for
+#' compatibility. The original 11-gene
+#' Parker `ROR-PC (Subtype + Clinic + Prolif)` is a different output.
+#'
+#' Experimental 18-gene ROR-PC: this research calculation differs from the
+#' published Lien implementation. Its prognostic performance and risk-category
+#' thresholds have not been independently validated. It is not a clinical
+#' Prosigna result and must not guide patient care.
+#' The published Lien implementation (2021,
+#' <https://doi.org/10.3390/cancers13236118>) standardizes each proliferation
+#' gene across patients; this package's additional score retains its calibrated,
+#' unstandardized 18-gene mean. Reproducing Lien's published results therefore
+#' does not validate this package variant. The categorical labels are
+#' experimental threshold assignments, not validated clinical risk strata.
+#'
+#' Relevant public NC wrappers signal a warning of class
+#' `bsr_experimental_ror_pc_warning` once per top-level call when a nonempty
+#' returned `score.ROR` contains both legacy columns. [BS_Multi()] aggregates
+#' this notice once per call when a returned component contains them, rather
+#' than once per method, sample or iteration. There is no such warning on
+#' package loading, in [Mapping()], with `hasClinical = FALSE`, or for
+#' AIMS/SSPBC-only results. An all-NA score column does not establish
+#' that its companion category is absent: the existing NODE >= 4 rule can
+#' still assign `high` with nonmissing tumor size.
+#'
+#' This is an intentional warning: `options(warn = 2)` turns it into an error.
+#' An expert workflow can handle only the
+#' `bsr_experimental_ror_pc_warning` class:
+#' - Establish a handler with `withCallingHandlers()`.
+#' - Within that handler, call `invokeRestart("muffleWarning")`.
+#'
+#' Unrelated warnings, including invalid NODE counts, should remain visible.
+#' Shiny identifies relevant selected Full metrics with the experimental labels
+#' and notice. Its TSV export preserves the existing tabular schema and
+#' provenance-comment layout while recording this interpretation.
+#'
 #' @section Known original ROR boundary limitation:
 #' The original Parker-derived ROR-S, ROR-P, ROR-C and
 #' `ROR-PC (Subtype + Clinic + Prolif)` grouping retains strict comparisons.
@@ -218,9 +361,70 @@ NULL
 #' Version 1.5.8 temporarily defers this known categorical-output defect
 #' pending scientific review of the intended equality convention. Scores,
 #' coefficients and thresholds are preserved. This limitation is separate
-#' from the corrected NODE-dependent
-#' `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)` boundaries described
-#' in [Mapping()], which remain unchanged.
+#' from the corrected NODE-dependent Experimental 18-gene ROR-PC group
+#' boundaries described in [Mapping()], which remain unchanged.
+#'
+#' @section Proliferation panel coverage:
+#' Two distinct proliferation calculations are used and are never
+#' interchanged. For the original Parker-derived ROR-P and
+#' `ROR-PC (Subtype + Clinic + Prolif)`, a separate copy of the calibrated
+#' expression matrix is standardized with column-wise `scale()`: each sample
+#' is centered at its mean across the represented PAM50 genes and divided by
+#' its sample standard deviation (denominator `n - 1` for `n`
+#' observed genes). The original 11-gene proliferation panel is then averaged
+#' on this standardized scale with `mean(..., na.rm = TRUE)`. The existing
+#' five-class centroid correlations, coefficients, cutoffs and final
+#' `100 * (score + 0.35) / 0.85` transformation are retained.
+#'
+#' This PAM50-only standardization is a chosen, reproducible convention
+#' matching the complete 50-gene Perou Lab executable example distributed
+#' with the Parker bioclassifier (also bundled in PCAPAM50 1.0.4). It is not
+#' a universal requirement inferred from the publication. The distributed
+#' script scales all rows present at its standardization step, before the
+#' centroid intersection; its behavior on arbitrary expanded gene sets is
+#' therefore not equivalent to this convention. BreastSubtypeR uses only
+#' the represented PAM50 genes in `outList$testData`, after its existing gene
+#' selection, duplicate resolution and method-specific calibration. No
+#' background genes are added. For `cIHC.itr`, standardization is applied to
+#' the final averaged matrix used for ROR scoring, not to each iteration.
+#' The classifier input retained in `outList$testData`, subtype predictions,
+#' correlations, Confidence and RNG behavior are unchanged.
+#'
+#' Earlier implementations averaged the calibrated but unstandardized
+#' original proliferation values. Original ROR-P and ROR-PC scores and risk
+#' groups can consequently change substantially, even for complete panels.
+#' Historical saved ROR outputs are not automatically equivalent to newly
+#' computed outputs; comparisons require the implementation version, gene
+#' coverage, calibration and input provenance. Bundled examples and historical
+#' research results are not automatically recalculated. Reference agreement
+#' on complete PAM50 input does not establish clinical validation or validate
+#' every calibration-specific extension of the shared ROR formulas.
+#'
+#' The additional research `ROR-PC (Subtype + Clinic + Prolif.Subtype)` is a
+#' separate definition: it continues to average the represented 18-gene panel
+#' on the calibrated, unstandardized expression scale, with the four-class
+#' correlations that exclude BIRC5, CCNB1, GRB7 and MYBL2, its own coefficients
+#' and the NODE-dependent groups described above. The panels share nine genes
+#' but are evaluated independently. This additional score and its groups,
+#' ROR-S and ROR-C are unchanged by the original proliferation correction.
+#'
+#' Absent genes are never synthesized and no new panel coverage threshold is
+#' imposed. One represented proliferation gene can contribute when sample-wise
+#' PAM50 standardization is defined. Fewer than two observed finite PAM50
+#' values, zero variance, or a nonfinite sample scale produce missing original
+#' proliferation-dependent scores and groups; no fallback score is substituted.
+#' Missing non-proliferation PAM50 genes also change the standardization mean
+#' and scale. Incomplete-panel scores are a compatibility limitation, not a
+#' validated partial-panel result. The historical incomplete TCGA regression
+#' fixture represents 7 of 11 and 8 of 18 proliferation genes; the expanded
+#' packaged `TCGABRCAobj` represents all 11 and 18 genes. For either panel,
+#' no observed panel value or a nonfinite panel estimate gives a missing
+#' (`NA`) proliferation
+#' score. Every exported numerical ROR score is finite or `NA`: a `NaN` or
+#' infinite result, including overflow in the final score transformation, has
+#' a missing group rather than `low`, `med` or `high`. The independent NODE >= 4
+#' high-risk rule for the additional score still applies with nonmissing tumor
+#' size. The deferred exact-boundary behavior of the original groups is unchanged.
 #'
 #' @details
 #' **Phenodata normalization.** If receptor fields are present, they are coerced to canonical encodings
@@ -230,7 +434,7 @@ NULL
 #'
 #' @examples
 #' if (requireNamespace("SummarizedExperiment", quietly = TRUE)) {
-#'     # Using example raw RNA-seq counts (with gene lengths)
+#'     # TCGA recount3 base-pair coverage sums (with G026 gene lengths)
 #'     data("TCGABRCAobj")
 #'     se_obj_counts <- TCGABRCAobj$se_obj[, 1:3] # tiny subset to keep checks fast
 #'     res <- Mapping(se_obj_counts, RawCounts = TRUE)
@@ -247,9 +451,17 @@ NULL
 Mapping <- function(se_obj,
     RawCounts = FALSE,
     method = c("max", "mean", "median", "iqr", "stdev"),
-    impute = TRUE,
-    verbose = TRUE) {
+    impute = FALSE,
+    verbose = TRUE,
+    include_ssp_ror = FALSE) {
     method <- match.arg(method)
+    if (!is.logical(impute) || length(impute) != 1L || is.na(impute)) {
+        stop("impute must be one nonmissing logical value.", call. = FALSE)
+    }
+    if (!is.logical(include_ssp_ror) || length(include_ssp_ror) != 1L ||
+        is.na(include_ssp_ror)) {
+        stop("include_ssp_ror must be one nonmissing logical value.", call. = FALSE)
+    }
 
     ## --- Normalize ER/HER2/TN in colData ---
     cd0 <- SummarizedExperiment::colData(se_obj)
@@ -271,6 +483,7 @@ Mapping <- function(se_obj,
         method = method,
         impute = impute,
         verbose = verbose,
+        include_ssp_ror = include_ssp_ror,
         .homonyms = "last"
     )
 
@@ -293,6 +506,12 @@ Mapping <- function(se_obj,
     )
     # Keep reporting separate from the processed inputs and prediction results.
     result <- list(se_NC = se_NC, se_SSP = se_SSP)
+    if (include_ssp_ror) {
+        result$se_SSP_ROR <- SummarizedExperiment(
+            assays = list(counts = res$x_SSP_ROR),
+            colData = colData(se_obj)
+        )
+    }
     if (isTRUE(verbose)) {
         tryCatch(.message_input_coverage(InputCoverage(result)),
             error = function(e) message("Input coverage unavailable: ", conditionMessage(e)))
@@ -306,6 +525,7 @@ Mapping <- function(se_obj,
 #' @name BS_parker
 #' @inheritSection Mapping Research ROR interpretation
 #' @inheritSection Mapping Known original ROR boundary limitation
+#' @inheritSection Mapping Proliferation panel coverage
 #' @description
 #' Implements the original PAM50 nearest-centroid classifier as described by
 #' Parker et al. (2009), along with supported calibration strategies and
@@ -351,10 +571,13 @@ Mapping <- function(se_obj,
 #'   integer count as a numeric value when available. Binary 0/1 is accepted
 #'   but cannot distinguish 1--3 from 4 or more positive nodes.
 #'
-#' `NODE` affects only the additional subtype-specific risk group,
-#' `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)`, using categories
+#' `NODE` affects only the additional subtype-specific risk group
+#' (Experimental 18-gene ROR-PC group), using categories
 #' 0, 1--3 and 4 or more. It does not enter any numerical ROR score.
-#' The current R API does not enforce nonnegative integer values for `NODE`.
+#' This group requires finite nonnegative integer-valued counts. Negative,
+#' fractional or infinite numeric `NODE` values give a warning and a missing
+#' additional group; numerical ROR scores remain available. Missing `NODE`
+#' (`NA`/`NaN`) gives a missing additional group without a NODE warning.
 #' For NODE = 0 or 1--3, an undefined numerical `NA` or `NaN` additional
 #' ROR-PC score has an actual missing risk category, not the text `"NaN"`.
 #' The numerical score is unchanged. The independent NODE >= 4 high-risk
@@ -468,6 +691,7 @@ BS_parker <- function(se_obj,
     call <- rlang::call2(makeCalls.parker, !!!arguments)
     res_parker <- eval(call)
 
+    .warn_experimental_ror_pc(res_parker)
     return(res_parker)
 }
 
@@ -476,6 +700,7 @@ BS_parker <- function(se_obj,
 #' @name BS_cIHC
 #' @inheritSection Mapping Research ROR interpretation
 #' @inheritSection Mapping Known original ROR boundary limitation
+#' @inheritSection Mapping Proliferation panel coverage
 #' @description
 #' Implements the conventional immunohistochemistry-based (cIHC) intrinsic
 #' subtyping approach, which balances cohorts by estrogen receptor (ER) status
@@ -487,7 +712,10 @@ BS_parker <- function(se_obj,
 #'   - **Assay data**: A log2-transformed, normalized expression matrix with
 #'     genes (Gene Symbols) as rows and samples as columns.
 #'   - **Column metadata** (`colData`): Must include:
-#'     - `"PatientID"`: Unique sample or patient identifier.
+#'     - `"PatientID"`: Unique sample or patient identifier. Values are converted
+#'       to character before name-based indexing, so factor labels (including
+#'       unused levels) are matched to expression column names. Missing, empty,
+#'       duplicated or unmatched identifiers are rejected.
 #'     - `"ER"`: Estrogen receptor status, coded as `"ER+"` or `"ER-"`.
 #'
 #' @param Subtype Logical. If `TRUE`, returns only the four main subtypes
@@ -500,10 +728,13 @@ BS_parker <- function(se_obj,
 #'   integer count as a numeric value when available. Binary 0/1 is accepted
 #'   but cannot distinguish 1--3 from 4 or more positive nodes.
 #'
-#' `NODE` affects only the additional subtype-specific risk group,
-#' `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)`, using categories
+#' `NODE` affects only the additional subtype-specific risk group
+#' (Experimental 18-gene ROR-PC group), using categories
 #' 0, 1--3 and 4 or more. It does not enter any numerical ROR score.
-#' The current R API does not enforce nonnegative integer values for `NODE`.
+#' This group requires finite nonnegative integer-valued counts. Negative,
+#' fractional or infinite numeric `NODE` values give a warning and a missing
+#' additional group; numerical ROR scores remain available. Missing `NODE`
+#' (`NA`/`NaN`) gives a missing additional group without a NODE warning.
 #' See [Mapping()] for clinical missing-value behavior.
 #'
 #' @param seed Integer. Random seed for reproducibility of ER-balancing.
@@ -555,6 +786,21 @@ BS_cIHC <- function(
     if (!all(c("PatientID", "ER") %in% colnames(pheno))) {
         stop("The 'colData' of 'se_obj' must include 'PatientID' and 'ER' columns.")
     }
+    pheno$PatientID <- as.character(pheno$PatientID)
+    if (anyNA(pheno$PatientID) || any(!nzchar(pheno$PatientID))) {
+        stop("colData(se_obj)$PatientID must not contain missing or empty values.",
+             call. = FALSE)
+    }
+    if (anyDuplicated(pheno$PatientID)) {
+        stop("colData(se_obj)$PatientID must be unique; duplicated: ",
+             paste(utils::head(unique(pheno$PatientID[duplicated(pheno$PatientID)]), 5L),
+                   collapse = ", "), call. = FALSE)
+    }
+    missing_ids <- setdiff(pheno$PatientID, colnames(gene_expr))
+    if (length(missing_ids)) {
+        stop("colData(se_obj)$PatientID value(s) not found among assay column names: ",
+             paste(utils::head(missing_ids, 5L), collapse = ", "), call. = FALSE)
+    }
     rownames(pheno) <- pheno$PatientID
 
     if (hasClinical) {
@@ -577,6 +823,7 @@ BS_cIHC <- function(
     call <- rlang::call2(makeCalls_ihc, !!!arguments)
     res_IHC <- eval(call)
 
+    .warn_experimental_ror_pc(res_IHC)
     return(res_IHC)
 }
 
@@ -586,6 +833,7 @@ BS_cIHC <- function(
 #' @name BS_cIHC.itr
 #' @inheritSection Mapping Research ROR interpretation
 #' @inheritSection Mapping Known original ROR boundary limitation
+#' @inheritSection Mapping Proliferation panel coverage
 #' @description
 #' Implements an **iterative** version of the conventional IHC-based intrinsic
 #' subtyping approach. This method repeatedly balances samples by estrogen
@@ -601,6 +849,12 @@ BS_cIHC <- function(
 #'   - **Column metadata** (`colData`): Must include:
 #'     - `"PatientID"`: Unique sample or patient identifier.
 #'     - `"ER"`: Estrogen receptor status, coded as `"ER+"` or `"ER-"`.
+#'
+#'   `PatientID` values are converted to character before selecting expression
+#'   columns in every iteration. Factor labels, including unused levels, are
+#'   accepted. IDs must be non-missing, non-empty, unique and present in the
+#'   assay column names. Valid character-ID results, ER balancing, RNG behavior
+#'   and numerical ROR formulas are unchanged.
 #'
 #' @param iteration Integer. Number of iterations for the ER-balancing procedure.
 #'   Default: 100.
@@ -645,10 +899,13 @@ BS_cIHC <- function(
 #'   integer count as a numeric value when available. Binary 0/1 is accepted
 #'   but cannot distinguish 1--3 from 4 or more positive nodes.
 #'
-#' `NODE` affects only the additional subtype-specific risk group,
-#' `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)`, using categories
+#' `NODE` affects only the additional subtype-specific risk group
+#' (Experimental 18-gene ROR-PC group), using categories
 #' 0, 1--3 and 4 or more. It does not enter any numerical ROR score.
-#' The current R API does not enforce nonnegative integer values for `NODE`.
+#' This group requires finite nonnegative integer-valued counts. Negative,
+#' fractional or infinite numeric `NODE` values give a warning and a missing
+#' additional group; numerical ROR scores remain available. Missing `NODE`
+#' (`NA`/`NaN`) gives a missing additional group without a NODE warning.
 #' See [Mapping()] for clinical missing-value behavior.
 #'
 #' @param seed Integer. Random seed for reproducibility.
@@ -723,6 +980,21 @@ BS_cIHC.itr <- function(
     if (!all(c("PatientID", "ER") %in% colnames(pheno))) {
         stop("The 'colData' of 'se_obj' must include 'PatientID' and 'ER' columns.")
     }
+    pheno$PatientID <- as.character(pheno$PatientID)
+    if (anyNA(pheno$PatientID) || any(!nzchar(pheno$PatientID))) {
+        stop("colData(se_obj)$PatientID must not contain missing or empty values.",
+             call. = FALSE)
+    }
+    if (anyDuplicated(pheno$PatientID)) {
+        stop("colData(se_obj)$PatientID must be unique; duplicated: ",
+             paste(utils::head(unique(pheno$PatientID[duplicated(pheno$PatientID)]), 5L),
+                   collapse = ", "), call. = FALSE)
+    }
+    missing_ids <- setdiff(pheno$PatientID, colnames(gene_expr))
+    if (length(missing_ids)) {
+        stop("colData(se_obj)$PatientID value(s) not found among assay column names: ",
+             paste(utils::head(missing_ids, 5L), collapse = ", "), call. = FALSE)
+    }
     rownames(pheno) <- pheno$PatientID
 
     if (hasClinical) {
@@ -748,6 +1020,7 @@ BS_cIHC.itr <- function(
     call <- rlang::call2(makeCalls_ihc.iterative, !!!arguments)
     res_IHC.itr <- eval(call)
 
+    .warn_experimental_ror_pc(res_IHC.itr)
     return(res_IHC.itr)
 }
 
@@ -757,6 +1030,7 @@ BS_cIHC.itr <- function(
 #' @name BS_PCAPAM50
 #' @inheritSection Mapping Research ROR interpretation
 #' @inheritSection Mapping Known original ROR boundary limitation
+#' @inheritSection Mapping Proliferation panel coverage
 #' @description
 #' Implements the PCA-PAM50 method, which integrates **Principal Component
 #' Analysis (PCA)** of ESR1 expression to adjust for estrogen receptor (ER)
@@ -767,7 +1041,10 @@ BS_cIHC.itr <- function(
 #'   - **Assay data**: A log2-transformed, normalized expression matrix with
 #'     genes (Gene Symbols) as rows and samples as columns.
 #'   - **Column metadata** (`colData`): Must include:
-#'     - `"PatientID"`: Unique sample or patient identifier.
+#'     - `"PatientID"`: Unique sample or patient identifier. Values are converted
+#'       to character and matched to assay column names, including factor labels
+#'       rather than their integer codes. Missing, empty, duplicated or unmatched
+#'       identifiers give an error before classification.
 #'     - `"ER"`: Estrogen receptor status, coded as `"ER+"` or `"ER-"`.
 #'
 #' @param Subtype Logical. If `TRUE`, returns only the four main subtypes
@@ -780,10 +1057,13 @@ BS_cIHC.itr <- function(
 #'   integer count as a numeric value when available. Binary 0/1 is accepted
 #'   but cannot distinguish 1--3 from 4 or more positive nodes.
 #'
-#' `NODE` affects only the additional subtype-specific risk group,
-#' `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)`, using categories
+#' `NODE` affects only the additional subtype-specific risk group
+#' (Experimental 18-gene ROR-PC group), using categories
 #' 0, 1--3 and 4 or more. It does not enter any numerical ROR score.
-#' The current R API does not enforce nonnegative integer values for `NODE`.
+#' This group requires finite nonnegative integer-valued counts. Negative,
+#' fractional or infinite numeric `NODE` values give a warning and a missing
+#' additional group; numerical ROR scores remain available. Missing `NODE`
+#' (`NA`/`NaN`) gives a missing additional group without a NODE warning.
 #' See [Mapping()] for clinical missing-value behavior.
 #'
 #' @param seed Integer. Random seed for reproducibility.
@@ -802,6 +1082,22 @@ BS_cIHC.itr <- function(
 #' ER-positive subtypes start with "L" and all other labels are ER-negative;
 #' it does not define behaviour for missing labels.
 #'
+#' Before second-stage sampling, complete intermediate rows are ordered by
+#' character `PatientID`, matching the first-step merge in PCAPAM50 1.0.4 under
+#' the caller's collation. This can change selected samples, centering medians,
+#' subtype calls and derived scores relative to earlier package behavior.
+#' The first-step calculations and labels are unchanged. The caller's locale
+#' is not changed; universal input-permutation or cross-locale equivalence is
+#' not guaranteed. This ordering correction is independent of the shared
+#' original ROR standardization described under Proliferation panel coverage.
+#'
+#' After both PCA-PAM50 steps complete, all sample-indexed outputs follow the
+#' input sample order: rows of `BS.all` and `score.ROR`, prediction vectors and
+#' distance-matrix rows in `outList`, and columns of `outList$testData`.
+#' Gene medians and centroids are not reordered. This final reordering leaves
+#' internal calibration and sampling, and per-sample values for the same input,
+#' seed and environment, unchanged. It is separate from the intermediate
+#' ordering used before second-stage sampling.
 #'
 #' @return A list with the following elements:
 #'   - `BS.all`: `data.frame` with `PatientID`, `BS` (five-class call) and,
@@ -849,6 +1145,22 @@ BS_PCAPAM50 <- function(
 
     if (!all(c("PatientID", "ER") %in% colnames(pheno))) {
         stop("The 'colData' of 'se_obj' must include 'PatientID' and 'ER' columns.")
+    }
+    ## Use sample names, not factor codes, in both centering steps (#197).
+    pheno$PatientID <- as.character(pheno$PatientID)
+    if (anyNA(pheno$PatientID) || any(!nzchar(pheno$PatientID))) {
+        stop("colData(se_obj)$PatientID must not contain missing or empty values.",
+             call. = FALSE)
+    }
+    if (anyDuplicated(pheno$PatientID)) {
+        stop("colData(se_obj)$PatientID must be unique; duplicated: ",
+             paste(utils::head(unique(pheno$PatientID[duplicated(pheno$PatientID)]), 5L),
+                   collapse = ", "), call. = FALSE)
+    }
+    missing_ids <- setdiff(pheno$PatientID, colnames(gene_expr))
+    if (length(missing_ids)) {
+        stop("colData(se_obj)$PatientID value(s) not found among assay column names: ",
+             paste(utils::head(missing_ids, 5L), collapse = ", "), call. = FALSE)
     }
     rownames(pheno) <- pheno$PatientID
 
@@ -908,6 +1220,10 @@ BS_PCAPAM50 <- function(
         )
     }
 
+    ## Match the reference's character PatientID merge order before sampling.
+    df.pc1pam <- df.pc1pam[
+        order(as.character(df.pc1pam$PatientID)), , drop = FALSE]
+
     arguments2 <- rlang::dots_list(
         mat = gene_expr,
         df.pam = df.pc1pam,
@@ -920,10 +1236,23 @@ BS_PCAPAM50 <- function(
     call <- rlang::call2(makeCalls.v1PAM, !!!arguments2)
     res_PCAPAM50 <- eval(call)
 
-    ## reorder
+    ## Restore all sample-indexed outputs after both steps; values are unchanged.
     idx <- na.omit(match(samples, res_PCAPAM50$BS.all$PatientID))
-    res_PCAPAM50$BS.all <- res_PCAPAM50$BS.all[idx, ]
+    ord <- res_PCAPAM50$BS.all$PatientID[idx]
+    res_PCAPAM50$BS.all <- res_PCAPAM50$BS.all[idx, , drop = FALSE]
+    res_PCAPAM50$score.ROR <- res_PCAPAM50$score.ROR[
+        match(ord, as.character(res_PCAPAM50$score.ROR$patientID)), , drop = FALSE]
+    ol <- res_PCAPAM50$outList
+    ol$predictions <- ol$predictions[ord]
+    if (!is.null(ol$predictions.FourSubtype)) {
+        ol$predictions.FourSubtype <- ol$predictions.FourSubtype[ord]
+    }
+    ol$testData <- ol$testData[, ord, drop = FALSE]
+    ol$distances <- ol$distances[ord, , drop = FALSE]
+    ol$dist.RORSubtype <- ol$dist.RORSubtype[ord, , drop = FALSE]
+    res_PCAPAM50$outList <- ol
 
+    .warn_experimental_ror_pc(res_PCAPAM50)
     return(res_PCAPAM50)
 }
 
@@ -933,6 +1262,7 @@ BS_PCAPAM50 <- function(
 #' @name BS_ssBC
 #' @inheritSection Mapping Research ROR interpretation
 #' @inheritSection Mapping Known original ROR boundary limitation
+#' @inheritSection Mapping Proliferation panel coverage
 #' @description
 #' Implements the **subgroup-specific gene-centering (ssBC)** method for breast
 #' cancer intrinsic subtyping. The ssBC approach applies precomputed,
@@ -967,10 +1297,13 @@ BS_PCAPAM50 <- function(
 #'   integer count as a numeric value when available. Binary 0/1 is accepted
 #'   but cannot distinguish 1--3 from 4 or more positive nodes.
 #'
-#' `NODE` affects only the additional subtype-specific risk group,
-#' `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)`, using categories
+#' `NODE` affects only the additional subtype-specific risk group
+#' (Experimental 18-gene ROR-PC group), using categories
 #' 0, 1--3 and 4 or more. It does not enter any numerical ROR score.
-#' The current R API does not enforce nonnegative integer values for `NODE`.
+#' This group requires finite nonnegative integer-valued counts. Negative,
+#' fractional or infinite numeric `NODE` values give a warning and a missing
+#' additional group; numerical ROR scores remain available. Missing `NODE`
+#' (`NA`/`NaN`) gives a missing additional group without a NODE warning.
 #' See [Mapping()] for clinical missing-value behavior.
 #'
 #' @return A list with the following elements:
@@ -1086,6 +1419,7 @@ BS_ssBC <- function(
     call <- rlang::call2(makeCalls.ssBC, !!!arguments)
     res_ssBC <- eval(call)
 
+    .warn_experimental_ror_pc(res_ssBC)
     return(res_ssBC)
 }
 
@@ -1129,6 +1463,9 @@ BS_ssBC <- function(
 #' its `all.pairs` vector and fitted naive Bayes tables contain 100 rule
 #' predictors. `k` is not the total rule denominator. [InputCoverage()] reports
 #' represented genes and rule evaluability without modifying this model.
+#' If no model rule is evaluable for a sample, its class, selected-class
+#' probability and all posterior probabilities are `NA`. Both TRUE and FALSE
+#' comparisons count as evaluable; with at least one, native predictions are retained.
 #' The posterior probabilities come from the fitted model and are distinct
 #' from input coverage, multi-method entropy and Parker `Confidence`.
 #' They are not externally calibrated measures of clinical reliability.
@@ -1245,17 +1582,33 @@ BS_AIMS <- function(se_obj) {
 #' @details
 #' The bundled SSP-ROR model uses \code{k = 21} and 361 gene-pair rules.
 #' Its \code{cl} values are categorical ROR-bin predictions from the fitted
-#' model described by Staaf et al. (2022). They are not continuous ROR scores,
+#' model described by Staaf et al. (2022). They are not continuous or
+#' Parker-derived ROR scores,
 #' tumor-size-adjusted ROR values, nodal-status-specific risk categories or
 #' clinical Prosigna outputs. This wrapper does not convert bins to numbers,
 #' apply clinical cutoffs or use tumor size or nodal status.
 #'
+#' Prepare SSP-ROR input with `Mapping(se_obj, include_ssp_ror = TRUE)$se_SSP_ROR`.
+#' The expanded public OSLO and TCGA inputs provide all 296 required genes and
+#' 361 evaluable rules per sample with `RawCounts = FALSE` and `TRUE`, respectively.
+#' Default `data_input$se_SSP` objects remain restricted to subtype genes.
+#' Complete rule coverage does not establish training-input equivalence: OSLO
+#' stores log2(protocol-adjusted FPKM + 1), which Mapping back-transforms to
+#' protocol-adjusted FPKM + 1. SSPBC development used original unadjusted
+#' StringTie FPKM. The example does not undo protocol adjustment or validate
+#' SSP-ROR calibration on that scale.
+#'
+#' For `ssp.pam50` and `ssp.subtype`, if no model rule is evaluable for a sample,
+#' its class, selected-class
+#' probability and all posterior probabilities are `NA`. Both TRUE and FALSE
+#' comparisons count as evaluable; with at least one, native predictions are retained.
 #' Posterior probabilities are conditional on the fitted naive Bayes model
 #' and its native handling of the available rule inputs. They differ from
 #' [InputCoverage()], multi-method entropy and Parker `Confidence`; they do
 #' not establish externally validated predictive or clinical reliability.
 #' For \code{ssp.ror}, they describe bin membership, not recurrence probability.
-#' Missing rules retain the native handling; successful prediction alone
+#' SSP-ROR retains native missing-rule handling rather than the subtype models'
+#' zero-evidence safeguard; successful prediction alone
 #' does not establish adequate input coverage.
 #'
 #' @references
@@ -1273,17 +1626,23 @@ BS_AIMS <- function(se_obj) {
 #' )
 #'
 #' ## Native ROR-bin predictions for research use
-#' ## This compact example lacks many SSP-ROR rules; it illustrates the API.
+#' ## Full rule coverage, with the OSLO training-input scale limitation above.
+#' se_obj <- OSLO2EMIT0obj$se_obj
+#' se_ror <- Mapping(se_obj, RawCounts = FALSE,
+#'     include_ssp_ror = TRUE)$se_SSP_ROR
 #' ror <- BS_sspbc(
-#'     se_obj = OSLO2EMIT0obj$data_input$se_SSP,
+#'     se_obj = se_ror,
 #'     ssp.name = "ssp.ror"
 #' )
-#' head(data.frame(
+#' ror_bins <- data.frame(
 #'     SampleID = rownames(ror$cl),
 #'     ROR_bin = ror$cl[, "21"],
 #'     Bin_probability = ror$prob[, "21"],
-#'     row.names = NULL
-#' ))
+#'     ror$all.probs[["21"]],
+#'     row.names = NULL, check.names = FALSE
+#' )
+#' head(ror_bins)
+#' ## write.csv(ror_bins, "ssp-ror-bins.csv", row.names = FALSE)
 #'
 #' @export
 
@@ -1320,6 +1679,7 @@ BS_sspbc <- function(se_obj, ssp.name = "ssp.pam50") {
 #' @name BS_Multi
 #' @inheritSection Mapping Research ROR interpretation
 #' @inheritSection Mapping Known original ROR boundary limitation
+#' @inheritSection Mapping Proliferation panel coverage
 #' @description
 #' Executes multiple intrinsic molecular subtyping methods in one call.
 #' Users can either specify a set of classifiers directly, or enable the
@@ -1349,7 +1709,8 @@ BS_sspbc <- function(se_obj, ssp.name = "ssp.pam50") {
 #'
 #'   **Notes:**
 #'   - If `"AUTO"` is selected, it must be the sole value in `methods`.
-#'   - Otherwise, at least **two** methods must be specified.
+#'   - Otherwise, at least **two distinct** methods must be specified.
+#'   - Duplicate entries are rejected rather than run repeatedly.
 #'
 #' @param Subtype Logical. If `TRUE`, also returns a four-class summary in
 #'   `res_subtypes.Subtype` (Luminal A, Luminal B, HER2-enriched, Basal-like).
@@ -1364,10 +1725,13 @@ BS_sspbc <- function(se_obj, ssp.name = "ssp.pam50") {
 #'   integer count as a numeric value when available. Binary 0/1 is accepted
 #'   but cannot distinguish 1--3 from 4 or more positive nodes.
 #'
-#' `NODE` affects only the additional subtype-specific risk group,
-#' `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)`, using categories
+#' `NODE` affects only the additional subtype-specific risk group
+#' (Experimental 18-gene ROR-PC group), using categories
 #' 0, 1--3 and 4 or more. It does not enter any numerical ROR score.
-#' The current R API does not enforce nonnegative integer values for `NODE`.
+#' This group requires finite nonnegative integer-valued counts. Negative,
+#' fractional or infinite numeric `NODE` values give a warning and a missing
+#' additional group; numerical ROR scores remain available. Missing `NODE`
+#' (`NA`/`NaN`) gives a missing additional group without a NODE warning.
 #' See [Mapping()] for clinical missing-value behavior.
 #'
 #' @param er_subsample Character, passed to `BS_cIHC.itr()` and used by no
@@ -1384,6 +1748,11 @@ BS_sspbc <- function(se_obj, ssp.name = "ssp.pam50") {
 #' include cIHC.itr when the ER-group size gates are met. TN-only and HER2+
 #' cohort routes are evaluated separately. See the package vignette for
 #' cohort-specific eligibility and minimum subgroup sizes.
+#'
+#' AUTO subcohort results for `ssBC` and `ssBC.v2` are restored by character
+#' `PatientID` labels, including factor labels with unused levels. Restoration
+#' requires complete, unique sample identities. Ineligible samples retain
+#' missing calls; subgroup eligibility and prediction algorithms are unchanged.
 #'
 #' For `ssBC.v2`, Fernandez-Martinez et al. (2020) described the earlier
 #' HER2/ER-specific application. The updated quantiles match the public
@@ -1481,6 +1850,19 @@ BS_Multi <- function(data_input,
         stop("Invalid method(s) specified: ", paste(invalid_methods, collapse = ", "))
     }
 
+    if ("AUTO" %in% methods && length(methods) > 1L) {
+        stop("'AUTO' must be the only entry in 'methods'.", call. = FALSE)
+    }
+
+    if (anyDuplicated(methods)) {
+        duplicates <- unique(methods[duplicated(methods)])
+        stop(
+            "Duplicate method(s) specified: ",
+            paste(duplicates, collapse = ", "),
+            call. = FALSE
+        )
+    }
+
     if (length(methods) == 1 && methods[1] == "AUTO") {
         message("Running AUTO mode for subtyping.")
     } else if (length(methods) < 2) {
@@ -1493,6 +1875,19 @@ BS_Multi <- function(data_input,
         stop("colData(se_NC) must have a 'PatientID' column.")
     }
     rownames(pheno) <- pheno$PatientID
+
+    restore_auto_rows <- function(calls) {
+        ids <- as.character(pheno$PatientID)
+        row_ids <- rownames(calls)
+        if (anyNA(ids) || any(!nzchar(ids)) || anyDuplicated(ids) ||
+            anyDuplicated(row_ids) || length(row_ids) != length(ids) ||
+            !setequal(row_ids, ids) ||
+            !identical(as.character(calls$PatientID), row_ids)) {
+            stop("Cannot restore AUTO subcohort results: sample IDs must be complete and unique.",
+                 call. = FALSE)
+        }
+        calls[match(ids, row_ids), , drop = FALSE]
+    }
 
     # Detect true TN cohort
     has_TN_col <- "TN" %in% colnames(pheno)
@@ -1541,7 +1936,7 @@ BS_Multi <- function(data_input,
     }
 
     ## run each method
-    results <- lapply(methods, function(method) {
+    results <- withCallingHandlers(lapply(methods, function(method) {
         ## try NC-based
         if (method == "parker.original") {
             message(method, " is running!")
@@ -1675,7 +2070,7 @@ BS_Multi <- function(data_input,
                 )
 
                 res_ssBC$BS.all <- rbind(res_ssBC$BS.all, na_df)
-                res_ssBC$BS.all <- res_ssBC$BS.all[pheno$PatientID, ]
+                res_ssBC$BS.all <- restore_auto_rows(res_ssBC$BS.all)
             }
 
             return(res_ssBC)
@@ -1727,7 +2122,7 @@ BS_Multi <- function(data_input,
                 )
 
                 res_ssBC.v2$BS.all <- rbind(res_ssBC.v2$BS.all, na_df)
-                res_ssBC.v2$BS.all <- res_ssBC.v2$BS.all[pheno$PatientID, ]
+                res_ssBC.v2$BS.all <- restore_auto_rows(res_ssBC.v2$BS.all)
             }
 
 
@@ -1779,6 +2174,8 @@ BS_Multi <- function(data_input,
         }
 
         stop("Unknown method: ", method)
+    }), bsr_experimental_ror_pc_warning = function(w) {
+        invokeRestart("muffleWarning")
     })
 
     ## Map method names and align outputs by PatientID (robust to order/missing)
@@ -1870,6 +2267,10 @@ BS_Multi <- function(data_input,
         )
     } else {
         res <- list(res_subtypes = res_subtypes, results = results)
+    }
+    experimental <- which(vapply(results, .has_experimental_ror_pc, logical(1)))
+    if (length(experimental)) {
+        .warn_experimental_ror_pc(results[[experimental[1L]]])
     }
     return(res)
 }

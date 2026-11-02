@@ -8,8 +8,9 @@ Mapping(
   se_obj,
   RawCounts = FALSE,
   method = c("max", "mean", "median", "iqr", "stdev"),
-  impute = TRUE,
-  verbose = TRUE
+  impute = FALSE,
+  verbose = TRUE,
+  include_ssp_ror = FALSE
 )
 }
 \arguments{
@@ -43,8 +44,9 @@ AUTO uses TNBC-specific cohort handling only when all evaluable TN annotations i
 \item \code{TSIZE}: Tumor size (0 = \eqn{\le 2}{<= 2} cm; 1 = \eqn{> 2}{> 2} cm). Must be numeric (0/1).
 \item \code{NODE}: Number of positive lymph nodes. Supply the actual nonnegative
 integer count as a numeric value when available. Binary 0/1 is accepted
-but cannot distinguish 1--3 from 4 or more positive nodes. The current
-R API does not enforce nonnegative integer counts; see Details.
+but cannot distinguish 1--3 from 4 or more positive nodes. The
+additional ROR-PC group requires finite nonnegative integer-valued
+counts; see Details.
 }
 \item \strong{Preferred canonical receptor coding}:
 \itemize{
@@ -81,12 +83,36 @@ the probes into one row).
 (short-oligo arrays, e.g., Affymetrix).
 \item \code{"stdev"}: keeps the single probe with the highest standard deviation.
 \item \code{"max"}: keeps the single probe with the largest row sum across samples
-(often used for RNA-seq).
-}}
+(often used for RNA-seq). A group with one row is retained without
+ranking, including any remaining \code{NA} or \code{NaN} measurements. If every
+probe of a multi-probe group has an undefined row sum (\code{NA}, \code{NaN} or
+\code{Inf - Inf}), \code{Mapping()} stops with an error naming the Entrez ID
+instead of selecting a probe.
+}
 
-\item{impute}{Logical. If \code{TRUE}, applies KNN-based imputation to missing values.}
+For \code{"stdev"} and \code{"iqr"}, missing observations are removed before computing
+the existing sample SD or type-7 IQR. Selection skips \code{NA}/\code{NaN} statistics
+and retains the first maximum in expression-row order, including infinite
+statistics. A singleton probe passes through unchanged. A duplicate group
+with no defined statistic raises \code{BreastSubtypeR_duplicate_undefined}, with
+\code{entrez_id}, \code{method} and \code{n_probes} fields. Thus duplicate probes with zero
+samples error for both methods; with one sample they error for \code{"stdev"},
+while defined zero IQRs retain the first-probe tie rule. No alternative
+probe-selection method or imputation is substituted for an undefined ranking.
+The default method remains \code{"max"}.
+}
+
+\item{impute}{Logical; default \code{FALSE} preserves missing measurements after
+duplicate resolution. For nonraw input, \code{TRUE} requests optional gene-level
+KNN with fixed \code{k = 10}, using the full eligible supplied donor matrix.
+Only originally missing measurements in represented genes selected for the
+requested outputs are estimated. Complete required outputs bypass KNN.}
 
 \item{verbose}{Logical. If \code{TRUE}, prints progress messages during execution.}
+
+\item{include_ssp_ror}{Logical; default \code{FALSE}. If \code{TRUE}, also retain the
+Entrez IDs used by the bundled \code{ssp.ror} gene-pair rules in a separate
+\code{se_SSP_ROR} output. The existing \code{se_NC} and \code{se_SSP} gene sets are unchanged.}
 }
 \value{
 A named list with:
@@ -95,6 +121,9 @@ A named list with:
 (assay name: \code{counts}).}
 \item{se_SSP}{\code{SummarizedExperiment} holding linear-scale data prepared for SSP-based methods
 (assay name: \code{counts}).}
+\item{se_SSP_ROR}{Only when \code{include_ssp_ror = TRUE}: a \code{SummarizedExperiment}
+with linear-scale SSP-ROR input, unprefixed Entrez IDs as row names and assay
+name \code{counts}. Sample order and column metadata match the existing outputs.}
 }
 }
 \description{
@@ -112,18 +141,89 @@ intrinsic subtyping workflows (NC- and SSP-based).
 This design allows users to supply a single expression format, while
 BreastSubtypeR automatically applies method-specific preprocessing.
 
+\strong{Missingness and optional imputation.} Absent genes are never synthesized.
+Mean/median use available probes. Max requires a defined total for a
+duplicate probe group; stdev/iqr require a defined variability statistic.
+Donors are prepared only when requested output measurements remain missing.
+Unusable nonprotected background genes (failed duplicate resolution,
+infinite observations or entirely missing profiles) are excluded with
+diagnostics; required genes are protected and their duplicate-resolution
+errors propagate. Only recognized unsupported duplicate groups are excluded;
+unrelated errors propagate. Otherwise usable partially missing
+donors are retained, including profiles with more than 50\% missingness.
+
+KNN compares each target with every other eligible original gene profile.
+Distance is the mean squared difference over shared finite observations,
+accumulated in input sample order. Exactly ten distinct other profiles with
+finite distances and positive overlap are selected; exact ties use original
+donor row order. Each missing coordinate uses the available original values
+among those ten neighbors (one to ten observed contributors per coordinate). No estimated value is reused, and there is no
+adaptive k, mean fallback or zero filling. \code{NA} and \code{NaN} are both missing,
+with separate internal counts. Observed and nontarget measurements and caller
+RNG state are preserved. When optional KNN runs, retained input infinities
+are unsupported; disabled/complete-output bypasses add no infinity filter. Nonfinite
+calculated distances are diagnosed and excluded individually.
+
+Unsupported or partly unresolved represented targets stop the call with a
+structured error identifying target genes and reasons. Full estimator
+diagnostics remain available on the condition for inspection, without adding
+fields to successful Mapping outputs. Newly estimated values must also remain
+finite on their existing NC/SSP output scales. Integer diagnostic/work limits
+are checked before estimation; workload is never silently reduced.
+
+This revised implementation differs from the original publication's pipeline.
+Incomplete-input estimates and downstream predictions may change, including
+calls that explicitly set \code{impute = TRUE}.
+
+\strong{Raw counts and exact output scales.} Raw \code{NA}/\code{NaN} counts are rejected with
+either impute setting. KNN is never used on raw counts or raw-derived outputs;
+\code{impute = TRUE} errors if missing raw-derived expression remains. Full-count
+normalization, library sizes and gene-length handling are unchanged: raw NC
+uses upper-quartile log2-CPM with the existing prior count, and raw SSP uses
+linear FPKM. Nonraw NC retains collapsed log expression; SSP uses \code{2^x}, so
+log2(FPKM+1) input yields FPKM+1 without subtraction of one.
+
+\strong{Optional SSP-ROR input.} \code{include_ssp_ror = TRUE} derives the required genes
+from the bundled \code{ssp.ror} model rather than the shared subtype signature.
+The current model uses 296 unique Entrez IDs in 361 gene-pair rules. Represented
+genes are returned in first-appearance order in those rules; absent genes are
+not synthesized. The separate \code{se_SSP_ROR} follows the same SSP scales above:
+raw counts yield linear FPKM, and nonraw input yields \code{2^x} after the existing
+duplicate resolution. For example, log2(FPKM+1) yields FPKM+1.
+
+With \code{impute = FALSE}, remaining missing measurements are preserved. With
+\code{impute = TRUE}, represented SSP-ROR genes join the protected genes and KNN
+targets; the same original donor profiles and estimator are used. Unsupported
+requested SSP-ROR inputs can therefore cause an opt-in call to fail even when
+the default outputs could be prepared. Raw-count imputation remains unsupported.
+Existing NC/SSP matrices and subtype results are unchanged for calls that succeed
+under both settings. No normalization, duplicate-selection or RNG policy changes.
+
+\code{BS_sspbc(result$se_SSP_ROR, ssp.name = "ssp.ror")} can already execute the
+bundled model with its native output. This option prepares input only; it does
+not add a score API, alter \code{BS_Multi()} or Ensemble voting, or extend
+\code{InputCoverage()} beyond its existing four-model report.
+
 \strong{Clinical ROR covariates.} With \code{hasClinical = TRUE}, NC method wrappers
-require both \code{TSIZE} and \code{NODE} columns and check that \code{NODE} is numeric;
-they do not enforce nonnegative integer counts. ROR-S and ROR-P scores and
-groups use neither covariate. ROR-C and both ROR-PC scores use \code{TSIZE},
+require both \code{TSIZE} and \code{NODE} columns and check that \code{NODE} is numeric.
+ROR-S and ROR-P scores and groups use neither covariate. ROR-C and both
+ROR-PC scores use \code{TSIZE},
 but no numerical ROR score uses \code{NODE}. Only the additional risk group
 \verb{ROR-PC Group (Subtype + Clinic + Prolif.Subtype)} uses \code{NODE} categories
 0, 1--3 and 4 or more. With nonmissing \code{TSIZE}, 4 or more positive nodes
 receive high risk; the other categories use different score cutoffs.
 
-In the R API, an \code{NA} value in \code{NODE} makes only this additional group
-missing. An \code{NA} value in \code{TSIZE} makes all clinical ROR scores and groups
-missing; ROR-S and ROR-P remain available. These are missing values within
+\code{NODE} is the number of positive lymph nodes. For this additional group,
+the NC methods accept only finite nonnegative integer-valued counts,
+stored as doubles or integers. Negative, fractional or infinite numeric values
+give one NODE warning per call and a missing additional group, while all
+numerical ROR scores and the other groups remain available. \code{NODE} is
+never rounded, truncated or recoded. \code{Mapping()} itself performs no
+\code{NODE} validation.
+
+In the R API, an \code{NA} or \code{NaN} value in \code{NODE} makes only this additional
+group missing, without a NODE warning. An \code{NA} value in \code{TSIZE} makes all
+clinical ROR scores and groups missing; ROR-S and ROR-P remain available. These are missing values within
 required columns, not permission to omit the columns. The additional
 subtype-specific ROR-PC group uses inclusive upper boundaries: NODE = 0
 has low <= 40, intermediate > 40 and <= 60, high > 60; NODE = 1--3 has
@@ -154,6 +254,53 @@ Pearson correlations within its validated assay workflow (Wallden et al.,
 do not establish equivalence of preprocessing, calibration or clinical
 validation. These scores and groups are research outputs, not clinical
 Prosigna results. No correlation calculation is changed in version 1.5.8.
+
+\strong{Experimental 18-gene ROR-PC} and
+\strong{Experimental 18-gene ROR-PC group} identify the existing score and group
+columns, respectively:
+
+\preformatted{
+ROR-PC (Subtype + Clinic + Prolif.Subtype)
+ROR-PC Group (Subtype + Clinic + Prolif.Subtype)
+}
+
+Both legacy column names, their types and values are retained for
+compatibility. The original 11-gene
+Parker \code{ROR-PC (Subtype + Clinic + Prolif)} is a different output.
+
+Experimental 18-gene ROR-PC: this research calculation differs from the
+published Lien implementation. Its prognostic performance and risk-category
+thresholds have not been independently validated. It is not a clinical
+Prosigna result and must not guide patient care.
+The published Lien implementation (2021,
+\url{https://doi.org/10.3390/cancers13236118}) standardizes each proliferation
+gene across patients; this package's additional score retains its calibrated,
+unstandardized 18-gene mean. Reproducing Lien's published results therefore
+does not validate this package variant. The categorical labels are
+experimental threshold assignments, not validated clinical risk strata.
+
+Relevant public NC wrappers signal a warning of class
+\code{bsr_experimental_ror_pc_warning} once per top-level call when a nonempty
+returned \code{score.ROR} contains both legacy columns. \code{\link[=BS_Multi]{BS_Multi()}} aggregates
+this notice once per call when a returned component contains them, rather
+than once per method, sample or iteration. There is no such warning on
+package loading, in \code{\link[=Mapping]{Mapping()}}, with \code{hasClinical = FALSE}, or for
+AIMS/SSPBC-only results. An all-NA score column does not establish
+that its companion category is absent: the existing NODE >= 4 rule can
+still assign \code{high} with nonmissing tumor size.
+
+This is an intentional warning: \code{options(warn = 2)} turns it into an error.
+An expert workflow can handle only the
+\code{bsr_experimental_ror_pc_warning} class:
+\itemize{
+\item Establish a handler with \code{withCallingHandlers()}.
+\item Within that handler, call \code{invokeRestart("muffleWarning")}.
+}
+
+Unrelated warnings, including invalid NODE counts, should remain visible.
+Shiny identifies relevant selected Full metrics with the experimental labels
+and notice. Its TSV export preserves the existing tabular schema and
+provenance-comment layout while recording this interpretation.
 }
 
 \section{Known original ROR boundary limitation}{
@@ -170,14 +317,77 @@ as an additional category or infer an assignment by rounding.
 Version 1.5.8 temporarily defers this known categorical-output defect
 pending scientific review of the intended equality convention. Scores,
 coefficients and thresholds are preserved. This limitation is separate
-from the corrected NODE-dependent
-\verb{ROR-PC Group (Subtype + Clinic + Prolif.Subtype)} boundaries described
-in \code{\link[=Mapping]{Mapping()}}, which remain unchanged.
+from the corrected NODE-dependent Experimental 18-gene ROR-PC group
+boundaries described in \code{\link[=Mapping]{Mapping()}}, which remain unchanged.
+}
+
+\section{Proliferation panel coverage}{
+
+Two distinct proliferation calculations are used and are never
+interchanged. For the original Parker-derived ROR-P and
+\code{ROR-PC (Subtype + Clinic + Prolif)}, a separate copy of the calibrated
+expression matrix is standardized with column-wise \code{scale()}: each sample
+is centered at its mean across the represented PAM50 genes and divided by
+its sample standard deviation (denominator \code{n - 1} for \code{n}
+observed genes). The original 11-gene proliferation panel is then averaged
+on this standardized scale with \code{mean(..., na.rm = TRUE)}. The existing
+five-class centroid correlations, coefficients, cutoffs and final
+\code{100 * (score + 0.35) / 0.85} transformation are retained.
+
+This PAM50-only standardization is a chosen, reproducible convention
+matching the complete 50-gene Perou Lab executable example distributed
+with the Parker bioclassifier (also bundled in PCAPAM50 1.0.4). It is not
+a universal requirement inferred from the publication. The distributed
+script scales all rows present at its standardization step, before the
+centroid intersection; its behavior on arbitrary expanded gene sets is
+therefore not equivalent to this convention. BreastSubtypeR uses only
+the represented PAM50 genes in \code{outList$testData}, after its existing gene
+selection, duplicate resolution and method-specific calibration. No
+background genes are added. For \code{cIHC.itr}, standardization is applied to
+the final averaged matrix used for ROR scoring, not to each iteration.
+The classifier input retained in \code{outList$testData}, subtype predictions,
+correlations, Confidence and RNG behavior are unchanged.
+
+Earlier implementations averaged the calibrated but unstandardized
+original proliferation values. Original ROR-P and ROR-PC scores and risk
+groups can consequently change substantially, even for complete panels.
+Historical saved ROR outputs are not automatically equivalent to newly
+computed outputs; comparisons require the implementation version, gene
+coverage, calibration and input provenance. Bundled examples and historical
+research results are not automatically recalculated. Reference agreement
+on complete PAM50 input does not establish clinical validation or validate
+every calibration-specific extension of the shared ROR formulas.
+
+The additional research \code{ROR-PC (Subtype + Clinic + Prolif.Subtype)} is a
+separate definition: it continues to average the represented 18-gene panel
+on the calibrated, unstandardized expression scale, with the four-class
+correlations that exclude BIRC5, CCNB1, GRB7 and MYBL2, its own coefficients
+and the NODE-dependent groups described above. The panels share nine genes
+but are evaluated independently. This additional score and its groups,
+ROR-S and ROR-C are unchanged by the original proliferation correction.
+
+Absent genes are never synthesized and no new panel coverage threshold is
+imposed. One represented proliferation gene can contribute when sample-wise
+PAM50 standardization is defined. Fewer than two observed finite PAM50
+values, zero variance, or a nonfinite sample scale produce missing original
+proliferation-dependent scores and groups; no fallback score is substituted.
+Missing non-proliferation PAM50 genes also change the standardization mean
+and scale. Incomplete-panel scores are a compatibility limitation, not a
+validated partial-panel result. The historical incomplete TCGA regression
+fixture represents 7 of 11 and 8 of 18 proliferation genes; the expanded
+packaged \code{TCGABRCAobj} represents all 11 and 18 genes. For either panel,
+no observed panel value or a nonfinite panel estimate gives a missing
+(\code{NA}) proliferation
+score. Every exported numerical ROR score is finite or \code{NA}: a \code{NaN} or
+infinite result, including overflow in the final score transformation, has
+a missing group rather than \code{low}, \code{med} or \code{high}. The independent NODE >= 4
+high-risk rule for the additional score still applies with nonmissing tumor
+size. The deferred exact-boundary behavior of the original groups is unchanged.
 }
 
 \examples{
 if (requireNamespace("SummarizedExperiment", quietly = TRUE)) {
-    # Using example raw RNA-seq counts (with gene lengths)
+    # TCGA recount3 base-pair coverage sums (with G026 gene lengths)
     data("TCGABRCAobj")
     se_obj_counts <- TCGABRCAobj$se_obj[, 1:3] # tiny subset to keep checks fast
     res <- Mapping(se_obj_counts, RawCounts = TRUE)

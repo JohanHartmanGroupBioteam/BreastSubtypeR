@@ -1,3 +1,4 @@
+# Historical example input is pinned independently of public data; see fixtures/README.md.
 ## Raw Shannon entropy of the per-method calls.
 ##
 ## table() drops missing values, so a row in which every executed method
@@ -31,7 +32,7 @@ test_that("entropy values for rows with calls are the raw Shannon entropy in bit
 })
 
 test_that("the packaged example keeps its stored entropy column", {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR")
+    load_historical_example("OSLO2EMIT0obj")
     rs <- OSLO2EMIT0obj$res$res_subtypes
     methods <- setdiff(colnames(rs), "entropy")
     recomputed <- apply(rs[, methods, drop = FALSE], 1, BreastSubtypeR:::get_entropy)
@@ -41,7 +42,7 @@ test_that("the packaged example keeps its stored entropy column", {
 })
 
 test_that("a manual run that calls nothing for a sample reports NA entropy", {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR")
+    load_historical_example("OSLO2EMIT0obj")
     input <- OSLO2EMIT0obj$data_input
     ## ssBC and ssBC.v2 center within ER (and ER/HER2) subgroups, so a sample
     ## whose status is unknown gets no call from either; with only these two

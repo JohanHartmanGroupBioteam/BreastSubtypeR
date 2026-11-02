@@ -64,17 +64,33 @@ multiple model variants for different applications.
 \details{
 The bundled SSP-ROR model uses \code{k = 21} and 361 gene-pair rules.
 Its \code{cl} values are categorical ROR-bin predictions from the fitted
-model described by Staaf et al. (2022). They are not continuous ROR scores,
+model described by Staaf et al. (2022). They are not continuous or
+Parker-derived ROR scores,
 tumor-size-adjusted ROR values, nodal-status-specific risk categories or
 clinical Prosigna outputs. This wrapper does not convert bins to numbers,
 apply clinical cutoffs or use tumor size or nodal status.
 
+Prepare SSP-ROR input with \code{Mapping(se_obj, include_ssp_ror = TRUE)$se_SSP_ROR}.
+The expanded public OSLO and TCGA inputs provide all 296 required genes and
+361 evaluable rules per sample with \code{RawCounts = FALSE} and \code{TRUE}, respectively.
+Default \code{data_input$se_SSP} objects remain restricted to subtype genes.
+Complete rule coverage does not establish training-input equivalence: OSLO
+stores log2(protocol-adjusted FPKM + 1), which Mapping back-transforms to
+protocol-adjusted FPKM + 1. SSPBC development used original unadjusted
+StringTie FPKM. The example does not undo protocol adjustment or validate
+SSP-ROR calibration on that scale.
+
+For \code{ssp.pam50} and \code{ssp.subtype}, if no model rule is evaluable for a sample,
+its class, selected-class
+probability and all posterior probabilities are \code{NA}. Both TRUE and FALSE
+comparisons count as evaluable; with at least one, native predictions are retained.
 Posterior probabilities are conditional on the fitted naive Bayes model
 and its native handling of the available rule inputs. They differ from
 \code{\link[=InputCoverage]{InputCoverage()}}, multi-method entropy and Parker \code{Confidence}; they do
 not establish externally validated predictive or clinical reliability.
 For \code{ssp.ror}, they describe bin membership, not recurrence probability.
-Missing rules retain the native handling; successful prediction alone
+SSP-ROR retains native missing-rule handling rather than the subtype models'
+zero-evidence safeguard; successful prediction alone
 does not establish adequate input coverage.
 }
 \examples{
@@ -86,17 +102,23 @@ res <- BS_sspbc(
 )
 
 ## Native ROR-bin predictions for research use
-## This compact example lacks many SSP-ROR rules; it illustrates the API.
+## Full rule coverage, with the OSLO training-input scale limitation above.
+se_obj <- OSLO2EMIT0obj$se_obj
+se_ror <- Mapping(se_obj, RawCounts = FALSE,
+    include_ssp_ror = TRUE)$se_SSP_ROR
 ror <- BS_sspbc(
-    se_obj = OSLO2EMIT0obj$data_input$se_SSP,
+    se_obj = se_ror,
     ssp.name = "ssp.ror"
 )
-head(data.frame(
+ror_bins <- data.frame(
     SampleID = rownames(ror$cl),
     ROR_bin = ror$cl[, "21"],
     Bin_probability = ror$prob[, "21"],
-    row.names = NULL
-))
+    ror$all.probs[["21"]],
+    row.names = NULL, check.names = FALSE
+)
+head(ror_bins)
+## write.csv(ror_bins, "ssp-ror-bins.csv", row.names = FALSE)
 
 }
 \references{

@@ -1,3 +1,4 @@
+# Historical example input is pinned independently of public data; see fixtures/README.md.
 ## PCAPAM50 and samples whose ER status is missing or non-canonical.
 ##
 ## BS_PCAPAM50() derives the IHC label from the ER column, so unknown ER
@@ -21,7 +22,7 @@ test_that(".ihc_status() reports missing and empty labels as not evaluable", {
 })
 
 test_that("a complete ER column reproduces the packaged PCAPAM50 calls", {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR")
+    load_historical_example("OSLO2EMIT0obj")
     se <- OSLO2EMIT0obj$data_input$se_NC
     expect_identical(
         sum(is.na(SummarizedExperiment::colData(se)$ER)),
@@ -39,7 +40,7 @@ test_that("a complete ER column reproduces the packaged PCAPAM50 calls", {
 })
 
 test_that("samples with unknown ER are reported, excluded and still classified", {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR")
+    load_historical_example("OSLO2EMIT0obj")
     se <- OSLO2EMIT0obj$data_input$se_NC
     unknown <- colnames(se)[1:6]
     SummarizedExperiment::colData(se)$ER[1:6] <- NA_character_

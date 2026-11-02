@@ -1,15 +1,301 @@
-# BreastSubtypeR development
+# BreastSubtypeR (development)
 
 ## Documentation and regression coverage
 
 * Document the already available `BS_sspbc(..., ssp.name = "ssp.ror")`
   pathway (#131), its native categorical ROR-bin labels and model posterior
   probabilities. Correct the documented matrix/list return types and sample
-  alignment, and add a research-use vignette example with CSV export.
+  alignment, and add a research-use vignette example with CSV export using
+  `Mapping(include_ssp_ror = TRUE)$se_SSP_ROR`. Distinguish categorical bins
+  from continuous/Parker-derived scores, recurrence probabilities and clinical
+  Prosigna outputs; explain the OSLO protocol-adjusted training-scale limitation.
 * Add regression coverage for packaged SSP-ROR model availability, single
-  and multiple samples, sample identity/order, native-output parity, invalid
+  and multiple samples, sample identity/order, native-output parity for both
+  expanded public datasets (296 genes, 361 evaluable rules per sample), invalid
   model names and preservation of both SSPBC subtype models. Prediction
   code, fitted models and native missing-rule handling are unchanged.
+
+## New features
+
+* Add opt-in `Mapping(include_ssp_ror = TRUE)` preparation of a separate
+  `se_SSP_ROR` input (#131). Required Entrez IDs come from the bundled `ssp.ror`
+  gene-pair rules (currently 296 genes and 361 rules). Default Mapping outputs
+  and the existing NC/SSP gene sets remain unchanged; #131 does not alter
+  packaged data.
+* SSP-ROR uses the existing duplicate resolution and SSP expression scales:
+  linear FPKM for raw counts, or `2^x` for nonraw log2 input (FPKM+1 for
+  log2(FPKM+1)). Optional KNN includes represented SSP-ROR genes as protected
+  targets, using the same original donors and estimator. Absent genes are never
+  synthesized; unsupported requested genes can fail an opt-in call.
+* Existing subtype results, normalization and RNG behavior are preserved.
+  `BS_sspbc()` already executes `ssp.ror` with its native output; model-output
+  APIs, `BS_Multi()`, Ensemble voting and the four-model `InputCoverage()` report
+  are unchanged.
+## Example data and reproducibility
+
+* Expand `OSLO2EMIT0obj` to 569 genes x 102 samples on the existing
+  log2(protocol-adjusted FPKM + 1) scale, preserving all original 356 rows,
+  values, annotations and sample metadata (#199). Append 213 verified genes;
+  no unadjusted expression matrix is introduced.
+* Expand `TCGABRCAobj` to 5,350 genes x 100 samples, preserving all original
+  5,000 rows/counts and metadata and appending 350 verified model genes.
+  Retain recount3 G026 base-pair coverage sums and GTF gene-sum lengths;
+  no count transformation or variance reranking is performed.
+* Retain public object names and the `se_obj`, `data_input` and `res`
+  structure. Regenerate Mapping/AUTO results under pinned source
+  `cb7a7c70`, with recorded seeds and versions. The expansion leaves OSLO
+  mapped inputs and complete method results unchanged under the same code;
+  TCGA normalization changes and 64 method calls change across 40 samples.
+  Comparisons separately retain historical stored results and recomputation
+  from historical inputs; earlier corrections such as #198 are not attributed
+  to dataset expansion. Original save-event build/seed provenance is incomplete.
+* Keep historical regression fixtures self-contained, including incomplete
+  TCGA proliferation coverage and frozen AUTO/entropy/reference results.
+  Synchronize the six Shiny input tables, dataset documentation and examples,
+  and add relocatable generation scripts and versioned manifests.
+* Keep default Mapping, model files, algorithms and public APIs unchanged.
+  Both examples map to 50 NC and 339 SSP genes; complete source-gene coverage
+  does not establish native SSP-ROR preparation or training-input compatibility.
+  SSPBC training used unadjusted StringTie FPKM; equivalence with adjusted OSLO
+  expression is unestablished. The separately merged #131 opt-in prepares
+  SSP-ROR input; normalization research remains #208.
+* This local integration remains subject to author review and distribution
+  clearance. No release or version bump is included; development version
+  1.5.13 is recommended for a separately approved integration.
+
+* Validate #199 against merged #131 at `f878f58c`: default mapped inputs and
+  complete results retain the approved Stage 3A values. Optional SSP-ROR
+  preparation covers 296 genes and 361 rules in each expanded example without
+  changing legacy components; it is not added to stored `data_input`.
+* Compact historical test fixtures by sharing only independently hash-verified
+  assay prefixes with the public objects. Historical metadata, mapped inputs
+  and results remain independently frozen; reconstructed complete objects are
+  identical to the originals. Public data bytes and scientific expectations
+  are unchanged.
+
+## Bug fixes
+
+* Resolve duplicate probes with `method = "stdev"` or `"iqr"` using the first
+  maximum among statistics that are not `NA`/`NaN` (#218). The existing sample
+  SD and type-7 IQR calculations, expression-row tie order and infinite-statistic
+  ordering are retained; singleton probes pass through unchanged. Groups with
+  defined statistics retain identical numerical results. Mixed defined/undefined
+  groups now select a defined maximum instead of an undefined probe.
+* Duplicate groups with no defined statistic now raise
+  `BreastSubtypeR_duplicate_undefined`, identifying the Entrez ID, method and
+  probe count. This intentionally rejects zero-sample duplicate groups for both
+  methods and one-sample duplicate groups for `stdev`; defined zero IQRs still
+  select the first tied probe. No fallback method is substituted.
+* Optional KNN propagates these errors for protected required genes and excludes
+  recognized unsupported background groups with diagnostics. Existing `max`
+  error handling and propagation of unrelated errors are preserved. The default
+  `max` method, raw-count processing, KNN estimator, RNG behavior and output
+  schemas are unchanged.
+
+# BreastSubtypeR 1.5.12
+
+## Interpretation and compatibility
+
+* Identify the existing additional 18-gene research score and its group as
+  **Experimental 18-gene ROR-PC** and **Experimental 18-gene ROR-PC group**
+  (#221). Their prognostic performance and risk-category thresholds have not
+  been independently validated; this calculation differs from the published
+  Lien implementation and is not a clinical Prosigna result. The original
+  11-gene Parker ROR-PC remains a distinct output.
+* Retain the exact `ROR-PC (Subtype + Clinic + Prolif.Subtype)` and
+  `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)` data columns, types and
+  values. Correlations, proliferation processing, coefficients, thresholds,
+  missing-value handling and the independent NODE >= 4 rule are unchanged.
+* Signal the classed `bsr_experimental_ror_pc_warning` once per relevant
+  top-level public NC call, and once for `BS_Multi()` when returned component
+  results contain the experimental columns. Package loading, `Mapping()`,
+  clinical-off and AIMS/SSPBC-only calls do not emit this notice. Expert
+  handlers can target this class without suppressing other warnings;
+  `options(warn = 2)` intentionally treats it as an error.
+* Show the notice and display labels for relevant selected Shiny Full metrics
+  and record them in its existing TSV provenance comments. Preserve the
+  comment-line count and tabular schema; Calls-only and AUTO exports are
+  unchanged. Labeling and reproducibility do not establish prognostic or
+  clinical validation.
+
+## Bug fixes
+
+* Correct original Parker-derived ROR-P and ROR-PC proliferation scoring
+  (#198). After existing PAM50 selection and method-specific calibration,
+  `RORgroup()` standardizes a separate copy of the represented PAM50 expression
+  within each sample, then averages the original 11-gene panel. This chosen
+  PAM50-only convention matches the complete 50-gene Perou Lab executable
+  example; it is not equivalent to running the distributed script on arbitrary
+  expanded gene sets. For `cIHC.itr`, only the final averaged matrix used for
+  ROR scoring is standardized. Classifier predictions, correlations, calibration,
+  sampling, consensus, Confidence, RNG, sample axes and `outList` are unchanged.
+  ROR-S, ROR-C and the distinct unstandardized 18-gene research ROR-PC are
+  unchanged, including its NODE-dependent groups. Existing original coefficients,
+  cutoffs, transformations and deferred exact-boundary behavior (#172) remain.
+  Undefined sample standardization gives missing original proliferation-dependent
+  scores/groups; matrix dimensions and finite-or-NA handling (#206) are retained
+  without imposing a new panel coverage threshold.
+* **Compatibility:** original ROR-P/ROR-PC scores and risk groups can change
+  substantially, including for complete inputs. Historical saved scores are
+  not automatically equivalent to newly computed scores. Record implementation,
+  gene coverage, calibration and input provenance when comparing results. Bundled
+  datasets, historical outputs and manuscript/Ensemble analyses have not been
+  recalculated. These remain research scores, without commercial Prosigna
+  equivalence or clinical validation; method-specific extensions and incomplete
+  panels require separate interpretation.
+
+* `RORgroup()` keeps both proliferation panel subsets as matrices and no
+  longer fails when exactly one 11-gene or 18-gene panel gene is represented
+  (#206). Represented genes are still averaged with `mean(..., na.rm = TRUE)`
+  without any gene-count threshold; absent genes are never synthesized. A
+  sample with no observed panel value, or a nonfinite panel estimate, now
+  receives a missing proliferation score instead of `NaN` or `Inf`, so
+  ROR-P, original ROR-PC and the additional ROR-PC score and groups are
+  missing for that sample rather than the literal text `"NaN"` or an
+  apparently valid `high`/`low` category. Every exported numerical ROR score
+  is now finite or `NA`: a `NaN` or infinite result, including overflow in
+  the final `100 * (score + 0.35) / 0.85` scaling or an infinite tumor-size
+  covariate, is reported as `NA` with a missing group for ROR-S, ROR-P,
+  ROR-C, original ROR-PC and the additional subtype-specific ROR-PC score.
+  This missing-value correction alone preserved finite complete-input scores,
+  subtype calls, calibration, correlations, coefficients, cutoffs, the
+  exact-equality limitation (#172), the correlation choice (#156) and the
+  independent NODE >= 4 high-risk rule. Incomplete panels are
+  documented as a compatibility limitation, not a validated score.
+
+# BreastSubtypeR 1.5.11
+
+## Mapping
+
+* `Mapping()` now defaults to `impute = FALSE`; primary examples and Shiny
+  explicitly opt out. Duplicate resolution precedes optional imputation and
+  complete required outputs bypass donor preparation.
+* Optional nonraw imputation uses the fixed-k=10 pure-R estimator over the full
+  eligible gene-level donor input, targeting only original holes in represented
+  genes selected for existing NC/SSP outputs. Exact ties retain donor row order;
+  estimates use one to ten available original contributors per coordinate among
+  those ten selected profiles.
+  Unsupported/partial targets and nonfinite newly projected estimates error
+  with internal diagnostics. Absent rows are not created and observed/nontarget
+  values, RNG state, output structure and expression scales are preserved.
+* Optional KNN no longer uses legacy row/column missingness cutoffs. Unusable
+  background donors are excluded with diagnostics, required genes remain
+  protected, and diagnostic capacity is checked before estimation.
+* Reject missing raw counts with either setting and never impute raw-derived
+  expression. Full-count normalization and library-size handling are unchanged.
+  Remove unused `impute` imports/dependency after replacing the legacy backend.
+
+* Infinity rejection applies when optional KNN runs, not to disabled or complete
+  output bypasses. This revision differs from the original published pipeline;
+  incomplete-input estimates and downstream predictions may change even with
+  explicit `impute = TRUE`.
+
+## Bug fixes
+
+* AIMS and the SSPBC subtype models now return missing calls and probabilities
+  for samples with zero evaluable model rules (#212, PR #215). Observed FALSE
+  comparisons still count as evidence; supported samples and model definitions
+  are unchanged.
+
+# BreastSubtypeR 1.5.10
+
+## Bug fixes
+
+* Preserve all Shiny reference-median labels under C and UTF-8 locales
+  (#210, PR #211). Construct the four non-ASCII option names at runtime;
+  all option values, ordering and defaults remain unchanged. Regression
+  tests compare the rendered UI and HTTP option labels across locales.
+
+* Load Shiny server and UI regression-test sources explicitly as UTF-8
+  (PRs #209 and #211). This fixes locale-dependent test-source parsing
+  without weakening the citation assertions or changing prediction logic.
+
+* `BS_Multi()` restores AUTO `ssBC` and `ssBC.v2` subcohort results by
+  character `PatientID` labels after checking complete, unique identities
+  (#202). Factor levels no longer cause eligible calls to be lost during
+  restoration. Intended missing calls, valid character-ID results, AUTO
+  eligibility, prediction algorithms and ROR formulas are unchanged.
+
+* `BS_cIHC.itr()` now converts `PatientID` values to character before
+  selecting expression columns in each iteration (#201). Factor labels,
+  including unused levels, select the intended ER-balanced centering samples
+  and values. Missing, empty, duplicated and unmatched identifiers produce
+  informative errors. Valid character-ID results, both subsampling policies,
+  iteration counts, RNG behavior and numerical ROR formulas are unchanged.
+
+* `BS_cIHC()` now converts `PatientID` values to character before
+  name-based indexing (#200). Factor labels, including those with unused
+  levels, select the intended ER-balanced centering samples and expression
+  values. Missing, empty, duplicated and unmatched identifiers produce
+  informative errors. Valid character-ID results, balancing rules, RNG
+  behavior and numerical ROR formulas are unchanged.
+
+* `BS_PCAPAM50()` now converts `PatientID` values to character before
+  name-based indexing (#197). Factor labels, including those with unused
+  levels, select the intended expression samples and centering values.
+  Missing, empty, duplicated and unmatched identifiers produce informative
+  errors. Valid character-ID results, sampling order, output order, RNG
+  behavior and numerical ROR formulas are unchanged.
+
+* `BS_PCAPAM50()` now orders complete intermediate rows by character
+  `PatientID` before second-stage sampling, matching the PCAPAM50 1.0.4
+  first-step merge under the caller's collation (#195). Selected sets,
+  centering medians, calls and derived scores may change. First-step
+  calculations and final input-order restoration are preserved. This does
+  not resolve the separate ROR expression-standardization investigation.
+
+* `BS_PCAPAM50()` now restores all sample-indexed outputs to input order,
+  including `score.ROR` and the prediction, distance and expression components
+  of `outList`. Internal calibration and sampling, and per-sample values for
+  the same input, seed and environment, are unchanged.
+
+* Report an informative error from `Mapping(method = "max")` when every
+  probe of a multi-probe Entrez ID has an undefined row total (`NA`, `NaN`
+  or `Inf - Inf`), naming the Entrez ID and the number of candidate probes,
+  instead of failing with an unrelated dimnames error. This changes only the
+  diagnostic: no probe is selected, imputed, averaged or dropped for such a
+  group, and selection and results for every group with a defined total are
+  unchanged. Follows the singleton preservation of #178; the duplicate
+  resolution review of #177 remains open.
+
+## Interpretation and documentation
+
+* Declare `S4Vectors` and `htmltools` in `Suggests` for their direct use in
+  tests and the optional Shiny application.
+
+* The factor-identifier corrections (#197, #200, #201 and #202) can change
+  affected sample selections, predictions, derived scores or restored calls.
+  The PCA-PAM50 intermediate-order correction (#195, PR #196) can change
+  results even with valid character identifiers. Unchanged ROR formulas do
+  not imply unchanged scores when their inputs change. Output-axis
+  restoration (PR #193) preserves per-sample values but can affect downstream
+  positional joins. These fixes do not resolve the separate ROR scientific
+  questions or establish that manuscript results are unaffected.
+
+* Clarify current version and installation-channel wording in the README
+  and vignette. Earlier release notes are retained.
+
+# BreastSubtypeR 1.5.9
+
+## Bug fixes
+
+* `RORgroup()` now requires finite nonnegative integer-valued `NODE` counts
+  for `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)` (#187). Negative,
+  fractional or infinite numeric values previously left the unscaled score
+  as numeric text in the group column or were silently classified; they now
+  give one warning per call and a missing group. The column is consistently
+  character, including all-missing batches. `NA`/`NaN` `NODE`, all numerical
+  ROR scores, the original Parker groups and the valid-count rules from #157
+  are unchanged. The exact-equality limitation in #172 remains deferred.
+* Preserve singleton gene rows under `Mapping(method = "max")` without
+  ranking them (#178). In the nonraw `impute = FALSE` path, remaining `NA`
+  and `NaN` measurements are retained instead of causing a dimension error.
+  Selection among multiple probes and all other mapping methods are unchanged.
+* Reject mixed AUTO/manual selections and duplicate method names in
+  `BS_Multi()` before accessing input data or executing classifiers (#188).
+  AUTO must be the only entry; manual selections must contain at least two
+  distinct methods. Valid method selections and their execution order are
+  unchanged.
 
 # BreastSubtypeR 1.5.8
 

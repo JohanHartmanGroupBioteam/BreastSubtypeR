@@ -5,9 +5,10 @@ sspbc_ror_data <- function() {
     result
 }
 
-sspbc_ror_public_input <- function() {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR", envir = environment())
-    OSLO2EMIT0obj$data_input$se_SSP
+sspbc_ror_public_object <- function(name = "OSLO2EMIT0obj") {
+    env <- new.env(parent = emptyenv())
+    data(list = name, package = "BreastSubtypeR", envir = env)
+    env[[name]]
 }
 
 sspbc_ror_complete_input <- function() {
@@ -60,17 +61,26 @@ test_that("both packaged model collections contain the fitted SSP-ROR model", {
     )
 })
 
-test_that("the public SSP-ROR example exactly preserves native results", {
-    input <- sspbc_ror_public_input()
+test_that("subtype-only inputs preserve native incomplete-rule results", {
+    # Default mapped inputs deliberately retain only the subtype signature.
+    # Full SSP-ROR coverage requires the opt-in input tested separately below.
+    input <- sspbc_ror_public_object()$data_input$se_SSP
     result <- suppressMessages(BS_sspbc(input, ssp.name = "ssp.ror"))
     expect_identical(result, sspbc_native_result(input, "ssp.ror"))
     expect_identical(rownames(result$cl), colnames(input))
     expect_identical(rownames(result$prob), colnames(input))
     expect_identical(colnames(result$data.used), colnames(input))
-    # This reduced public example does not cover all SSP-ROR rules. Preserve
-    # the native missingness instead of imputing or changing the fitted model.
+    # Derive the available rules from the supplied genes, without a historical
+    # rule-count oracle tied to an older packaged dataset.
+    pairs <- strsplit(sspbc_ror_data()$sspbc.models$ssp.ror$all.pairs, "<", fixed = TRUE)
+    available <- vapply(pairs, function(pair) {
+        all(pair %in% paste0("e", rownames(input)))
+    }, logical(1))
+    expect_true(any(available))
+    expect_true(any(!available))
     expect_true(anyNA(result$rules.matrix))
-    expect_true(all(colSums(!is.na(result$rules.matrix)) == 75L))
+    expect_identical(unname(!is.na(result$rules.matrix)),
+        matrix(rep(available, ncol(input)), ncol = ncol(input)))
 })
 
 test_that("SSP-ROR retains native types and shapes for one or more samples", {
@@ -166,18 +176,14 @@ test_that("SSPBC rejects unknown and partial model names", {
     }
 })
 
-test_that("existing SSPBC subtype models retain baseline output", {
-    input <- sspbc_ror_public_input()[, c(7L, 2L, 5L), drop = FALSE]
-    # Labels verified at unmodified main:
-    # 67d982cb324ec376ea599929eb41837a50fd09b3.
-    expected <- list(
-        ssp.pam50 = c("LumA", "Basal", "Normal"),
-        ssp.subtype = c("LumA", "Basal", "LumA")
-    )
-    for (name in names(expected)) {
+test_that("existing SSPBC subtype models retain current native output", {
+    input <- sspbc_ror_public_object()$data_input$se_SSP[, c(7L, 2L, 5L), drop = FALSE]
+    for (name in c("ssp.pam50", "ssp.subtype")) {
         result <- suppressMessages(BS_sspbc(input, ssp.name = name))
         expect_identical(result, sspbc_native_result(input, name))
-        expect_identical(unname(result$cl[, 1]), expected[[name]])
+        model <- sspbc_ror_data()$sspbc.models[[name]]
+        labels <- names(model$one.vs.all.tsp[[model$k]]$apriori)
+        expect_true(all(result$cl %in% labels))
         expect_identical(rownames(result$cl), colnames(input))
         single <- suppressMessages(BS_sspbc(
             input[, 2L, drop = FALSE], ssp.name = name
@@ -191,4 +197,75 @@ test_that("existing SSPBC subtype models retain baseline output", {
         suppressMessages(BS_sspbc(input)),
         suppressMessages(BS_sspbc(input, ssp.name = "ssp.pam50"))
     )
+})
+
+test_that("expanded public datasets supply complete native SSP-ROR outputs", {
+    model <- sspbc_ror_data()$sspbc.models$ssp.ror
+    genes <- unique(unlist(strsplit(model$all.pairs, "<", fixed = TRUE)))
+    ids <- sub("^e", "", genes)
+    labels <- sprintf("c%03d", seq(5, 90, by = 5))
+    components <- c("cl", "prob", "all.probs", "rules.matrix",
+        "data.used", "EntrezID.used")
+    for (dataset in c("OSLO2EMIT0obj", "TCGABRCAobj")) {
+        object <- sspbc_ror_public_object(dataset)
+        raw <- identical(dataset, "TCGABRCAobj")
+        source <- object$se_obj
+        expect_identical(dim(source), if (raw) c(5350L, 100L) else c(569L, 102L))
+        mapped <- Mapping(source, RawCounts = raw, include_ssp_ror = TRUE,
+            verbose = FALSE)
+        input <- mapped$se_SSP_ROR
+        expect_identical(dim(input), c(296L, ncol(source)))
+        expect_identical(rownames(input), ids)
+        expect_identical(colnames(input), colnames(source))
+        expect_identical(SummarizedExperiment::colData(input),
+            SummarizedExperiment::colData(source))
+        batch <- suppressMessages(BS_sspbc(input, ssp.name = "ssp.ror"))
+        # Full cohort, full reordered cohort and singleton: all six native
+        # components must agree, including the positional rule/posterior axes.
+        for (indices in list(seq_len(ncol(input)), rev(seq_len(ncol(input))), 7L)) {
+            subset <- input[, indices, drop = FALSE]
+            result <- suppressMessages(BS_sspbc(subset, ssp.name = "ssp.ror"))
+            native <- sspbc_native_result(subset, "ssp.ror")
+            expect_identical(names(result), components)
+            for (component in components) {
+                expect_identical(result[[component]], native[[component]],
+                    info = paste(dataset, component))
+            }
+            expect_identical(result$cl, batch$cl[indices, , drop = FALSE])
+            expect_identical(result$prob, batch$prob[indices, , drop = FALSE])
+            expect_identical(result$all.probs[["21"]],
+                batch$all.probs[["21"]][indices, , drop = FALSE])
+            expect_identical(result$rules.matrix,
+                batch$rules.matrix[, indices, drop = FALSE])
+            expect_identical(result$data.used, batch$data.used[, indices, drop = FALSE])
+            expect_identical(result$EntrezID.used, batch$EntrezID.used)
+            expect_identical(dimnames(result$cl), list(colnames(subset), "21"))
+            expect_identical(dimnames(result$prob), dimnames(result$cl))
+            expect_identical(colnames(result$data.used), colnames(subset))
+            expect_identical(result$EntrezID.used, genes)
+            expect_identical(dim(result$rules.matrix), c(361L, length(indices)))
+            expect_true(all(colSums(!is.na(result$rules.matrix)) == 361L))
+            expect_true(all(result$rules.matrix %in% c(0, 1)))
+            expect_true(all(result$cl %in% labels))
+            probabilities <- result$all.probs[["21"]]
+            expect_identical(dimnames(probabilities), list(NULL, labels))
+            expect_identical(dim(probabilities), c(length(indices), 18L))
+            expect_true(all(is.finite(probabilities)))
+            expect_true(all(probabilities >= 0 & probabilities <= 1))
+            expect_equal(unname(rowSums(probabilities)), rep(1, length(indices)))
+            expect_equal(unname(result$prob[, 1]), apply(probabilities, 1, max))
+            expect_identical(unname(result$cl[, 1]),
+                labels[max.col(probabilities, ties.method = "first")])
+            # Executable counterpart of the documented table/CSV recipe.
+            table <- data.frame(SampleID = rownames(result$cl),
+                ROR_bin = result$cl[, "21"],
+                Bin_probability = result$prob[, "21"], probabilities,
+                row.names = NULL, check.names = FALSE)
+            expect_identical(table$SampleID, colnames(subset))
+            expect_identical(table$ROR_bin, unname(result$cl[, "21"]))
+            expect_identical(table$Bin_probability, unname(result$prob[, "21"]))
+            expect_identical(names(table), c("SampleID", "ROR_bin", "Bin_probability", labels))
+            expect_identical(unname(as.matrix(table[labels])), unname(probabilities))
+        }
+    }
 })

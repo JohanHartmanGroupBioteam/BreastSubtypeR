@@ -151,6 +151,17 @@ bs_callout <- function(title, body, color = c("info","success","warning","danger
   list(calls = calls_tbl, full = full_tbl)
 }
 
+# Human-readable labels travel in comment metadata, never as renamed columns.
+.experimental_ror_pc_export_note <- function(df) {
+  has_score <- getFromNamespace(".has_experimental_ror_pc", "BreastSubtypeR")
+  if (!has_score(df)) return(character())
+  fields <- getFromNamespace(".experimental_ror_pc_fields", "BreastSubtypeR")()
+  notice <- getFromNamespace(".experimental_ror_pc_notice", "BreastSubtypeR")()
+  paste(notice, "Output labels:",
+        paste(sprintf("%s = %s", names(fields), fields), collapse = "; "),
+        "The original Parker ROR-PC fields retain their existing labels.")
+}
+
 server <- function(input, output, session) {
   
   # --- small reactives ---
@@ -357,6 +368,10 @@ server <- function(input, output, session) {
         hdr <- c(hdr, sprintf("Export: %s | Date: %s | R: %s", kind,
                              format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"), getRversion()))
       }
+      if (identical(kind, "full")) {
+        note <- .experimental_ror_pc_export_note(p[[kind]])
+        if (length(note)) hdr[length(hdr)] <- paste(hdr[length(hdr)], note, sep = " | ")
+      }
       .write_tsv_with_header(file, p[[kind]], header_lines = hdr)
     }
   )
@@ -433,7 +448,8 @@ server <- function(input, output, session) {
               Shiny attempts numeric conversion; all values in both columns must be finite to enable clinical ROR.
               If validation fails, Shiny displays a warning and proceeds without clinical ROR; subtype analysis can still proceed.</li>
               <li><b>Clinical coding:</b> <code>TSIZE</code> is 0 (at most 2 cm) or 1 (more than 2 cm).
-              <code>NODE</code> is the number of positive lymph nodes; actual nonnegative integer counts are recommended when available but are not enforced.
+              <code>NODE</code> is the number of positive lymph nodes. The additional subtype-specific ROR-PC risk group requires finite nonnegative integer counts;
+              negative or fractional values give a warning and a missing group for that sample, while numerical ROR scores remain available.
               Binary 0/1 is accepted but cannot distinguish 1&ndash;3 from 4 or more nodes for the additional subtype-specific ROR-PC risk group.
               NODE does not enter numerical ROR scores.</li>
             </ul>"))
@@ -538,6 +554,21 @@ server <- function(input, output, session) {
                    inline = TRUE, selected = selected),
       if (!has_full) helpText("Full metrics are unavailable for this method. Download calls only.")
     )
+  })
+  output$experimental_ror_pc_notice <- renderUI({
+    p <- current_prediction()
+    if (!identical(input$export_kind %||% "calls", "full") ||
+        !supports_export(p, "full")) return(NULL)
+    has_score <- getFromNamespace(".has_experimental_ror_pc", "BreastSubtypeR")
+    if (!has_score(p$full)) return(NULL)
+    fields <- getFromNamespace(".experimental_ror_pc_fields", "BreastSubtypeR")()
+    notice <- getFromNamespace(".experimental_ror_pc_notice", "BreastSubtypeR")()
+    bs_callout("Experimental 18-gene ROR-PC", tagList(
+      tags$p(notice),
+      tags$dl(lapply(seq_along(fields), function(i) tagList(
+        tags$dt(unname(fields[i])), tags$dd(tags$code(names(fields)[i]))))),
+      tags$p("The original Parker ROR-PC fields retain their existing labels.")
+    ), "warning")
   })
   output$download_control <- renderUI({
     p <- current_prediction()
@@ -757,7 +788,7 @@ server <- function(input, output, session) {
         output_text <- capture.output({
           message("Mapping() -> RawCounts = ", reactive_files$RawCounts)
           data_input <- BreastSubtypeR::Mapping(se_obj = se_obj, RawCounts = reactive_files$RawCounts,
-                                impute = TRUE, verbose = TRUE)
+                                impute = FALSE, verbose = TRUE)
           cat("Step 1 is complete.\nYou may now proceed to Step 2.\n")
         })
         reactive_files$data_input <- data_input
@@ -887,7 +918,10 @@ server <- function(input, output, session) {
         withCallingHandlers({
           res <- BreastSubtypeR::BS_ssBC(se_obj = se_NC, s = input$s, Subtype = want_4, hasClinical = use_clin)
         }, warning = function(w) {
-          showNotification(conditionMessage(w), type = "warning", duration = 15)
+          # The experimental warning is shown persistently with its full
+          # export; keep unrelated warnings visible as before.
+          if (!inherits(w, "bsr_experimental_ror_pc_warning"))
+            showNotification(conditionMessage(w), type = "warning", duration = 15)
           invokeRestart("muffleWarning")
         })
       }

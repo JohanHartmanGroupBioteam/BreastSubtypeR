@@ -1,3 +1,4 @@
+# Historical example input is pinned independently of public data; see fixtures/README.md.
 # These synthetic inputs distinguish the original Spearman p-value default
 # from exact = FALSE without copying the author-supplied example files.
 confidence_test_input <- function() {
@@ -180,11 +181,11 @@ test_that("Confidence does not mutate the prediction or centroid inputs", {
 })
 
 test_that("Bundled PAM50 results have original Confidence and unchanged ROR", {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR", envir = environment())
+    load_historical_example("OSLO2EMIT0obj", envir = environment())
     se <- OSLO2EMIT0obj$data_input$se_NC
-    result <- suppressMessages(BS_parker(
+    result <- suppressMessages(expect_experimental_ror_pc(BS_parker(
         se, Subtype = TRUE, hasClinical = TRUE
-    ))
+    )))
     out <- result$outList
     expected <- vapply(seq_along(out$predictions), function(j) {
         confidence_direct(out$testData[, j],

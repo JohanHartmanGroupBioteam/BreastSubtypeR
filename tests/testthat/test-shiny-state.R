@@ -3,8 +3,10 @@ shiny_app_env <- function() {
     skip_if_not_installed("shiny")
     skip_if_not_installed("bslib")
     env <- new.env(parent = asNamespace("shiny"))
-    sys.source(system.file("ShinyBreastSubtypeR/server.R",
-                           package = "BreastSubtypeR"), env)
+    server_path <- system.file("ShinyBreastSubtypeR/server.R",
+                               package = "BreastSubtypeR")
+    eval(parse(file = server_path, encoding = "UTF-8", keep.source = FALSE),
+         envir = env)
     env
 }
 shiny_defaults <- function(session, method = "PAM50") {
@@ -230,8 +232,9 @@ test_that("coverage provenance rejects retained mapping from an older generation
 test_that("iteration control preserves its historical default, minimum and step", {
     env <- shiny_app_env()
     withr::local_dir(system.file("ShinyBreastSubtypeR", package = "BreastSubtypeR"))
-    sys.source(system.file("ShinyBreastSubtypeR/ui.R",
-                           package = "BreastSubtypeR"), env)
+    eval(parse(file = system.file("ShinyBreastSubtypeR/ui.R",
+                                 package = "BreastSubtypeR"),
+               encoding = "UTF-8", keep.source = FALSE), envir = env)
     html <- as.character(env$ui)
     control <- regmatches(html, regexpr('<input[^>]*id="iteration"[^>]*>', html))
     expect_length(control, 1L)
@@ -321,12 +324,25 @@ test_that("prediction parameters invalidate results while retaining mapped input
         shiny_defaults(session)
         mapped <- reactive_files$data_input
         coverage <- current_input_coverage()
+        run_checked <- function(id) {
+            experimental_warnings <- list()
+            withCallingHandlers(session$setInputs(run = id),
+                bsr_experimental_ror_pc_warning = function(w) {
+                    experimental_warnings[[length(experimental_warnings) + 1L]] <<- w
+                    invokeRestart("muffleWarning")
+                })
+            has_score <- getFromNamespace(".has_experimental_ror_pc", "BreastSubtypeR")
+            # ssBC presents this warning through the persistent export notice.
+            expected <- has_score(current_prediction()$full) &&
+                !identical(input$BSmethod, "ssBC")
+            expect_length(experimental_warnings, as.integer(expected))
+        }
         changes <- list(list(k_subtypes = "4"), list(hasClinical = TRUE),
                         list(internal = "meanCtr"), list(calibration = "None"),
                         list(BSmethod = "cIHC.itr"), list(ratio = 1.5),
                         list(iteration = 11), list(BSmethod = "ssBC"), list(s = "ER"))
         for (i in seq_along(changes)) {
-            session$setInputs(run = i)
+            run_checked(i)
             expect_false(is.null(current_prediction()))
             do.call(session$setInputs, changes[[i]])
             expect_null(current_prediction())
@@ -338,7 +354,7 @@ test_that("prediction parameters invalidate results while retaining mapped input
             expect_identical(current_input_coverage(), coverage)
         }
         session$setInputs(BSmethod = "PAM50", calibration = "External", external = "nCounter")
-        session$setInputs(run = 20)
+        run_checked(20)
         expect_false(is.null(current_prediction()))
         session$setInputs(external = "Given.mdns")
         expect_null(current_prediction())
@@ -363,6 +379,137 @@ test_that("export choice and inactive method parameters preserve a valid predict
         expect_equal(full, p$full, ignore_attr = TRUE)
         expect_match(readLines(output$download)[2], "Method: PAM50")
         expect_match(readLines(output$download)[3], "Export: full")
+    })
+})
+
+test_that("experimental ROR-PC notice follows full results without changing exports", {
+    env <- shiny_app_env()
+    fields <- getFromNamespace(".experimental_ror_pc_fields", "BreastSubtypeR")()
+    notice <- getFromNamespace(".experimental_ror_pc_notice", "BreastSubtypeR")()
+    emitted <- 0L
+    shiny::testServer(env$server, {
+        shiny_defaults(session)
+        session$setInputs(hasClinical = TRUE)
+        run_clinical <- function(n) withCallingHandlers(
+            session$setInputs(run = n), warning = function(w) {
+                if (inherits(w, "bsr_experimental_ror_pc_warning")) {
+                    emitted <<- emitted + 1L
+                    invokeRestart("muffleWarning")
+                }
+            })
+        run_clinical(1)
+        p <- current_prediction()
+        expect_true(all(names(fields) %in% names(p$full)))
+        expect_null(output$experimental_ror_pc_notice)
+        calls_text <- readLines(output$download)
+        expect_false(any(grepl(notice, calls_text, fixed = TRUE)))
+        expect_length(grep("^# ", calls_text), 3L)
+        expect_equal(read.delim(output$download, comment.char = "#",
+                                check.names = FALSE), p$calls, ignore_attr = TRUE)
+
+        session$setInputs(export_kind = "full")
+        expect_identical(current_prediction(), p)
+        expect_match(output$experimental_ror_pc_notice$html, notice, fixed = TRUE)
+        for (label in unname(fields))
+            expect_match(output$experimental_ror_pc_notice$html, label, fixed = TRUE)
+        expect_match(output$experimental_ror_pc_notice$html,
+                     "original Parker ROR-PC", fixed = TRUE)
+        full_text <- readLines(output$download)
+        expect_length(grep("^# ", full_text), 3L)
+        expect_match(full_text[2], "Method: PAM50", fixed = TRUE)
+        expect_match(full_text[3], "Export: full", fixed = TRUE)
+        expect_match(full_text[3], notice, fixed = TRUE)
+        for (i in seq_along(fields))
+            expect_match(full_text[3], paste(names(fields)[i], "=", fields[i]),
+                         fixed = TRUE)
+        exported <- read.delim(output$download, comment.char = "#", check.names = FALSE)
+        expect_identical(names(exported), names(p$full))
+        expect_equal(exported, p$full, ignore_attr = TRUE)
+        expect_identical(current_prediction(), p)
+        session$flushReact()
+        expect_match(output$experimental_ror_pc_notice$html, notice, fixed = TRUE)
+        expect_identical(emitted, 1L)
+
+        session$setInputs(k_subtypes = "4")
+        expect_null(output$experimental_ror_pc_notice)
+        expect_error(output$download, "No current prediction")
+        run_clinical(2)
+        expect_match(output$experimental_ror_pc_notice$html, notice, fixed = TRUE)
+        expect_identical(emitted, 2L)
+        session$setInputs(export_kind = "calls")
+        expect_null(output$experimental_ror_pc_notice)
+        expect_false(any(grepl(notice, readLines(output$download), fixed = TRUE)))
+        expect_identical(emitted, 2L)
+
+        session$setInputs(export_kind = "full")
+        expect_match(output$experimental_ror_pc_notice$html, notice, fixed = TRUE)
+        report_error(simpleError("Deliberate failed rerun"))
+        session$flushReact()
+        expect_null(output$experimental_ror_pc_notice)
+        expect_error(output$download, "No current prediction")
+    })
+})
+
+test_that("experimental notice requires both result fields in the selected export", {
+    env <- shiny_app_env()
+    fields <- getFromNamespace(".experimental_ror_pc_fields", "BreastSubtypeR")()
+    notice <- getFromNamespace(".experimental_ror_pc_notice", "BreastSubtypeR")()
+    shiny::testServer(env$server, {
+        shiny_defaults(session)
+        session$setInputs(run = 1, export_kind = "full")
+        original <- current_prediction()
+        expect_false(any(names(fields) %in% names(original$full)))
+        expect_null(output$experimental_ror_pc_notice)
+        expect_false(any(grepl(notice, readLines(output$download), fixed = TRUE)))
+        for (i in seq_along(fields)) {
+            partial <- original
+            partial$full[[names(fields)[i]]] <- NA
+            reactive_files$prediction <- partial
+            session$flushReact()
+            expect_null(output$experimental_ror_pc_notice)
+            expect_false(any(grepl(notice, readLines(output$download), fixed = TRUE)))
+        }
+        reactive_files$prediction <- original
+        session$setInputs(BSmethod = "AUTO Mode", export_kind = "calls", run = 2)
+        expect_null(current_prediction()$full)
+        expect_null(output$experimental_ror_pc_notice)
+        expect_false(any(grepl(notice, readLines(output$download), fixed = TRUE)))
+        expect_length(grep("^# ", readLines(output$download)), 2L)
+    })
+})
+
+test_that("ssBC keeps unrelated warning toasts without duplicating experimental notice", {
+    env <- shiny_app_env()
+    notifications <- character()
+    env$showNotification <- function(ui, ...) {
+        notifications <<- c(notifications, as.character(ui))
+        invisible("test-notification")
+    }
+    notice <- getFromNamespace(".experimental_ror_pc_notice", "BreastSubtypeR")()
+    shiny::testServer(env$server, {
+        shiny_defaults(session, "ssBC")
+        session$setInputs(hasClinical = TRUE, export_kind = "full")
+        res <- withCallingHandlers(
+            BreastSubtypeR::BS_parker(reactive_files$data_input$se_NC,
+                                      hasClinical = TRUE),
+            warning = function(w) {
+                if (inherits(w, "bsr_experimental_ror_pc_warning"))
+                    invokeRestart("muffleWarning")
+            })
+        run_stub <- function() {
+            testthat::local_mocked_bindings(
+                BS_ssBC = function(...) {
+                    getFromNamespace(".warn_experimental_ror_pc", "BreastSubtypeR")(res)
+                    warning("Unrelated input warning", call. = FALSE)
+                    res
+                }, .package = "BreastSubtypeR")
+            session$setInputs(run = 1)
+        }
+        run_stub()
+        expect_false(is.null(current_prediction()))
+        expect_false(any(grepl(notice, notifications, fixed = TRUE)))
+        expect_equal(sum(notifications == "Unrelated input warning"), 1L)
+        expect_match(output$experimental_ror_pc_notice$html, notice, fixed = TRUE)
     })
 })
 
@@ -703,7 +850,8 @@ test_that("the presentation preserves controls, defaults and conditional setting
     env <- shiny_app_env()
     app_dir <- system.file("ShinyBreastSubtypeR", package = "BreastSubtypeR")
     withr::local_dir(app_dir)
-    sys.source(file.path(app_dir, "ui.R"), env)
+    eval(parse(file = file.path(app_dir, "ui.R"), encoding = "UTF-8",
+               keep.source = FALSE), envir = env)
     html <- as.character(env$ui)
     for (id in c("load_example_step1", "about", "GEX", "is_raw_counts", "clinic",
                  "anno", "map", "BSmethod", "k_subtypes", "hasClinical", "calibration",
@@ -764,7 +912,8 @@ test_that("the interface identifies its workflow and provides accessible scienti
     env <- shiny_app_env()
     app_dir <- system.file("ShinyBreastSubtypeR", package = "BreastSubtypeR")
     withr::local_dir(app_dir)
-    sys.source(file.path(app_dir, "ui.R"), env)
+    eval(parse(file = file.path(app_dir, "ui.R"), encoding = "UTF-8",
+               keep.source = FALSE), envir = env)
     html <- as.character(env$ui)
     for (text in c("iBreastSubtypeR", "For research use", "About &amp; Citation",
                    "The application runs locally in your R session.", "1. Data and preprocessing",
@@ -934,7 +1083,8 @@ test_that("scroll hints accompany wide figures only and are narrow-screen scoped
     env <- shiny_app_env()
     app_dir <- system.file("ShinyBreastSubtypeR", package = "BreastSubtypeR")
     withr::local_dir(app_dir)
-    sys.source(file.path(app_dir, "ui.R"), env)
+    eval(parse(file = file.path(app_dir, "ui.R"), encoding = "UTF-8",
+               keep.source = FALSE), envir = env)
     html <- as.character(env$ui)
     css <- htmltools::renderTags(env$ui)$head
     expect_match(css, ".plot-scroll-hint { display: none;", fixed = TRUE)
@@ -951,4 +1101,130 @@ test_that("scroll hints accompany wide figures only and are narrow-screen scoped
         expect_match(plot_html, "Expression and subtype calls", fixed = TRUE)
         expect_match(plot_html, "Swipe horizontally to view the full plot.", fixed = TRUE)
     })
+})
+
+test_that("reference choices preserve Unicode in C and UTF-8 locales", {
+    skip_if_not_installed("shiny")
+    skip_if_not_installed("bslib")
+    ## Fresh processes avoid cached UI objects and native-encoded symbol names.
+    render_ui <- function(locale, app_dir) {
+        candidates <- if (locale == "C") "C" else unique(c(
+            Sys.getlocale("LC_CTYPE"),
+            if (.Platform$OS.type == "windows") {
+                c("English_United States.utf8", ".UTF-8")
+            } else {
+                c("C.UTF-8", "en_US.UTF-8", "UTF-8", "en_US.utf8")
+            }
+        ))
+        available <- FALSE
+        diagnostics <- character()
+        for (candidate in candidates) {
+            selected <- tryCatch(Sys.setlocale("LC_CTYPE", candidate),
+                warning = function(w) {
+                    diagnostics <<- c(diagnostics, conditionMessage(w))
+                    ""
+                })
+            if (nzchar(selected) &&
+                (locale == "C" || isTRUE(l10n_info()[["UTF-8"]]))) {
+                available <- TRUE
+                break
+            }
+        }
+        if (!available) return(list(available = FALSE, reason = paste(
+            "No", locale, "LC_CTYPE available; tried",
+            paste(candidates, collapse = ", "), paste(diagnostics, collapse = "; "))))
+        withCallingHandlers({
+            library(shiny)
+            setwd(app_dir)
+            labels <- c(
+                "Custom (upload file\u2026)",
+                "Built-in: nCounter",
+                "Built-in: RNA-seq (Freeze 2012-09-07)",
+                "Built-in: totalRNA FFPE (2015-11-11)",
+                "Built-in: RNA-seq V2",
+                "Built-in: RNA-seq V1",
+                "Built-in: Agilent custom 4\u00d744K (GC)",
+                "Built-in: Agilent 244K",
+                "Built-in: 1\u00d744K (WashU, post-collapse)",
+                "Built-in: 4\u00d744K (WashU v2, post-collapse)",
+                "Built-in: htp1.5 (WU update)",
+                "Built-in: arrayTrain (post-collapse)"
+            )
+            values <- c(
+                "Given.mdns", "nCounter", "RNAseq.Freeze.20120907",
+                "totalRNA.FFPE.20151111", "RNAseq.V2", "RNAseq.V1",
+                "GC.4x44Kcustom", "Agilent_244K",
+                "commercial_1x44k_postMeanCollapse_WashU",
+                "commercial_4x44k_postMeanCollapse_WashU_v2",
+                "htp1.5_WU_update", "arrayTrain_postMeanCollapse"
+            )
+            expected <- paste0('<option value="', values, '"',
+                ifelse(values == "Given.mdns", " selected", ""),
+                ">", labels, "</option>")
+            utf8_bytes <- function(x) lapply(enc2utf8(x), charToRaw)
+            options_from <- function(html) {
+                block <- regmatches(html, regexpr(
+                    '(?s)<select[^>]*id="external"[^>]*>.*?</select>',
+                    html, perl = TRUE))
+                stopifnot(length(block) == 1L, nzchar(block))
+                regmatches(block, gregexpr("<option[^>]*>.*?</option>",
+                    block, perl = TRUE))[[1L]]
+            }
+            set.seed(20261024)
+            app <- shiny::shinyAppDir(app_dir)
+            req <- list2env(list(REQUEST_METHOD = "GET", PATH_INFO = "/",
+                SCRIPT_NAME = "", QUERY_STRING = "", HTTP_HOST = "127.0.0.1",
+                SERVER_PORT = "8080"), parent = emptyenv())
+            response <- app$httpHandler(req)
+            stopifnot(response$status == 200L,
+                      grepl("UTF-8", response$content_type, fixed = TRUE))
+            http_html <- response$content
+            if (is.raw(http_html)) http_html <- rawToChar(http_html)
+            Encoding(http_html) <- "UTF-8"
+            set.seed(20261024)
+            env <- new.env(parent = asNamespace("shiny"))
+            eval(parse(file = file.path(app_dir, "server.R"),
+                       encoding = "UTF-8", keep.source = FALSE), envir = env)
+            eval(parse(file = file.path(app_dir, "ui.R"),
+                       encoding = "UTF-8", keep.source = FALSE), envir = env)
+            ui_html <- as.character(env$ui)
+            stopifnot(identical(utf8_bytes(options_from(http_html)),
+                                utf8_bytes(expected)),
+                      identical(utf8_bytes(options_from(ui_html)),
+                                utf8_bytes(expected)))
+            list(available = TRUE, ui = charToRaw(enc2utf8(ui_html)),
+                 options = utf8_bytes(options_from(http_html)))
+        }, warning = function(w) stop(conditionMessage(w), call. = FALSE))
+    }
+    ## Serialize the function so Unicode constants survive a C-locale parent.
+    environment(render_ui) <- baseenv()
+    script <- tempfile(fileext = ".R")
+    input <- tempfile(fileext = ".rds")
+    output <- tempfile(fileext = ".rds")
+    log <- tempfile(fileext = ".log")
+    on.exit(unlink(c(script, input, output, log)), add = TRUE)
+    writeLines(c(
+        'args <- commandArgs(TRUE)',
+        'config <- readRDS(args[1L])',
+        '.libPaths(config$libs)',
+        'saveRDS(config$render(config$locale, config$app_dir), args[2L])'
+    ), script)
+    rscript <- file.path(R.home("bin"),
+        if (.Platform$OS.type == "windows") "Rscript.exe" else "Rscript")
+    results <- list()
+    for (locale in c("C", "UTF-8")) {
+        saveRDS(list(render = render_ui, locale = locale, libs = .libPaths(),
+            app_dir = system.file("ShinyBreastSubtypeR", package = "BreastSubtypeR")),
+            input)
+        status <- system2(rscript,
+            c("--vanilla", shQuote(script), shQuote(input), shQuote(output)),
+            stdout = log, stderr = log)
+        expect_identical(status, 0L,
+            info = paste(locale, paste(readLines(log), collapse = "\n")))
+        if (status == 0L) {
+            results[[locale]] <- readRDS(output)
+            if (!results[[locale]]$available) skip(results[[locale]]$reason)
+        }
+    }
+    if (length(results) == 2L) expect_identical(results[["C"]], results[["UTF-8"]])
 })

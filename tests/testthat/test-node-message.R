@@ -1,5 +1,6 @@
+# Historical example input is pinned independently of public data; see fixtures/README.md.
 test_that("BS_parker describes the existing numeric NODE requirement", {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR", envir = environment())
+    load_historical_example("OSLO2EMIT0obj", envir = environment())
     se <- OSLO2EMIT0obj$data_input$se_NC
     SummarizedExperiment::colData(se)$NODE <- as.character(
         SummarizedExperiment::colData(se)$NODE)
