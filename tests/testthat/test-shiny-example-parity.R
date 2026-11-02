@@ -89,8 +89,10 @@ test_that("installed Shiny examples map, calculate AUTO and download candidate c
             mapped <- reactive_files$data_input
             expect_identical(names(mapped), c("se_NC", "se_SSP"))
             for (component in names(mapped)) {
-                expect_identical(as.matrix(SummarizedExperiment::assay(mapped[[component]])),
-                                 as.matrix(SummarizedExperiment::assay(obj$data_input[[component]])))
+                expect_true(issue199_portable_compare(
+                    SummarizedExperiment::assay(mapped[[component]]),
+                    SummarizedExperiment::assay(obj$data_input[[component]]), name,
+                    path = paste0("/data_input/", component, "/assay")))
                 expect_identical(rownames(mapped[[component]]), rownames(obj$data_input[[component]]))
                 expect_identical(colnames(mapped[[component]]), colnames(obj$data_input[[component]]))
                 shiny199_fields_equal(

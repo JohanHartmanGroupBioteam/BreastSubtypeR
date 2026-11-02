@@ -32,6 +32,98 @@ issue199_fresh <- local({
 issue199_calls <- function() readRDS(test_path("fixtures",
     "issue199-cb7a7c70-calls.rds"))
 
+test_that("the 19 portability paths enforce elementwise bounds and exact decisions", {
+    policy <- issue199_portability_policy()
+    expect_identical(nrow(policy), 19L)
+    expect_identical(sum(policy$dataset == "OSLO2EMIT0obj"), 5L)
+    expect_identical(sum(policy$dataset == "TCGABRCAobj" &
+        policy$scope == "C_vs_approved_C"), 13L)
+    expect_identical(sum(policy$scope == "B_mapping_vs_frozen_A"), 1L)
+    expect_false(anyDuplicated(policy[c("scope", "dataset", "path")]) > 0L)
+    for (i in seq_len(nrow(policy))) {
+        rule <- policy[i, ]
+        posterior <- grepl("/all.probs/", rule$path, fixed = TRUE)
+        expected <- if (posterior) matrix(c(.4, .3, .2, .09, .01), nrow = 1L) else
+            matrix(1, nrow = 1L)
+        compare <- function(actual) issue199_portable_compare(actual, expected,
+            rule$dataset, rule$scope, rule$path)
+        actual <- expected
+        bound <- rule$atol + rule$rtol * abs(expected[1L])
+        actual[1L] <- expected[1L] + bound / 2
+        expect_true(compare(actual), info = rule$path)
+        actual[1L] <- expected[1L] + 4 * bound
+        expect_error(compare(actual), "numeric bound exceeded", info = rule$path)
+    }
+    p <- "/res/results/AIMS/all.probs/20"
+    expected <- matrix(c(.5, .5, 0, 0, 0), nrow = 1L)
+    actual <- expected
+    actual[1L, 1:2] <- c(.5 + 2^-53, .5 - 2^-53)
+    expect_error(issue199_portable_compare(actual, expected, "OSLO2EMIT0obj",
+        path = p), "posterior ranks/ties/argmax")
+    expected[1L, 1:2] <- rev(actual[1L, 1:2])
+    expect_error(issue199_portable_compare(actual, expected, "OSLO2EMIT0obj",
+        path = p), "posterior ranks/ties/argmax")
+    cut <- 100 * (-.25 + .35) / .85
+    expect_error(issue199_portable_compare(cut + 2^-49, cut, "TCGABRCAobj",
+        path = "/res/results/ssBC/score.ROR/ROR-P (Subtype + Prolif)"),
+        "ROR cutoff sides")
+})
+
+test_that("portability never relaxes structure, metadata, masks or unlisted values", {
+    se <- SummarizedExperiment::SummarizedExperiment(
+        assays = list(counts = matrix(1, nrow = 1L)))
+    posterior <- matrix(c(.4, .3, .2, .09, .01), nrow = 1L)
+    expected <- list(data_input = list(se_NC = se, se_SSP = se),
+        res = list(results = list(
+            AIMS = list(all.probs = list(`20` = posterior), data.used = matrix(1:2 + 0, 1L)),
+            sspbc = list(all.probs = list(`24` = posterior), data.used = matrix(1, 1L))),
+            untouched = 1, call = "LumA"))
+    compare <- function(actual, reference = expected) issue199_portable_compare(
+        actual, reference, "OSLO2EMIT0obj")
+    expect_true(compare(expected))
+    actual <- expected; actual$res$untouched <- 1 + .Machine$double.eps
+    expect_error(compare(actual), "unlisted value must be exact")
+    actual <- expected; reference <- expected
+    actual$res$untouched <- -0; reference$res$untouched <- 0
+    expect_error(compare(actual, reference), "unlisted value must be exact")
+    actual <- expected; actual$res$call <- "LumB"
+    expect_error(compare(actual), "unlisted value must be exact")
+    actual <- expected; dim(actual$res$results$AIMS$data.used) <- c(2L, 1L)
+    expect_error(compare(actual), "attributes/names/dimensions")
+    actual <- expected; S4Vectors::metadata(actual$data_input$se_NC) <- list(changed = TRUE)
+    expect_error(compare(actual), "type/class/length")
+    actual <- expected
+    SummarizedExperiment::assay(actual$data_input$se_SSP, withDimnames = FALSE) <-
+        as.data.frame(SummarizedExperiment::assay(actual$data_input$se_SSP, withDimnames = FALSE))
+    expect_error(compare(actual), "type/class/length")
+    actual <- expected; SummarizedExperiment::assayNames(actual$data_input$se_SSP) <- "other"
+    expect_error(compare(actual), "attributes/names/dimensions")
+    actual <- expected
+    SummarizedExperiment::assays(actual$data_input$se_SSP)$extra <- matrix(1, 1L)
+    expect_error(compare(actual), "type/class/length")
+    actual <- expected; attr(actual$res$results$AIMS$data.used, "changed") <- TRUE
+    expect_error(compare(actual), "attributes/names/dimensions")
+    actual <- expected; class(actual$res$results$AIMS$data.used) <- "changed"
+    expect_error(compare(actual), "type/class/length")
+    actual <- expected; storage.mode(actual$res$results$AIMS$data.used) <- "integer"
+    expect_error(compare(actual), "type/class/length")
+    for (value in c(NA_real_, NaN, Inf)) {
+        actual <- expected; actual$res$results$AIMS$data.used[1L] <- value
+        expect_error(compare(actual), "nonfinite masks/signs")
+    }
+    # A misspelled named posterior child must leave its exact policy path unused.
+    actual <- expected; names(actual$res$results$AIMS$all.probs) <- "2"
+    expect_error(compare(actual, actual), "unused.*policy path")
+    p <- "/data_input/se_NC/assay"
+    expect_error(issue199_portable_compare(1e-320, 0, "TCGABRCAobj", path = p),
+        "zero support/signs")
+    expect_error(issue199_portable_compare(-0, 0, "TCGABRCAobj", path = p), "signed zero")
+    expect_error(issue199_portable_compare(1e-310 + 5e-324, 1e-310,
+        "TCGABRCAobj", path = p), "subnormal support/values")
+    expect_error(issue199_portable_compare(-Inf, Inf, "TCGABRCAobj", path = p),
+        "nonfinite masks/signs")
+})
+
 test_that("compact historical files retain pinned payloads and original provenance", {
     manifest <- read.delim(test_path("fixtures", "historical-cb7a7c70",
         "manifest.tsv"), stringsAsFactors = FALSE)
@@ -115,7 +207,8 @@ test_that("default Mapping reconstructs current examples without changing RNG", 
             RawCounts = nm == "TCGABRCAobj", verbose = FALSE))
         expect_identical(.Random.seed, rng, info = nm)
         expect_identical(obj$se_obj, before, info = nm)
-        expect_identical(mapped, obj$data_input, info = nm)
+        expect_true(issue199_portable_compare(mapped, obj$data_input, nm,
+            path = "/data_input"), info = nm)
         for (method in names(mapped)) {
             expect_identical(dim(mapped[[method]]),
                 c(if (method == "se_NC") 50L else 339L, ncol(obj$se_obj)), info = nm)
@@ -135,15 +228,19 @@ test_that("expanded current AUTO results reproduce the accepted complete objects
         rng <- .Random.seed
         fresh <- issue199_fresh(nm)
         expect_identical(.Random.seed, rng, info = nm)
-        expect_identical(fresh$data_input, obj$data_input, info = nm)
-        # A strict current-runtime replay; any future intentional correction must
-        # receive a separate versioned baseline, never overwrite the old oracle.
-        expect_identical(fresh$res, obj$res, info = nm)
+        expect_true(issue199_portable_compare(fresh$data_input, obj$data_input,
+            nm, path = "/data_input"), info = nm)
+        # Only measured component paths admit bounded elementwise roundoff;
+        # all other values, structure and scientific decisions remain exact.
+        expect_true(issue199_portable_compare(fresh$res, obj$res, nm,
+            path = "/res"), info = nm)
+        issue199_expect_decisions(fresh$res, obj$res)
         methods <- setdiff(names(obj$res$res_subtypes), "entropy")
         expect_identical(obj$res$res_subtypes[, methods],
             reference[[nm]]$C[, methods], info = nm)
-        expect_equal(obj$res$res_subtypes$entropy, reference[[nm]]$C$entropy,
-            tolerance = 1e-12, info = nm)
+        expect_identical(fresh$res$res_subtypes, reference[[nm]]$C, info = nm)
+        expect_identical(obj$res$res_subtypes$entropy, reference[[nm]]$C$entropy,
+            info = nm)
         expect_identical(length(obj$res$results), 8L, info = nm)
         expect_identical(sum(is.na(obj$res$res_subtypes$ssBC.v2)),
             if (nm == "OSLO2EMIT0obj") 8L else 4L, info = nm)
@@ -173,6 +270,7 @@ test_that("OSLO expansion changes neither mapped values nor current method outpu
         tolerance = 1e-12)
     expect_identical(b$res$res_subtypes[, methods],
         issue199_calls()$OSLO2EMIT0obj$B[, methods])
+    expect_identical(b$res$res_subtypes, issue199_calls()$OSLO2EMIT0obj$B)
     # Historical stored ROR-P predates #198. It remains testable in the
     # historical suite and is deliberately not relabelled as current output.
 })
@@ -185,8 +283,11 @@ test_that("TCGA expanded counts reproduce the 64 documented dataset-induced call
     methods <- setdiff(names(reference$B), "entropy")
     expect_identical(b$res$res_subtypes[, methods], reference$B[, methods])
     expect_identical(c$res$res_subtypes[, methods], reference$C[, methods])
-    expect_equal(b$res$res_subtypes$entropy, reference$B$entropy, tolerance = 1e-12)
-    expect_identical(b$data_input, historical_example("TCGABRCAobj")$data_input)
+    expect_identical(b$res$res_subtypes, reference$B)
+    expect_identical(c$res$res_subtypes, reference$C)
+    expect_true(issue199_portable_compare(b$data_input,
+        historical_example("TCGABRCAobj")$data_input, "TCGABRCAobj",
+        "B_mapping_vs_frozen_A", "/data_input"))
     rows <- lapply(methods, function(method) {
         a <- b$res$res_subtypes[[method]]
         z <- c$res$res_subtypes[[method]]
