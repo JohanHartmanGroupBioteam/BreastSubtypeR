@@ -59,9 +59,10 @@
   SSPBC training used unadjusted StringTie FPKM; equivalence with adjusted OSLO
   expression is unestablished. The separately merged #131 opt-in prepares
   SSP-ROR input; normalization research remains #208.
-* This local integration remains subject to author review and distribution
-  clearance. No release or version bump is included; development version
-  1.5.13 is recommended for a separately approved integration.
+* The scoped author and public-source/field-level redistribution review was
+  completed, and PR #228 merged the #199 integration. Source attribution and
+  reuse conditions continue to apply. Integration is not a release; the package
+  remains at version 1.5.12, with release/version decisions handled separately.
 
 * Validate #199 against merged #131 at `f878f58c`: default mapped inputs and
   complete results retain the approved Stage 3A values. Optional SSP-ROR

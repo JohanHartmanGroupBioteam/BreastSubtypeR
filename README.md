@@ -143,8 +143,10 @@ The verified OSLO source is [Mendeley Data V4](https://doi.org/10.17632/yzxtxn4n
 SSPBC models were developed with unadjusted StringTie FPKM; equivalence with
 protocol-adjusted OSLO expression has not been established. A complete source
 gene union does not establish native SSP-ROR preparation or training-input
-compatibility. Default Mapping remains unchanged and returns no `se_SSP_ROR`;
-model-aware preparation (#131) and normalization research (#208) remain separate.
+compatibility. Default Mapping remains unchanged and returns no `se_SSP_ROR`.
+The implemented #131 opt-in, `Mapping(include_ssp_ror = TRUE)`, prepares a
+separate `se_SSP_ROR`; stored `data_input$se_SSP` remains subtype-restricted
+and is not a complete SSP-ROR input. Normalization research remains #208.
 See `?OSLO2EMIT0obj` and `?TCGABRCAobj` for details.
 
 

@@ -7,18 +7,30 @@ establish native SSP-ROR preparation or training-input equivalence.
 
 ## Reproduction
 
-Use a full source checkout, R 4.5.2 and the recorded dependencies. Install the
-checkout into a **new private library**:
+Reconstruction requires the approved generation implementation
+`cb7a7c70e0f94e1690d15ac2ec2b464a40934f36`, R 4.5.2 on Windows and the recorded
+[dependency stack](manifests/reconstruction-software-v1.tsv), plus the retained
+external sources and original complete historical objects. Current main is not
+the approved generation implementation: its fingerprint rejection is intentional.
+The separately pinned f878f58c replay and post-#219 instructions below do not
+relax this verification.
+
+Use `/generation-checkout` for the pinned cb7a7c70 source installation and
+`/integration-checkout` for this integration's reconstruction wrapper, approved
+comparison objects and hash-pinned models. Set `--package-source` explicitly
+to `/integration-checkout`; see
+[Reproduction after merged #219](#reproduction-after-merged-219).
+Install the pinned generation checkout into a **new private library**:
 
 ~~~text
-R CMD INSTALL --install-tests --library=/new/library /checkout
+R CMD INSTALL --install-tests --library=/new/library /generation-checkout
 ~~~
 
 Set `R_LIBS` to that library and your pinned dependency library. No script
 installs dependencies or downloads source data. Run from any working directory:
 
 ~~~text
-Rscript --vanilla /checkout/data-raw/issue199/rebuild-datasets.R --archive=/retained/2026-10-26_expanded-inputs --historical-dir=/retained/original-complete-objects --out=/new/reproduction
+Rscript --vanilla /integration-checkout/data-raw/issue199/rebuild-datasets.R --package-source=/integration-checkout --archive=/retained/2026-10-26_expanded-inputs --historical-dir=/retained/original-complete-objects --out=/new/reproduction
 ~~~
 
 The archive path is external and relocatable. Preserve its internal layout and
@@ -114,8 +126,8 @@ hash-pinned historical Shiny table; the six shared fields come from candidate
 `colData`. No additional clinical fields are attached to the public
 `SummarizedExperiment`.
 
-Development version 1.5.13 is recommended after author approval.
-`DESCRIPTION` remains at 1.5.12 during this review.
+PR #228 merged the #199 integration after the scoped review was completed.
+`DESCRIPTION` remains at 1.5.12; release and version-target decisions are separate.
 
 The completed public-source and field-level
 review has resolved the redistribution gate for these #199 candidates; source

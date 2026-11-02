@@ -197,8 +197,11 @@ default Mapping still returns only its existing `se_NC` and `se_SSP`
 components. SSPBC models were developed using unadjusted StringTie FPKM;
 prediction equivalence with adjusted OSLO expression has not been established.
 Current nonraw SSP preprocessing uses `2^x`, retaining the `+1` offset
-for the OSLO input. Model-aware preparation remains #131 and normalization
-research remains #208. See `?OSLO2EMIT0obj`, `?TCGABRCAobj` and the source
+for the OSLO input. The implemented #131 opt-in,
+`Mapping(include_ssp_ror = TRUE)`, prepares a separate `se_SSP_ROR`; stored
+`data_input$se_SSP` remains subtype-restricted. See the complete examples in
+[Native SSP-ROR bins for research use](#native-ssp-ror-bins-for-research-use).
+Normalization research remains #208. See `?OSLO2EMIT0obj`, `?TCGABRCAobj` and the source
 repository's `data-raw/issue199` scripts and manifests for provenance and
 reproduction requirements.
 
