@@ -546,6 +546,80 @@ deferred pending scientific review of exact-equality
 assignments. The corrected NODE-dependent additional ROR-PC grouping from
 issue #154 remains unchanged.
 
+## Native SSP-ROR bins for research use
+
+`BS_sspbc(se_obj, ssp.name = "ssp.ror")` already exposes the bundled SSP-ROR
+model from [Staaf et al. (2022)](https://doi.org/10.1038/s41523-022-00465-3).
+It returns categorical bin labels (`c005`, `c010`, ..., `c090`), with 18
+classes in the fitted model. These are distinct from the NC-method ROR
+scores above, continuous or Parker-derived ROR scores, tumor-size-adjusted values,
+nodal-status-specific risk categories and clinical Prosigna outputs.
+`BS_sspbc()` preserves the native model calculations and does not perform
+numerical bin conversion or clinical adjustment.
+
+The expanded public OSLO (569 genes, 102 samples) and TCGA (5,350 genes,
+100 samples) inputs cover all 296 required SSP-ROR genes and 361 rules per
+sample when prepared with `Mapping(include_ssp_ror = TRUE)$se_SSP_ROR`.
+Use `RawCounts = FALSE` for OSLO and `RawCounts = TRUE` for TCGA. Default
+`data_input$se_SSP` objects still contain only subtype genes and are not the
+complete SSP-ROR inputs.
+
+Complete coverage does not establish training-input equivalence or clinical
+validity. OSLO stores log2(protocol-adjusted FPKM + 1); Mapping returns
+protocol-adjusted FPKM + 1 for SSP-ROR. SSPBC development used original
+unadjusted StringTie FPKM. This example neither reverses the protocol
+adjustment nor establishes SSP-ROR calibration on the adjusted scale.
+For incomplete inputs, SSP-ROR retains native missing-rule handling rather
+than the subtype models' zero-evidence safeguard; a returned label or high
+posterior probability does not establish adequate coverage.
+
+```{r ssp-ror, eval=TRUE}
+data("OSLO2EMIT0obj")
+se_obj <- OSLO2EMIT0obj$se_obj
+se_ror <- Mapping(se_obj, RawCounts = FALSE,
+    include_ssp_ror = TRUE)$se_SSP_ROR
+ssp_ror <- BS_sspbc(
+    se_ror,
+    ssp.name = "ssp.ror"
+)
+ror_bins <- data.frame(
+    SampleID = rownames(ssp_ror$cl),
+    ROR_bin = ssp_ror$cl[, "21"],
+    Bin_probability = ssp_ror$prob[, "21"],
+    ssp_ror$all.probs[["21"]],
+    row.names = NULL, check.names = FALSE
+)
+head(ror_bins)
+```
+
+The same pathway accepts the public TCGA coverage-sum input with gene lengths:
+
+```{r ssp-ror-tcga, eval=TRUE}
+data("TCGABRCAobj")
+tcga_ror_input <- Mapping(TCGABRCAobj$se_obj, RawCounts = TRUE,
+    include_ssp_ror = TRUE)$se_SSP_ROR
+tcga_ror <- BS_sspbc(tcga_ror_input, ssp.name = "ssp.ror")
+stopifnot(all(colSums(!is.na(tcga_ror$rules.matrix)) == 361L))
+```
+
+
+`cl` is a character matrix and `prob` a numeric matrix, each with one row per
+sample and one column named `"21"` (the fitted model's `k` setting).
+`all.probs[["21"]]` is a numeric matrix with one row per sample and 18
+columns named by bin label. These are model posterior probabilities of bin
+membership, not probabilities of recurrence. `rules.matrix` has 361 rows
+and one column per sample; `k` is not the total rule count. Matrices retain
+their dimensions for a single sample.
+
+All sample axes preserve input order. Native `all.probs[["21"]]` row names
+and `rules.matrix` column names are absent; associate them with
+`rownames(ssp_ror$cl)`. `data.used` retains sample IDs as column names, and
+`EntrezID.used` identifies its rows. To export the labelled research table:
+
+```{r export-ssp-ror, eval=FALSE}
+write.csv(ror_bins, "ssp-ror-bins.csv", row.names = FALSE)
+```
+
 # Guidance & best practices
 
 ## Input types

@@ -1,5 +1,20 @@
 # BreastSubtypeR (development)
 
+## Documentation and regression coverage
+
+* Document the already available `BS_sspbc(..., ssp.name = "ssp.ror")`
+  pathway (#131), its native categorical ROR-bin labels and model posterior
+  probabilities. Correct the documented matrix/list return types and sample
+  alignment, and add a research-use vignette example with CSV export using
+  `Mapping(include_ssp_ror = TRUE)$se_SSP_ROR`. Distinguish categorical bins
+  from continuous/Parker-derived scores, recurrence probabilities and clinical
+  Prosigna outputs; explain the OSLO protocol-adjusted training-scale limitation.
+* Add regression coverage for packaged SSP-ROR model availability, single
+  and multiple samples, sample identity/order, native-output parity for both
+  expanded public datasets (296 genes, 361 evaluable rules per sample), invalid
+  model names and preservation of both SSPBC subtype models. Prediction
+  code, fitted models and native missing-rule handling are unchanged.
+
 ## New features
 
 * Add opt-in `Mapping(include_ssp_ror = TRUE)` preparation of a separate
