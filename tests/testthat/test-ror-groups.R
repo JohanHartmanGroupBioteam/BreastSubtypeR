@@ -151,8 +151,8 @@ test_that("NODE changes only the subtype-specific ROR-PC risk group", {
     ))
 
     ## These scores are away from cutoffs. Resolved NODE boundaries (#154,
-    ## implemented in #157) are tested below. The original Parker equality
-    ## limitation remains separately deferred in #172.
+    ## implemented in #157) are tested below. The original Parker cutoff
+    ## equalities are tested independently in test-ror-boundaries.R (#172).
     nodes <- c(0, 1, 3, 4, NA)
     expected_groups <- list(
         c("low", "low", "med", "high"),

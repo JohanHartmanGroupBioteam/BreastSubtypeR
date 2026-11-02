@@ -161,22 +161,31 @@ and notice. Its TSV export preserves the existing tabular schema and
 provenance-comment layout while recording this interpretation.
 }
 
-\section{Known original ROR boundary limitation}{
+\section{Original research ROR boundary policy}{
 
 The original Parker-derived ROR-S, ROR-P, ROR-C and
-\code{ROR-PC (Subtype + Clinic + Prolif)} grouping retains strict comparisons.
-At exact equality to either unscaled cutoff, a group can contain the
-numeric score as text instead of \code{low}, \code{med} or \code{high}.
+\code{ROR-PC (Subtype + Clinic + Prolif)} groups use the author-approved
+BreastSubtypeR convention: \code{low} below the lower cutoff, \code{med} at or
+between both cutoffs, and \code{high} above the upper cutoff (#172).
 The unscaled cutoff pairs are ROR-S: -0.15/0.10; ROR-P: -0.25/0.10;
 ROR-C: -0.10/0.20; and original ROR-PC: -0.20/0.20. These apply before
-\code{100 * (score + 0.35) / 0.85}, not directly to displayed scaled scores.
-Numeric-text values are invalid risk categories; do not interpret them
-as an additional category or infer an assignment by rounding.
-Version 1.5.8 temporarily defers this known categorical-output defect
-pending scientific review of the intended equality convention. Scores,
-coefficients and thresholds are preserved. This limitation is separate
-from the corrected NODE-dependent Experimental 18-gene ROR-PC group
-boundaries described in \code{\link[=Mapping]{Mapping()}}, which remain unchanged.
+\code{100 * (score + 0.35) / 0.85}, without rounding or tolerance. Do not
+classify from displayed or reverse-scaled scores: distinct raw doubles
+can produce the same scaled value.
+
+This package policy is supported by the training-extrema rationale in
+Nielsen et al. (2010, \url{https://doi.org/10.1158/1078-0432.CCR-10-1282})
+and the inclusive intermediate ranges reported by Martin et al. (2016,
+\url{https://doi.org/10.1007/s10549-016-3725-z}). Their published scaled
+cutpoints do not replace the unscaled constants above. This is an
+author-approved convention, not historically proven equality semantics
+of the original distributed scripts, which omitted equality assignments.
+Earlier package versions could consequently return numeric text in group
+columns; recomputation now assigns those exact-boundary cases to \code{med}.
+Numerical scores, nonboundary groups and missing/nonfinite handling are
+unchanged. These research ROR results are not clinical Prosigna results.
+The separate NODE-dependent Experimental 18-gene ROR-PC group boundaries
+described in \code{\link[=Mapping]{Mapping()}} remain unchanged.
 }
 
 \section{Proliferation panel coverage}{
@@ -240,7 +249,7 @@ score. Every exported numerical ROR score is finite or \code{NA}: a \code{NaN} o
 infinite result, including overflow in the final score transformation, has
 a missing group rather than \code{low}, \code{med} or \code{high}. The independent NODE >= 4
 high-risk rule for the additional score still applies with nonmissing tumor
-size. The deferred exact-boundary behavior of the original groups is unchanged.
+size. Finite original-score equalities follow the boundary policy above.
 }
 
 \examples{

@@ -537,17 +537,29 @@ res <- withCallingHandlers(
 )
 ```
 
-**Known exact-equality limitation.** The original Parker-derived ROR-S,
-ROR-P, ROR-C and `ROR-PC (Subtype + Clinic + Prolif)` groups retain strict
-comparisons. At an exact unscaled cutoff, the group can contain numeric
-text instead of `low`, `med` or `high`. The unscaled pairs are -0.15/0.10,
+**Original research ROR boundary policy.** The original Parker-derived ROR-S,
+ROR-P, ROR-C and `ROR-PC (Subtype + Clinic + Prolif)` groups use the
+author-approved BreastSubtypeR convention: `low` below the lower cutoff,
+`med` at or between both cutoffs, and `high` above the upper cutoff (#172).
+The unscaled pairs are -0.15/0.10,
 -0.25/0.10, -0.10/0.20 and -0.20/0.20, respectively, before
 `100 * (score + 0.35) / 0.85`. They are not cutoffs on the displayed scaled
-scores. Numeric-text labels are invalid categories, not an additional risk
-group; do not infer an assignment by rounding. This known defect remains
-deferred pending scientific review of exact-equality
-assignments. The corrected NODE-dependent additional ROR-PC grouping from
-issue #154 remains unchanged.
+scores. No rounding or tolerance is used. Distinct raw doubles can produce
+the same scaled score, so reverse scaling cannot recover exact membership.
+
+The convention is supported by the training-extrema rationale in
+[Nielsen et al. (2010)](https://doi.org/10.1158/1078-0432.CCR-10-1282)
+(lower threshold: minimum Luminal B; upper threshold: maximum Luminal A)
+and the inclusive intermediate ranges reported by
+[Martin et al. (2016)](https://doi.org/10.1007/s10549-016-3725-z).
+The published scaled cutpoints do not replace this package's raw constants.
+This is an author-approved package policy, not historically proven equality
+semantics of the original distributed scripts, which omitted equality
+assignments. Earlier package versions could return numeric text at the eight
+boundaries; recomputation now returns `med`. Numerical scores, nonboundary
+groups and missing/nonfinite handling are preserved. These research ROR
+results are not clinical Prosigna results. The separate NODE-dependent
+Experimental 18-gene ROR-PC grouping remains unchanged.
 
 ## Native SSP-ROR bins for research use
 
