@@ -24,12 +24,11 @@ ror198_proliferation <- function(x) {
 }
 
 ror198_groups <- function(raw, low, high) {
-    group <- raw
-    group[raw < low] <- "low"
-    group[raw > low & raw < high] <- "med"
-    group[raw > high] <- "high"
+    ## Numerical oracle above retains original provenance; categorical
+    ## equalities follow the separately author-approved package policy #172.
+    group <- ifelse(raw < low, "low", ifelse(raw > high, "high", "med"))
     group[!is.finite(raw)] <- NA_character_
-    as.character(group) # retain the deferred exact-boundary text (#172)
+    as.character(group)
 }
 
 ror198_reference <- function(out, clinical = NULL) {

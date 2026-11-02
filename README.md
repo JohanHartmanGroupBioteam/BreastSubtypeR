@@ -214,11 +214,17 @@ No such warning is emitted by package loading, `Mapping()`,
 `hasClinical = FALSE`, or AIMS/SSPBC-only results. See the ROR guide below for
 warning handling, including `options(warn = 2)`.
 
-The package retains the original Parker-derived grouping comparisons:
-exact equality at an unscaled cutoff can return numeric text instead of a
-valid risk category. This known defect is temporarily deferred for separate
-scientific review, not endorsed as a valid category. The corrected
-NODE-dependent additional ROR-PC grouping remains unchanged. See
+Original research ROR-S, ROR-P, ROR-C and ROR-PC groups assign exact equality
+at either unscaled cutoff to `med` (#172): low below, medium at or between,
+and high above the cutoffs. This author-approved package convention is
+supported by [Nielsen et al. (2010)](https://doi.org/10.1158/1078-0432.CCR-10-1282)
+and [Martin et al. (2016)](https://doi.org/10.1007/s10549-016-3725-z), not
+historically proven equality semantics of the original distributed scripts.
+It replaces their numeric-text boundary labels without changing scores,
+cutoffs, nonboundary groups or missing-value handling. Classification uses
+unrounded raw scores, not displayed or reverse-scaled scores. These are
+research results, not clinical Prosigna results. The separate NODE-dependent
+additional ROR-PC grouping remains unchanged. See
 [the ROR guide](vignettes/BreastSubtypeR.Rmd#four--versus-five-class-results-and-ror)
 and `?BS_parker` for the exact cutoffs and methodological references.
 

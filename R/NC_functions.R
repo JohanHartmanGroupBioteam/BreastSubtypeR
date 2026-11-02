@@ -456,8 +456,8 @@ sspPredict <- function(x, y, std = FALSE, distm = "spearman", Subtype = TRUE) {
 }
 
 # Nonfinite (now NA) numerical ROR scores have no valid risk category (#206).
-# Finite scores keep the original strict-comparison labels assigned by the
-# caller, including the exact-equality text deferred in #172.
+# Finite scores keep the labels assigned by the caller, including the
+# author-approved medium category at either original cutoff (#172).
 .finite_group <- function(group, score) {
     nonfinite <- !is.finite(score)
     if (any(nonfinite)) {
@@ -621,16 +621,17 @@ RORgroup <- function(
         0.3385116381 * prolifScore
 
 
-    # threshold the risk score
+    # Author-approved research ROR policy (#172): both raw-score cutoff
+    # equalities are medium. Keep scores and the separate NODE policy intact.
     griskgroups <- genomic
     griskgroups[genomic > ghthreshold] <- "high"
-    griskgroups[genomic > glthreshold &
-        genomic < ghthreshold] <- "med"
+    griskgroups[genomic >= glthreshold &
+        genomic <= ghthreshold] <- "med"
     griskgroups[genomic < glthreshold] <- "low"
     gpriskgroups <- genomicWprolif
     gpriskgroups[genomicWprolif > gphthreshold] <- "high"
-    gpriskgroups[genomicWprolif > gplthreshold &
-        genomicWprolif < gphthreshold] <- "med"
+    gpriskgroups[genomicWprolif >= gplthreshold &
+        genomicWprolif <= gphthreshold] <- "med"
     gpriskgroups[genomicWprolif < gplthreshold] <- "low"
 
     genomic <- 100 * (genomic + 0.35) / 0.85
@@ -671,13 +672,13 @@ RORgroup <- function(
 
             criskgroups <- combined
             criskgroups[combined > chthreshold] <- "high"
-            criskgroups[combined > clthreshold &
-                combined < chthreshold] <- "med"
+            criskgroups[combined >= clthreshold &
+                combined <= chthreshold] <- "med"
             criskgroups[combined < clthreshold] <- "low"
             cpriskgroups <- combinedWprolif
             cpriskgroups[combinedWprolif > cphthreshold] <- "high"
-            cpriskgroups[combinedWprolif > cplthreshold &
-                combinedWprolif < cphthreshold] <- "med"
+            cpriskgroups[combinedWprolif >= cplthreshold &
+                combinedWprolif <= cphthreshold] <- "med"
             cpriskgroups[combinedWprolif < cplthreshold] <- "low"
 
             combined <- 100 * (combined + 0.35) / 0.85

@@ -76,6 +76,25 @@
 
 ## Bug fixes
 
+* Resolve the original research ROR-S, ROR-P, ROR-C and ROR-PC exact-boundary
+  defect (#172) with the author-approved `(med, med)` package convention:
+  low below the lower cutoff, medium at or between both cutoffs, and high
+  above the upper cutoff. The unscaled pairs remain -0.15/0.10, -0.25/0.10,
+  -0.10/0.20 and -0.20/0.20, respectively. No rounding, tolerance or
+  classification from displayed/reverse-scaled scores is used. Only the
+  eight equality assignments change from numeric text to `med`; numerical
+  scores, coefficients, normalization, subtype predictions, nonboundary
+  groups, missing/nonfinite handling, output schemas and the separate
+  NODE-dependent ROR-PC output are preserved. Add exact IEEE-754 boundary,
+  adjacent-value, clinical/no-clinical and preservation regressions.
+* Document #172 as an author-approved convention supported by Nielsen et al.
+  (2010, doi:10.1158/1078-0432.CCR-10-1282) and Martin et al.
+  (2016, doi:10.1007/s10549-016-3725-z), not historically proven equality
+  semantics of the original distributed code. Published scaled cutpoints
+  do not replace the package's raw constants. These are research ROR results,
+  not clinical Prosigna results. This supersedes the historical #172 deferrals
+  recorded in earlier release entries below.
+
 * Resolve duplicate probes with `method = "stdev"` or `"iqr"` using the first
   maximum among statistics that are not `NA`/`NaN` (#218). The existing sample
   SD and type-7 IQR calculations, expression-row tie order and infinite-statistic

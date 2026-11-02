@@ -503,7 +503,7 @@ test_that("every exported ROR score is finite or NA and nonfinite results have N
     for (s in c(parker_scores, add_score)) expect_true(all(is.finite(full[[s]])), info = s)
 })
 
-test_that("finite exact-equality scores keep the deferred #172 text after the finiteness check", {
+test_that("finite exact-equality scores keep the approved #172 medium label after the finiteness check", {
     input <- make_panel_input()
     ## A zero sample mean with positive SD makes the standardized proliferation
     ## exactly zero. LumA = -1.0509660919621142 then gives exactly 0.1.
@@ -516,10 +516,10 @@ test_that("finite exact-equality scores keep the deferred #172 text after the fi
     ## does not is a test failure, never a silent skip.
     expect_identical(unscaled, 0.1)
     res <- run_ror(input)
-    expect_identical(res[["ROR-P Group (Subtype + Prolif)"]][2], as.character(unscaled))
+    expect_identical(res[["ROR-P Group (Subtype + Prolif)"]][2], "med")
     expect_identical(res[["ROR-P (Subtype + Prolif)"]][2], 100 * (unscaled + 0.35) / 0.85)
-    expect_identical(BreastSubtypeR:::.finite_group(c("0.1", "high", NA), c(52.9, 70, 1)),
-        c("0.1", "high", NA))
+    expect_identical(BreastSubtypeR:::.finite_group(c("med", "high", NA), c(52.9, 70, 1)),
+        c("med", "high", NA))
 })
 
 test_that("missing additional scores are NA rather than NaN with the NODE >= 4 override kept", {
