@@ -165,3 +165,28 @@ results remain independently frozen. Only identical assay prefixes are shared
 with public objects; independently frozen assay and complete-object digests
 reject drift. Reconstructed complete objects retain every original value and
 all scientific expectations. The original full files remain archived.
+
+## Reproduction after merged #219
+
+The merged #219 implementation at
+`9110054b2032d0d560297c2c0166e39cb7776946` changes Mapping donor preparation.
+It is not a supported reconstruction fingerprint in `rebuild-datasets.R`.
+Compatibility tests against saved objects do not authorize a new generation
+implementation or replacement artifact. Keep the existing manifests unchanged.
+
+To reproduce the approved generation, create a separate source checkout at
+`cb7a7c70e0f94e1690d15ac2ec2b464a40934f36`, install that checkout into the new
+private library described above, and use the retained R 4.5.2 Windows dependency
+stack in `manifests/reconstruction-software-v1.tsv`. Run this integration
+checkout's reconstruction wrapper with
+`--package-source=/path/to/this-integration-checkout`; retain the same external archive,
+historical originals and new output-directory arguments. The wrapper and its
+manifests, approved comparison objects and hash-pinned unchanged models come
+from this integration checkout; only the installed implementation comes from
+the explicitly pinned generation checkout. The original checkout's historical
+packaged objects must not be substituted for the approved comparison objects.
+
+The existing f878f58c replay remains separately pinned. Do not install current
+main and bypass a fingerprint rejection. Function serialization fingerprints
+and exact-value replay also depend on the recorded environment; passing Linux
+compatibility tests does not establish cross-platform reconstruction identity.
