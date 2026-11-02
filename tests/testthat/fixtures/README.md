@@ -78,8 +78,12 @@ floating-point evaluation. Historical tests keep their original tolerances.
 These files are included under tests/ in the source package and by
 `R CMD INSTALL --install-tests`, so installed-package tests do not require
 any private archive path. They are not installed in ordinary installations.
-Distribution clearance for the underlying expression and clinical data remains
-a release gate; retaining data in a test directory does not exempt it.
+The completed #199 public-source and field-level review includes these fixtures
+and resolves their scoped redistribution gate; see the dated
+[data provenance review](../../../inst/DATA-PROVENANCE.md). Source attribution
+and reuse conditions still apply. This is not institutional approval or blanket
+clearance for future data, uses or releases; historical derivation limitations
+remain documented in that review.
 
 To reproduce the compact fixtures, run the source-only builder from a full
 checkout with the original complete objects and a new output directory:
@@ -94,7 +98,9 @@ identity. It requires SummarizedExperiment and digest for generation; the
 installed test loader requires no new package dependency. Original versioned
 AIMS/cIHC fixtures and the B/C call oracle remain byte-identical.
 The Stage 3B scripts `migrate_regression.ps1` and
-`freeze_regression_oracles.R` document the original extraction. Do not rerun
+`freeze_regression_oracles.R` document the original extraction and are retained
+separately in the Stage 3B archive's `scripts/` directory; they are not tracked
+in the current Git tree. Do not rerun
 the guarded historical scientific fixture generator.
 
 The Stage 3C packaging assertions check the compact physical containers and
