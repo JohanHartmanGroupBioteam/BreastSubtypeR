@@ -1,5 +1,6 @@
+# Historical example input is pinned independently of public data; see fixtures/README.md.
 test_that("complete PAM50 ROR-P and original ROR-PC match the Parker reference", {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR", envir = environment())
+    load_historical_example("OSLO2EMIT0obj", envir = environment())
     se <- OSLO2EMIT0obj$data_input$se_NC
     expect_identical(dim(se), c(50L, 102L))
     res <- expect_experimental_ror_pc(BS_parker(se, calibration = "Internal", internal = "medianCtr",
@@ -27,7 +28,7 @@ test_that("complete PAM50 ROR-P and original ROR-PC match the Parker reference",
 })
 
 test_that("the ROR standardization is within each sample and never mutates its input", {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR", envir = environment())
+    load_historical_example("OSLO2EMIT0obj", envir = environment())
     se <- OSLO2EMIT0obj$data_input$se_NC
     clinical <- as.data.frame(SummarizedExperiment::colData(se))
     out <- BS_parker(se, calibration = "Internal", Subtype = TRUE)$outList
@@ -58,7 +59,7 @@ test_that("all NC methods use the final PAM50 matrix for original ROR only", {
     methods <- c("parker.original", "genefu.scale", "genefu.robust", "cIHC",
         "cIHC.itr", "PCAPAM50", "ssBC", "ssBC.v2")
     for (dataset in c("OSLO2EMIT0obj", "TCGABRCAobj")) {
-        data(list = dataset, package = "BreastSubtypeR", envir = environment())
+        load_historical_example(dataset, envir = environment())
         se <- get(dataset)$data_input$se_NC
         # The packaged TCGA subset has no TSIZE/NODE; exercise clinical code
         # with explicit synthetic covariates in this temporary test input only.
@@ -103,7 +104,7 @@ test_that("all NC methods use the final PAM50 matrix for original ROR only", {
 })
 
 test_that("all Parker calibration variants standardize after calibration", {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR", envir = environment())
+    load_historical_example("OSLO2EMIT0obj", envir = environment())
     se <- OSLO2EMIT0obj$data_input$se_NC
     clinical <- as.data.frame(SummarizedExperiment::colData(se))
     variants <- list(list(calibration = "None"),

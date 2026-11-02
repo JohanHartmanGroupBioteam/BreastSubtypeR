@@ -1,3 +1,4 @@
+# Historical example input is pinned independently of public data; see fixtures/README.md.
 pcapam50_id_membership <- function(actual, expected) {
     complete <- is.character(actual) && length(actual) == length(expected) &&
         !anyNA(actual) && !anyDuplicated(actual) && all(nzchar(actual)) &&
@@ -28,7 +29,7 @@ pcapam50_id_outputs <- function(result, ids, subtype) {
 }
 
 test_that("factor PatientID preserves complete character-ID results", {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR")
+    load_historical_example("OSLO2EMIT0obj")
     original <- OSLO2EMIT0obj$data_input$se_NC
     ids <- colnames(original)
     for (subtype in c(FALSE, TRUE)) for (clinical in c(FALSE, TRUE)) {
@@ -55,7 +56,7 @@ test_that("factor PatientID preserves complete character-ID results", {
 })
 
 test_that("factor IDs retain names through reordering, subsets and unused levels", {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR")
+    load_historical_example("OSLO2EMIT0obj")
     original <- OSLO2EMIT0obj$data_input$se_NC
     names <- paste0(rep(c("a-", "A_", "z.", "2"), length.out = ncol(original)), seq_len(ncol(original)))
     colnames(original) <- names
@@ -82,7 +83,7 @@ test_that("factor IDs retain names through reordering, subsets and unused levels
 })
 
 test_that("native PCA-PAM50 centering selects expression values by biological ID", {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR")
+    load_historical_example("OSLO2EMIT0obj")
     original <- OSLO2EMIT0obj$data_input$se_NC
     ids <- colnames(original)
     assay <- as.matrix(SummarizedExperiment::assay(original))
@@ -145,7 +146,7 @@ test_that("native PCA-PAM50 centering selects expression values by biological ID
 })
 
 test_that("PCA-PAM50 rejects invalid identifiers before scientific calculation", {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR")
+    load_historical_example("OSLO2EMIT0obj")
     original <- OSLO2EMIT0obj$data_input$se_NC
     ids <- colnames(original)
     reached <- FALSE
@@ -166,7 +167,7 @@ test_that("PCA-PAM50 rejects invalid identifiers before scientific calculation",
 })
 
 test_that("factor-ID correction preserves caller RNG and locale", {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR")
+    load_historical_example("OSLO2EMIT0obj")
     input <- OSLO2EMIT0obj$data_input$se_NC
     ids <- colnames(input)
     SummarizedExperiment::colData(input)$PatientID <- factor(ids, levels = rev(ids))

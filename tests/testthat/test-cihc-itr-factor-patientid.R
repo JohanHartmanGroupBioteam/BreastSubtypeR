@@ -1,3 +1,4 @@
+# Historical example input is pinned independently of public data; see fixtures/README.md.
 cihc_itr_ids <- function(actual, expected) {
     complete <- is.character(actual) && length(actual) == length(expected) &&
         !anyNA(actual) && !anyDuplicated(actual) && all(nzchar(actual)) &&
@@ -102,7 +103,7 @@ cihc_itr_centering <- function(run, input, iterations) {
 }
 
 test_that("native iterative cIHC selects each centering matrix by biological ID", {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR")
+    load_historical_example("OSLO2EMIT0obj")
     input <- OSLO2EMIT0obj$data_input$se_NC
     ids <- colnames(input)
     reference <- expect_silent(cihc_itr_capture(input))
@@ -123,7 +124,7 @@ test_that("native iterative cIHC selects each centering matrix by biological ID"
 })
 
 test_that("iterative factor IDs preserve both policies and all output modes", {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR")
+    load_historical_example("OSLO2EMIT0obj")
     original <- OSLO2EMIT0obj$data_input$se_NC
     all_ids <- colnames(original)
     er <- SummarizedExperiment::colData(original)$ER
@@ -168,7 +169,7 @@ test_that("iterative factor IDs preserve both policies and all output modes", {
 })
 
 test_that("iterative cIHC rejects malformed IDs before sampling", {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR")
+    load_historical_example("OSLO2EMIT0obj")
     original <- OSLO2EMIT0obj$data_input$se_NC
     ids <- colnames(original)
     cases <- list(missing = replace(ids, 1, NA_character_),
@@ -186,7 +187,7 @@ test_that("iterative cIHC rejects malformed IDs before sampling", {
 })
 
 test_that("iterative ID conversion preserves RNG kinds and absent caller state", {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR")
+    load_historical_example("OSLO2EMIT0obj")
     input <- OSLO2EMIT0obj$data_input$se_NC
     ids <- colnames(input)
     SummarizedExperiment::colData(input)$PatientID <-

@@ -2,38 +2,77 @@
 #'
 #' @description
 #' Example object derived from the OSLO2-EMIT0 cohort (Staaf et al., 2022).
-#' Includes a subset of normalized expression data, clinical metadata, feature
-#' annotations, and example outputs from \code{Mapping()} and \code{BS_Multi()}.
+#' Includes protocol-adjusted expression, historical clinical metadata and
+#' feature annotations, and regenerated \code{Mapping()} and \code{BS_Multi()}
+#' results. It retains the existing public object name and principal list schema.
 #'
 #' @docType data
 #' @usage data("OSLO2EMIT0obj")
 #'
 #' @format A list with:
 #' \describe{
-#'   \item{\code{se_obj}}{A \code{SummarizedExperiment} containing expression
-#'   values for 356 gene features from 102 OSLO2-EMIT0 samples, calculated as
-#'   \code{log2(FPKM + 1)} from library-protocol-adjusted FPKM. Clinical metadata
-#'   are stored in \code{colData}, and feature annotations in \code{rowData}.}
-#'   \item{\code{data_input}}{Example output structure produced by \code{Mapping()}.}
-#'   \item{\code{res}}{Example results from \code{BS_Multi()} run in \emph{AUTO} mode.}
+#'   \item{\code{se_obj}}{A \code{SummarizedExperiment} with 569 unique model
+#'   genes and 102 samples. The assay is \code{log2(FPKM + 1)} calculated from
+#'   library-protocol-adjusted FPKM. The original 356 rows, all 36,312 values,
+#'   feature annotations and sample metadata/order are retained exactly;
+#'   213 genes are appended in adjusted-source order. Clinical metadata are in
+#'   \code{colData}, feature annotations in \code{rowData}, and reconstruction
+#'   provenance in \code{metadata(se_obj)$issue199_reconstruction}.}
+#'   \item{\code{data_input}}{Regenerated \code{Mapping()} output containing
+#'   \code{se_NC} (50 genes by 102 samples) and \code{se_SSP}
+#'   (339 genes by 102 samples).}
+#'   \item{\code{res}}{Regenerated \code{BS_Multi()} AUTO results, containing
+#'   \code{res_subtypes} and \code{results}; the summary uses five classes
+#'   and clinical ROR scoring is disabled.}
 #' }
 #'
+#' @details
+#' The 569-gene union covers the bundled PAM50, AIMS and SSPBC
+#' \code{ssp.subtype}, \code{ssp.pam50} and \code{ssp.ror} model identifiers.
+#' Default \code{Mapping()} still selects its existing NC/SSP registries;
+#' this object does not add \code{se_SSP_ROR} or establish complete native
+#' SSP-ROR preparation. SSPBC models were developed using unadjusted StringTie
+#' FPKM. Prediction equivalence with this protocol-adjusted input has not
+#' been established. Current nonraw SSP preprocessing uses \code{2^x},
+#' retaining the \code{+1} offset for this input. No unadjusted matrix is included.
+#'
+#' Complete results were regenerated under BreastSubtypeR 1.5.12 at source
+#' commit \code{cb7a7c70e0f94e1690d15ac2ec2b464a40934f36}.
+#' Mapping used \code{RawCounts = FALSE}, \code{method = "max"} and
+#' \code{impute = TRUE}, with seed 1992026. Prediction used
+#' \code{methods = "AUTO"}, \code{Subtype = FALSE},
+#' \code{hasClinical = FALSE} and \code{er_subsample = "target"},
+#' with seed 20260831 and unchanged method defaults. RNG kinds were
+#' Mersenne-Twister, Inversion and Rejection.
+#'
+#' Under that same implementation, expansion leaves both mapped inputs and
+#' every complete method result identical to recomputation from the historical
+#' 356-row input. Subtype calls and entropy also match the historical stored
+#' object. Some stored historical ROR, Confidence and output-row details differ
+#' from current recomputation, including the original proliferation-score
+#' standardization correction (#198); these are not expansion effects.
+#' The exact original save-event environment and seed remain unknown.
+#' Reconstruction scripts and versioned manifests are in
+#' \code{data-raw/issue199} in the package source repository.
+#'
 #' @source
-#' \code{OSLO2EMIT0.103.genematrix_noNeg.Rdata}, Mendeley Data, version 3,
-#' from the library-protocol-adjusted FPKM collection.
-#' \doi{10.17632/yzxtxn4nmd.3}
-#' The source matrix contains 19,675 features and 103 sample identifiers.
-#' The packaged subset retains 356 features and 102 samples in source-relative
-#' order; source sample \code{OSLO2EMIT0.073} is absent. The historical reason
-#' for that omission, the feature-selection rationale and the exact generating
-#' script are not established. The expression transformation was verified by
-#' matching source feature and sample identifiers, not inferred from the filename.
+#' \code{OSLO2EMIT0.103.genematrix_noNeg.Rdata}, the verified
+#' library-protocol-adjusted FPKM artifact in Mendeley Data, version 4,
+#' file identifier \code{216a4cc7-e688-4c72-9513-2ad081e2c801}.
+#' \doi{10.17632/yzxtxn4nmd.4}
+#' The source contains 19,675 features and 103 sample identifiers. The original
+#' 102 sample identifiers/order are retained; \code{OSLO2EMIT0.073} is absent.
+#' Its historical omission rationale and the original feature-selection
+#' recipe are unresolved. Historical values were copied without recomputation:
+#' independently transforming the source differs by one ULP at 51 original
+#' cells. The new rows use the verified source transform consistently.
+#' MYO10 retains the verified Entrez identifier 4651.
 #'
 #' @references
-#' Vallon-Christersson J (2023). RNA Sequencing-Based Single Sample Predictors
+#' Vallon-Christersson J (2025). RNA Sequencing-Based Single Sample Predictors
 #' of Molecular Subtype and Risk of Recurrence for Clinical Assessment of
-#' Early-Stage Breast Cancer. Mendeley Data, V3.
-#' \doi{10.17632/yzxtxn4nmd.3}
+#' Early-Stage Breast Cancer. Mendeley Data, V4.
+#' \doi{10.17632/yzxtxn4nmd.4}
 #'
 #' Staaf J, Hakkinen J, Hegardt C, Saal LH, Kimbung S, Hedenfalk I, et al.
 #' RNA sequencing-based single sample predictors of molecular subtype and risk of
@@ -43,51 +82,107 @@
 #' @examples
 #' library(BreastSubtypeR)
 #' data("OSLO2EMIT0obj")
+#' dim(OSLO2EMIT0obj$se_obj) # 569 genes, 102 samples
+#' names(OSLO2EMIT0obj) # se_obj, data_input, res
 "OSLO2EMIT0obj"
 
 
 #' @title TCGABRCAobj: Example dataset (TCGA-BRCA subset)
 #'
 #' @description
-#' Example object derived from TCGA-BRCA. Includes a subset of normalized metadata
-#' + raw counts (as a SummarizedExperiment), and example outputs from \code{Mapping()}
-#' and \code{BS_Multi()} to facilitate runnable examples.
+#' Example object containing recount3 TCGA-BRCA base-pair coverage sums,
+#' historical clinical metadata and feature annotations, and regenerated
+#' \code{Mapping()} and \code{BS_Multi()} outputs. The existing public object
+#' name and principal list schema are retained.
 #'
 #' @docType data
 #' @usage data("TCGABRCAobj")
 #'
 #' @format A list with:
 #' \describe{
-#'   \item{\code{se_obj}}{A \code{SummarizedExperiment} containing the integer raw-count matrix
-#'   (top 5,000 variable genes), \code{rowData} with \code{probe}, \code{SYMBOL}, \code{ENTREZID},
-#'   \code{Length}, and \code{colData} with \code{PatientID}, \code{ER}, \code{PR}, \code{HER2}.}
-#'   \item{\code{data_input}}{Example \code{Mapping()} output created from \code{se_obj}.}
-#'   \item{\code{res}}{Example \code{BS_Multi()} results (e.g., run in \emph{AUTO} mode).}
+#'   \item{\code{se_obj}}{A \code{SummarizedExperiment} with 5,350 versioned
+#'   Ensembl features and 100 samples. The integer assay retains the recount3
+#'   G026 base-pair coverage-sum convention, not transformed read counts, TPM
+#'   or FPKM. All original 5,000 rows and 500,000 values are unchanged, followed
+#'   by 350 missing model genes in C-locale lexicographic Entrez-ID order.
+#'   \code{rowData} contains \code{probe}, \code{SYMBOL}, \code{ENTREZID} and
+#'   \code{Length}; \code{colData} contains \code{PatientID}, \code{ER},
+#'   \code{PR} and \code{HER2}. Original annotations, sample metadata and
+#'   order are preserved. Reconstruction provenance is in
+#'   \code{metadata(se_obj)$issue199_reconstruction}.}
+#'   \item{\code{data_input}}{Regenerated \code{Mapping()} output containing
+#'   \code{se_NC} (50 genes by 100 samples) and \code{se_SSP}
+#'   (339 genes by 100 samples).}
+#'   \item{\code{res}}{Regenerated \code{BS_Multi()} AUTO results, containing
+#'   \code{res_subtypes} and \code{results}; the summary uses five classes
+#'   and clinical ROR scoring is disabled.}
 #' }
 #'
+#' @details
+#' The historical 5,000-gene selection is retained without variance reranking.
+#' Added genes complete the verified 569-gene PAM50/AIMS/SSPBC model union.
+#' All 535,000 counts agree with the original G026 source. Gene lengths come
+#' from the G026 gene-sum GTF score field, not genomic spans. Versioned
+#' Ensembl mappings are retained, including the documented Entrez 9906
+#' recovery to \code{ENSG00000215790.6} (SLC35E2; length 3264).
+#' Historical missing or repeated Entrez annotations remain unchanged;
+#' the 5,350 versioned feature identifiers are unique.
+#' No \code{recount3::transform_counts()} conversion was applied.
+#'
+#' Complete results were regenerated under BreastSubtypeR 1.5.12 at source
+#' commit \code{cb7a7c70e0f94e1690d15ac2ec2b464a40934f36}.
+#' Mapping used \code{RawCounts = TRUE}, \code{method = "max"} and
+#' \code{impute = TRUE}, with seed 1992026. Prediction used
+#' \code{methods = "AUTO"}, \code{Subtype = FALSE},
+#' \code{hasClinical = FALSE} and \code{er_subsample = "target"},
+#' with seed 20260831 and unchanged method defaults. RNG kinds were
+#' Mersenne-Twister, Inversion and Rejection.
+#'
+#' Expansion changes full-input library sizes and upper-quartile factors
+#' before Mapping selects its existing registries. Relative to recomputation
+#' of the historical input under the same implementation, 64 method calls
+#' change across 40 samples: genefu.robust 8, ssBC 4, ssBC.v2 6, cIHC 5,
+#' cIHC.itr 6, PCAPAM50 8, AIMS 16 and sspbc 11. This comparison separates
+#' dataset effects from earlier implementation and summary-schema changes.
+#' The original stored object has additional differences, including
+#' 15 ssBC.v2 calls and one PCAPAM50 call on current-code recomputation;
+#' exclusive historical build/seed attribution is unresolved.
+#'
+#' The historical incomplete mapped input (37 NC and 178 SSP genes) remains
+#' an immutable test fixture. The current input maps to all 50 PAM50 genes
+#' and both proliferation panels (11 and 18 genes). Complete source-gene
+#' coverage does not establish native SSP-ROR preparation or equivalence to
+#' unadjusted StringTie FPKM training input. No \code{se_SSP_ROR} is provided.
+#' Reconstruction scripts and versioned manifests are in
+#' \code{data-raw/issue199} in the package source repository.
+#'
 #' @source
-#' The Cancer Genome Atlas (TCGA) BRCA via GDC; counts summarized with \code{recount3};
-#' clinical data retrieved with \code{TCGAbiolinks}.
+#' TCGA-BRCA recount3 G026 gene sums
+#' (\code{tcga.gene_sums.BRCA.G026.gz}) and gene-sum annotation
+#' (\code{human.gene_sums.G026.gtf.gz}). The complete count source contains
+#' 63,856 features and 1,256 samples; the original 100-sample selection is
+#' preserved, with source UUIDs resolved against historical count vectors.
+#' Clinical metadata originally retrieved with \code{TCGAbiolinks} are
+#' retained without reacquisition or recoding.
 #'
 #' @references
 #' The Cancer Genome Atlas Network.
 #' Comprehensive molecular portraits of human breast tumors.
-#' \emph{Nature}. 2012;490(7418):61–70. https://doi.org/10.1038/nature11412
+#' \emph{Nature}. 2012;490(7418):61-70. https://doi.org/10.1038/nature11412
 #'
 #' Colaprico A, Silva TC, Olsen C, Garofano L, Cava C, Garolini D, et al.
 #' TCGAbiolinks: an R/Bioconductor package for integrative analysis of TCGA data.
 #' \emph{Nucleic Acids Res}. 2016;44(8):e71. https://doi.org/10.1093/nar/gkv1507
 #'
-#' Collado-Torres L, Nellore A, Kammers K, Ellis SE, Taub MA, Hansen KD, et al.
-#' Reproducible RNA-seq analysis using recount2.
-#' \emph{Nat Biotechnol}. 2017;35(4):319–321. https://doi.org/10.1038/nbt.3838
+#' recount3 project: \url{https://rna.recount.bio/}
 #'
 #' @examples
 #' library(BreastSubtypeR)
 #' data("TCGABRCAobj")
-#' names(TCGABRCAobj)
-#' # str(TCGABRCAobj$se_obj); head(colData(TCGABRCAobj$se_obj))
+#' dim(TCGABRCAobj$se_obj) # 5350 genes, 100 samples
+#' names(TCGABRCAobj) # se_obj, data_input, res
 "TCGABRCAobj"
+
 
 
 #' @title BreastSubtypeRobj: Resources for NC-based methods

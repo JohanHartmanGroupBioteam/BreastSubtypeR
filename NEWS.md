@@ -5,7 +5,8 @@
 * Add opt-in `Mapping(include_ssp_ror = TRUE)` preparation of a separate
   `se_SSP_ROR` input (#131). Required Entrez IDs come from the bundled `ssp.ror`
   gene-pair rules (currently 296 genes and 361 rules). Default Mapping outputs
-  and the existing NC/SSP gene sets remain unchanged; no packaged data change.
+  and the existing NC/SSP gene sets remain unchanged; #131 does not alter
+  packaged data.
 * SSP-ROR uses the existing duplicate resolution and SSP expression scales:
   linear FPKM for raw counts, or `2^x` for nonraw log2 input (FPKM+1 for
   log2(FPKM+1)). Optional KNN includes represented SSP-ROR genes as protected
@@ -14,6 +15,47 @@
 * Existing subtype results, normalization and RNG behavior are preserved.
   `BS_sspbc()` already executes `ssp.ror` with its native output; model-output
   APIs, `BS_Multi()`, Ensemble voting and the four-model `InputCoverage()` report
+  are unchanged.
+## Example data and reproducibility
+
+* Expand `OSLO2EMIT0obj` to 569 genes x 102 samples on the existing
+  log2(protocol-adjusted FPKM + 1) scale, preserving all original 356 rows,
+  values, annotations and sample metadata (#199). Append 213 verified genes;
+  no unadjusted expression matrix is introduced.
+* Expand `TCGABRCAobj` to 5,350 genes x 100 samples, preserving all original
+  5,000 rows/counts and metadata and appending 350 verified model genes.
+  Retain recount3 G026 base-pair coverage sums and GTF gene-sum lengths;
+  no count transformation or variance reranking is performed.
+* Retain public object names and the `se_obj`, `data_input` and `res`
+  structure. Regenerate Mapping/AUTO results under pinned source
+  `cb7a7c70`, with recorded seeds and versions. The expansion leaves OSLO
+  mapped inputs and complete method results unchanged under the same code;
+  TCGA normalization changes and 64 method calls change across 40 samples.
+  Comparisons separately retain historical stored results and recomputation
+  from historical inputs; earlier corrections such as #198 are not attributed
+  to dataset expansion. Original save-event build/seed provenance is incomplete.
+* Keep historical regression fixtures self-contained, including incomplete
+  TCGA proliferation coverage and frozen AUTO/entropy/reference results.
+  Synchronize the six Shiny input tables, dataset documentation and examples,
+  and add relocatable generation scripts and versioned manifests.
+* Keep default Mapping, model files, algorithms and public APIs unchanged.
+  Both examples map to 50 NC and 339 SSP genes; complete source-gene coverage
+  does not establish native SSP-ROR preparation or training-input compatibility.
+  SSPBC training used unadjusted StringTie FPKM; equivalence with adjusted OSLO
+  expression is unestablished. The separately merged #131 opt-in prepares
+  SSP-ROR input; normalization research remains #208.
+* This local integration remains subject to author review and distribution
+  clearance. No release or version bump is included; development version
+  1.5.13 is recommended for a separately approved integration.
+
+* Validate #199 against merged #131 at `f878f58c`: default mapped inputs and
+  complete results retain the approved Stage 3A values. Optional SSP-ROR
+  preparation covers 296 genes and 361 rules in each expanded example without
+  changing legacy components; it is not added to stored `data_input`.
+* Compact historical test fixtures by sharing only independently hash-verified
+  assay prefixes with the public objects. Historical metadata, mapped inputs
+  and results remain independently frozen; reconstructed complete objects are
+  identical to the originals. Public data bytes and scientific expectations
   are unchanged.
 
 ## Bug fixes

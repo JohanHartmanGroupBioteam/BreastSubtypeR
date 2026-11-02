@@ -1,3 +1,4 @@
+# Historical example input is pinned independently of public data; see fixtures/README.md.
 cihc_id_membership <- function(actual, expected) {
     complete <- is.character(actual) && length(actual) == length(expected) &&
         !anyNA(actual) && !anyDuplicated(actual) && all(nzchar(actual)) &&
@@ -28,7 +29,7 @@ cihc_id_outputs <- function(result, ids, subtype) {
 }
 
 test_that("native cIHC centering selects expression values by biological ID", {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR")
+    load_historical_example("OSLO2EMIT0obj")
     original <- OSLO2EMIT0obj$data_input$se_NC
     ids <- colnames(original)
     assay <- SummarizedExperiment::assay(original)
@@ -83,7 +84,7 @@ test_that("native cIHC centering selects expression values by biological ID", {
 })
 
 test_that("cIHC factor IDs preserve complete character results in both column orders", {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR")
+    load_historical_example("OSLO2EMIT0obj")
     original <- OSLO2EMIT0obj$data_input$se_NC
     original_ids <- colnames(original)
     for (indices in list(seq_len(ncol(original)), rev(seq_len(ncol(original))))) {
@@ -115,7 +116,7 @@ test_that("cIHC factor IDs preserve complete character results in both column or
 })
 
 test_that("cIHC names remain aligned with matrix assays and smaller ER-positive groups", {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR")
+    load_historical_example("OSLO2EMIT0obj")
     original <- OSLO2EMIT0obj$data_input$se_NC
     ids <- paste0(rep(c("a-", "A_", "z.", "2"), length.out = ncol(original)), seq_len(ncol(original)))
     colnames(original) <- ids
@@ -139,7 +140,7 @@ test_that("cIHC names remain aligned with matrix assays and smaller ER-positive 
 })
 
 test_that("cIHC rejects invalid identifiers before scientific calculation", {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR")
+    load_historical_example("OSLO2EMIT0obj")
     original <- OSLO2EMIT0obj$data_input$se_NC
     ids <- colnames(original)
     reached <- FALSE
@@ -161,7 +162,7 @@ test_that("cIHC rejects invalid identifiers before scientific calculation", {
 })
 
 test_that("cIHC factor IDs preserve caller RNG and locale", {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR")
+    load_historical_example("OSLO2EMIT0obj")
     input <- OSLO2EMIT0obj$data_input$se_NC
     ids <- colnames(input)
     SummarizedExperiment::colData(input)$PatientID <- factor(ids, levels = rev(ids))

@@ -1,6 +1,7 @@
+# Historical example input is pinned independently of public data; see fixtures/README.md.
 visual_example <- function() {
     env <- new.env()
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR", envir = env)
+    load_historical_example("OSLO2EMIT0obj", envir = env)
     obj <- env$OSLO2EMIT0obj
     calls <- obj$res$results$genefu.robust$BS.all
     list(obj = obj, x = SummarizedExperiment::assay(obj$data_input$se_NC),

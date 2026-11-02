@@ -1,3 +1,4 @@
+# Historical example input is pinned independently of public data; see fixtures/README.md.
 ## Check all sample-indexed outputs, with complete identities and structure
 ## asserted before matching or subsetting. Historical numeric fixtures retain
 ## expect_equal() tolerances for differences between supported environments.
@@ -70,7 +71,7 @@ pcapam50_order_structure <- function(res, ids, genes, subtype, clinical) {
 }
 
 test_that("BS_PCAPAM50 returns all sample-indexed outputs in input order", {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR")
+    load_historical_example("OSLO2EMIT0obj")
     se <- OSLO2EMIT0obj$data_input$se_NC
     ids <- colnames(se)
     pcapam50_order_ids(ids, as.character(SummarizedExperiment::colData(se)$PatientID))
@@ -101,7 +102,7 @@ test_that("BS_PCAPAM50 returns all sample-indexed outputs in input order", {
 })
 
 test_that("output ordering retains samples with unknown ER", {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR")
+    load_historical_example("OSLO2EMIT0obj")
     se <- OSLO2EMIT0obj$data_input$se_NC
     ids <- colnames(se)
     pcapam50_order_ids(ids, as.character(SummarizedExperiment::colData(se)$PatientID))
@@ -118,7 +119,7 @@ test_that("output ordering retains samples with unknown ER", {
 })
 
 test_that("BS_PCAPAM50 preserves packaged OSLO outputs except original ROR correction", {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR")
+    load_historical_example("OSLO2EMIT0obj")
     frozen <- OSLO2EMIT0obj$res$results$PCAPAM50
     pcapam50_order_assert(!is.null(frozen), "The required packaged PCAPAM50 fixture is missing")
     se <- OSLO2EMIT0obj$data_input$se_NC

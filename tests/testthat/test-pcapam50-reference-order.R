@@ -1,3 +1,4 @@
+# Historical example input is pinned independently of public data; see fixtures/README.md.
 test_that("second-stage candidates follow the reference character-key merge", {
     ids <- c("a2", "A10", "a-1", "a_1", "a.2", "a.10", "B2", "b1", "10", "2")
     labels <- setNames(c(rep("LumA", 6), rep("Basal", 4)), ids)
@@ -127,7 +128,7 @@ test_that("intermediate character and factor keys retain merge order and payload
 })
 
 test_that("reference ordering preserves caller RNG state and package four-class logic", {
-    data("OSLO2EMIT0obj", package = "BreastSubtypeR")
+    load_historical_example("OSLO2EMIT0obj")
     se <- OSLO2EMIT0obj$data_input$se_NC
     se <- se[, rev(seq_len(ncol(se))), drop = FALSE]
     withr::local_preserve_seed()
