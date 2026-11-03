@@ -232,9 +232,12 @@ test_that("expanded current AUTO results reproduce the accepted complete objects
             nm, path = "/data_input"), info = nm)
         # Only measured component paths admit bounded elementwise roundoff;
         # all other values, structure and scientific decisions remain exact.
-        expect_true(issue199_portable_compare(fresh$res, obj$res, nm,
+        # #233 expands only ssBC AUTO sample axes. Check new NA rows/axes,
+        # then compare every retained payload against the unchanged fixture.
+        compatible <- auto_ssbc_historical_view(fresh$res, obj$res)
+        expect_true(issue199_portable_compare(compatible, obj$res, nm,
             path = "/res"), info = nm)
-        issue199_expect_decisions(fresh$res, obj$res)
+        issue199_expect_decisions(compatible, obj$res)
         methods <- setdiff(names(obj$res$res_subtypes), "entropy")
         expect_identical(obj$res$res_subtypes[, methods],
             reference[[nm]]$C[, methods], info = nm)

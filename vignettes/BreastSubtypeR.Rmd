@@ -382,6 +382,41 @@ res_auto <- BS_Multi(
 Vis_Multi(res_auto$res_subtypes)
 ```
 
+For `ssBC` and `ssBC.v2` in AUTO, all existing sample-indexed components now
+cover the input assay's IDs and order: `BS.all` and `score.ROR` rows, named
+prediction vectors (including four-class predictions when requested),
+`outList$distances` and `outList$dist.RORSubtype` rows, and calibrated
+`outList$testData` columns. This changes dimensions compared with earlier AUTO
+results, which expanded only `BS.all`. Restoration uses each component's own
+validated IDs after calculation. Added payloads are typed `NA`, with actual
+sample labels; evaluated values and existing missingness are unchanged. Row
+names identify score rows even when a native `score.ROR$patientID` is missing.
+No ROR score or group is inferred for an added row, including from `NODE`.
+Gene/model metadata (`mdns`, `centroids`) and absent fields/methods are unchanged.
+Manual `BS_Multi` and standalone `BS_ssBC` behavior is unchanged; AUTO alignment
+does not resolve standalone four-class ordering/singleton issue #234.
+
+Entirely `NA` columns in calibrated `testData` mean that calibrated measurements
+are unavailable. They are not replaced with input expression, zeros or imputed
+values. External PCA/clustering consumers must filter these columns from a
+separate analysis input and align annotations by ID. For example:
+
+```{r auto-calibrated-plot-input, eval=FALSE}
+ss <- res_auto$results$ssBC.v2 # only if this method was selected
+x <- ss$outList$testData
+keep <- colSums(!is.na(x)) > 0L
+plot_x <- x[, keep, drop = FALSE]
+plot_calls <- ss$BS.all[match(colnames(plot_x), ss$BS.all$PatientID), , drop = FALSE]
+```
+
+The package's `Vis_PCA`, `Vis_heatmap` and `Vis_boxplot` apply this narrow
+filter to their plot inputs and report excluded IDs. They leave result objects
+unchanged and retain samples with missing calls but available measurements.
+Partially missing measurements keep their existing handling. PCA/heatmaps
+require at least two genes and two samples; boxes require at least one
+correlation row. Cohort selection, centering, numerical scores, calls and
+aggregate entropy are unchanged by this output restoration.
+
 ***AUTO logic (clarifications)***
 
 -   **TNBC cohorts** take precedence when all evaluable TN annotations indicate TN. At least 18 TN samples enable **ssBC and ssBC.v2**, plus SSP-based methods (AIMS, sspbc); smaller TN cohorts run SSP only.

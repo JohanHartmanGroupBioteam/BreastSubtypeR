@@ -32,6 +32,11 @@ explained variance.
 The scatter plot uses a shared sans-serif theme and a bottom subtype
 legend. PCA centering, scaling, scores, joins, explained variance and
 reference lines are unchanged; no confidence ellipses or tests are added.
+Entirely missing expression columns are omitted from a plot copy, with a
+message listing excluded sample IDs and corresponding annotations removed.
+At least two genes and two samples must remain. Missing subtype calls alone
+do not exclude samples. Partially missing measurements retain their existing
+handling; there is no imputation or complete-case filter.
 }
 \examples{
 library(SummarizedExperiment)

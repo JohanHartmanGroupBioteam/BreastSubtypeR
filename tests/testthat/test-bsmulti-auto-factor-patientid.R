@@ -154,6 +154,11 @@ m202_assert_restoration <- function(run, input, subtype) {
             SummarizedExperiment::assay(input$se_NC[, eligible, drop = FALSE]))
         expect_identical(predictor$clinical,
             as.data.frame(SummarizedExperiment::colData(input$se_NC[, eligible, drop = FALSE])))
+        if (length(run$selection)) {
+            expect_auto_ssbc_axes(run$result$results[[method]], predictor$result, ids)
+        } else {
+            expect_identical(run$result$results[[method]], predictor$result)
+        }
         calls <- run$result$results[[method]]$BS.all
         m202_valid_ids(as.character(calls$PatientID), ids)
         expect_identical(calls$PatientID, ids)

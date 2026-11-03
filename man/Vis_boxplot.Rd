@@ -29,6 +29,10 @@ Each plotted value is the maximum across one row of \code{correlations}.
 Rows are paired positionally with \code{out$Subtype}; keep the two inputs in
 the same sample order. Neutral boxes retain the usual quartiles, median,
 whiskers and outliers. The maximum correlation is not a probability.
+Entirely missing correlation rows are omitted from a plot copy, with a
+message listing excluded sample IDs. When filtering is needed, annotations
+are matched to the remaining row IDs. At least one row must remain. Missing
+subtype calls alone and partially missing correlation rows are not filtered.
 }
 \examples{
 data("OSLO2EMIT0obj")

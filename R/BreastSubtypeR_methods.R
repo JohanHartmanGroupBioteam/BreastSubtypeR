@@ -1771,10 +1771,32 @@ BS_sspbc <- function(se_obj, ssp.name = "ssp.pam50") {
 #' cohort routes are evaluated separately. See the package vignette for
 #' cohort-specific eligibility and minimum subgroup sizes.
 #'
-#' AUTO subcohort results for `ssBC` and `ssBC.v2` are restored by character
-#' `PatientID` labels, including factor labels with unused levels. Restoration
-#' requires complete, unique sample identities. Ineligible samples retain
-#' missing calls; subgroup eligibility and prediction algorithms are unchanged.
+#' AUTO results for `ssBC` and `ssBC.v2` cover the input assay's sample identities
+#' and order in every existing sample-indexed component: `BS.all`, `score.ROR`,
+#' named predictions, rows of `distances` and `dist.RORSubtype`, and columns of
+#' calibrated `testData` inside `outList`. Four-class predictions are restored
+#' only when present. This is an API dimension change from earlier AUTO results,
+#' where only `BS.all` was expanded beyond the evaluated subcohort.
+#'
+#' Restoration happens after calculation, using each component's own IDs.
+#' Input assay IDs must be complete and unique and agree with `PatientID`
+#' labels, including factors with unused levels. Ambiguous or unexpected output
+#' IDs are rejected. Newly added rows/columns have typed `NA` payloads and actual
+#' sample labels; existing values and missingness are preserved. In particular,
+#' an existing missing `score.ROR$patientID` stays missing (use row names for its
+#' identity). No ROR score or risk group is calculated for an added row.
+#' Gene/model metadata (`mdns`, `centroids`) and absent fields/methods are not
+#' expanded. Eligibility, calibration, predictions and numerical scores are
+#' unchanged; manual `BS_Multi` and standalone `BS_ssBC` retain their behavior,
+#' including the separate standalone four-class ordering issue (#234).
+#'
+#' An entirely `NA` column of `outList$testData` represents unavailable calibrated
+#' expression, not zero expression or an imputed sample. External PCA/clustering
+#' consumers must exclude these columns from their plot/analysis input and align
+#' annotations by ID, without modifying the result object. `Vis_PCA`,
+#' `Vis_heatmap` and `Vis_boxplot` report and omit wholly unavailable sample
+#' measurements from plot copies. Missing subtype calls alone do not remove a
+#' sample; partially missing measurements keep their existing handling.
 #'
 #' For `ssBC.v2`, Fernandez-Martinez et al. (2020) described the earlier
 #' HER2/ER-specific application. The updated quantiles match the public
@@ -1895,6 +1917,13 @@ BS_Multi <- function(data_input,
     pheno <- colData(data_input$se_NC) %>% data.frame()
     if (!"PatientID" %in% colnames(pheno)) {
         stop("colData(se_NC) must have a 'PatientID' column.")
+    }
+    if (identical(methods, "AUTO")) {
+        assay_ids <- colnames(data_input$se_NC)
+        .auto_ssbc_ids(assay_ids, ncol(data_input$se_NC), "input assay")
+        if (!identical(as.character(pheno$PatientID), assay_ids))
+            stop("AUTO requires PatientID labels to match the input assay sample order.",
+                 call. = FALSE)
     }
     rownames(pheno) <- pheno$PatientID
 
@@ -2215,6 +2244,14 @@ BS_Multi <- function(data_input,
         character(0)
     }
     samples <- if (length(samples_NC)) samples_NC else samples_SSP
+
+    # Restore only existing ssBC results after all native calibration/scoring.
+    if (!is_manual) {
+        for (method in intersect(c("ssBC", "ssBC.v2"), names(results))) {
+            if (!is.null(results[[method]]))
+                results[[method]] <- .restore_auto_ssbc(results[[method]], samples)
+        }
+    }
 
     # Hold per-method calls; start empty and fill by matching PatientID
     res_subtypes <- data.table::data.table(row_id = samples)
