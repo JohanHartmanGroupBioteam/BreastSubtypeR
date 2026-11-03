@@ -863,6 +863,10 @@ get_average_subtype <- function(res_ihc_iterative, consensus_subtypes) {
 #' Rows are paired positionally with `out$Subtype`; keep the two inputs in
 #' the same sample order. Neutral boxes retain the usual quartiles, median,
 #' whiskers and outliers. The maximum correlation is not a probability.
+#' Entirely missing correlation rows are omitted from a plot copy, with a
+#' message listing excluded sample IDs. When filtering is needed, annotations
+#' are matched to the remaining row IDs. At least one row must remain. Missing
+#' subtype calls alone and partially missing correlation rows are not filtered.
 #'
 #' @examples
 #' data("OSLO2EMIT0obj")
@@ -883,6 +887,11 @@ get_average_subtype <- function(res_ihc_iterative, consensus_subtypes) {
 #' @export
 
 Vis_boxplot <- function(out, correlations) {
+    available <- .plot_available_samples(correlations, out, rows = TRUE, plot = "Vis_boxplot")
+    correlations <- available$x
+    out <- available$out
+    if (nrow(correlations) < 1L)
+        stop("Vis_boxplot requires at least one sample with available correlations.", call. = FALSE)
     df <- data.frame(
         predictions = out$Subtype,
         cor = apply(correlations, 1, max)
@@ -920,6 +929,10 @@ Vis_boxplot <- function(out, correlations) {
 #' maximum gene z-score, respectively; the scale is not clipped or made
 #' symmetric. Subtype annotations retain the standard subtype colors.
 #' Missing subtype calls are grey and keep their expression measurements.
+#' Entirely missing expression columns are omitted from a plot copy, with a
+#' message listing excluded sample IDs and corresponding annotations removed.
+#' At least two genes and two samples must remain. Partially missing measurements
+#' retain their existing handling; there is no imputation or complete-case filter.
 #'
 #' Gene and within-slice sample clustering use Spearman distance and average
 #' linkage. The existing dendrogram reordering and ComplexHeatmap clustering
@@ -948,7 +961,12 @@ Vis_boxplot <- function(out, correlations) {
 #' @export
 
 Vis_heatmap <- function(x, out) {
-    scaled_mat <- t(scale(t(x[, out$PatientID])))
+    available <- .plot_available_samples(x, out, plot = "Vis_heatmap")
+    x <- available$x
+    out <- available$out
+    if (nrow(x) < 2L || nrow(out) < 2L)
+        stop("Vis_heatmap requires at least two genes and two samples with available expression.", call. = FALSE)
+    scaled_mat <- t(scale(t(x[, out$PatientID, drop = FALSE])))
 
     ## color
     scaled_dat <- c(min(scaled_mat), 0, max(scaled_mat))
@@ -1047,6 +1065,11 @@ Vis_heatmap <- function(x, out) {
 #' The scatter plot uses a shared sans-serif theme and a bottom subtype
 #' legend. PCA centering, scaling, scores, joins, explained variance and
 #' reference lines are unchanged; no confidence ellipses or tests are added.
+#' Entirely missing expression columns are omitted from a plot copy, with a
+#' message listing excluded sample IDs and corresponding annotations removed.
+#' At least two genes and two samples must remain. Missing subtype calls alone
+#' do not exclude samples. Partially missing measurements retain their existing
+#' handling; there is no imputation or complete-case filter.
 #'
 #' @examples
 #' library(SummarizedExperiment)
@@ -1071,6 +1094,11 @@ Vis_heatmap <- function(x, out) {
 #' @export
 
 Vis_PCA <- function(x, out, Eigen = FALSE) {
+    available <- .plot_available_samples(x, out, plot = "Vis_PCA")
+    x <- available$x
+    out <- available$out
+    if (nrow(x) < 2L || ncol(x) < 2L)
+        stop("Vis_PCA requires at least two genes and two samples with available expression.", call. = FALSE)
     Subtype.color <- c(
         "Basal" = "red",
         "Her2" = "hotpink",

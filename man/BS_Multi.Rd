@@ -101,10 +101,32 @@ include cIHC.itr when the ER-group size gates are met. TN-only and HER2+
 cohort routes are evaluated separately. See the package vignette for
 cohort-specific eligibility and minimum subgroup sizes.
 
-AUTO subcohort results for \code{ssBC} and \code{ssBC.v2} are restored by character
-\code{PatientID} labels, including factor labels with unused levels. Restoration
-requires complete, unique sample identities. Ineligible samples retain
-missing calls; subgroup eligibility and prediction algorithms are unchanged.
+AUTO results for \code{ssBC} and \code{ssBC.v2} cover the input assay's sample identities
+and order in every existing sample-indexed component: \code{BS.all}, \code{score.ROR},
+named predictions, rows of \code{distances} and \code{dist.RORSubtype}, and columns of
+calibrated \code{testData} inside \code{outList}. Four-class predictions are restored
+only when present. This is an API dimension change from earlier AUTO results,
+where only \code{BS.all} was expanded beyond the evaluated subcohort.
+
+Restoration happens after calculation, using each component's own IDs.
+Input assay IDs must be complete and unique and agree with \code{PatientID}
+labels, including factors with unused levels. Ambiguous or unexpected output
+IDs are rejected. Newly added rows/columns have typed \code{NA} payloads and actual
+sample labels; existing values and missingness are preserved. In particular,
+an existing missing \code{score.ROR$patientID} stays missing (use row names for its
+identity). No ROR score or risk group is calculated for an added row.
+Gene/model metadata (\code{mdns}, \code{centroids}) and absent fields/methods are not
+expanded. Eligibility, calibration, predictions and numerical scores are
+unchanged; manual \code{BS_Multi} and standalone \code{BS_ssBC} retain their behavior,
+including the separate standalone four-class ordering issue (#234).
+
+An entirely \code{NA} column of \code{outList$testData} represents unavailable calibrated
+expression, not zero expression or an imputed sample. External PCA/clustering
+consumers must exclude these columns from their plot/analysis input and align
+annotations by ID, without modifying the result object. \code{Vis_PCA},
+\code{Vis_heatmap} and \code{Vis_boxplot} report and omit wholly unavailable sample
+measurements from plot copies. Missing subtype calls alone do not remove a
+sample; partially missing measurements keep their existing handling.
 
 For \code{ssBC.v2}, Fernandez-Martinez et al. (2020) described the earlier
 HER2/ER-specific application. The updated quantiles match the public

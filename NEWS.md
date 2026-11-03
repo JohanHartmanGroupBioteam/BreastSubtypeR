@@ -1,5 +1,21 @@
 # BreastSubtypeR (development)
 
+## API compatibility
+
+* In `BS_Multi(methods = "AUTO")`, restore every existing sample-indexed
+  `ssBC`/`ssBC.v2` component to input assay IDs/order after calculation (#233).
+  `score.ROR`, predictions, correlation matrices and calibrated `testData` now
+  have full input coverage, as `BS.all` already did. Added payloads are typed
+  `NA`; no score, risk group or calibrated expression is invented. Existing
+  values/missingness, model metadata, absent fields and method eligibility are
+  preserved. This is an API dimension change, not a classifier change.
+* Plotting helpers report and omit entirely unavailable expression columns or
+  correlation rows from plot copies, retaining missing calls with available
+  measurements. External PCA/clustering consumers must similarly filter
+  unavailable calibrated columns and align annotations by ID. No imputation or
+  new partial-missingness policy is introduced. Manual/standalone ssBC behavior
+  remains unchanged; standalone ordering/singleton issue #234 remains separate.
+
 ## Documentation and regression coverage
 
 * Document PCA-PAM50's inherited locale-sensitive character-key ordering

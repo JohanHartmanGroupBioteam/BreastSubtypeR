@@ -30,6 +30,10 @@ and red expression scale is anchored at the observed minimum, zero and
 maximum gene z-score, respectively; the scale is not clipped or made
 symmetric. Subtype annotations retain the standard subtype colors.
 Missing subtype calls are grey and keep their expression measurements.
+Entirely missing expression columns are omitted from a plot copy, with a
+message listing excluded sample IDs and corresponding annotations removed.
+At least two genes and two samples must remain. Partially missing measurements
+retain their existing handling; there is no imputation or complete-case filter.
 
 Gene and within-slice sample clustering use Spearman distance and average
 linkage. The existing dendrogram reordering and ComplexHeatmap clustering
