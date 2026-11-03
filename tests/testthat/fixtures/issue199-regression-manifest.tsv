@@ -1,6 +1,6 @@
 "file"	"bytes"	"sha256"
 "issue199-cb7a7c70-calls.rds"	"2492"	"99d0243b05ac606dfcb81dbdbc1d63eb2471ee4359f504abe5f3df0c43add428"
-"issue199-TCGA-B-C-changes.tsv"	"3630"	"6474e404bcc89488a14fb74e68889592a9fbd87df9604a25f04f1e653cc7ef9f"
+"issue199-TCGA-B-C-changes.tsv"	"3565"	"371135d09b6bb4d9a6e9650cd16659f61604063ecb117d9cfc966a2d2cf4b825"
 "aims_1.5.6_multisample.rds"	"265104"	"9972a7a2b0c94136ab33e936a05dab64ba612b7d8c3bfded9f4cae94ac8dc244"
 "cihc_itr_1.5.5.rds"	"255296"	"a685032dc24c9f87ac1153b48aa7f66149385530cd492047cb0df3b828358cfc"
-"make-cihc-itr-1.5.5.R"	"3122"	"ef7aa19d25a8751fe90b8c8ab13edee9f3b2ec8961e4f0e12200b031cc240f47"
+"make-cihc-itr-1.5.5.R"	"3050"	"6b8abf238ed1e970ef9eb23069e43479e7964cbefbe72e83eaa4bb036a323b23"
