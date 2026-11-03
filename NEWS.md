@@ -2,6 +2,21 @@
 
 ## Documentation and regression coverage
 
+* Document PCA-PAM50's inherited locale-sensitive character-key ordering
+  before both cohort-calibration sampling stages (#232). Preserve the original
+  PCAPAM50 1.0.4 algorithm and reference-compatible behavior within each locale;
+  no sorting, sampling, calibration or scoring calculation changes. Identical
+  seeds alone do not guarantee identical subtype or numerical ROR outputs
+  across locales. Document effective LC_COLLATE, exact IDs, R/RNG/seed and
+  package/source/dependency provenance; no locale forcing or ID-case
+  normalization is introduced.
+* Add offline original-reference fixtures and regression coverage for both
+  sampling stages, selected identities, medians and calls, sample permutations,
+  character/factor IDs, clinical alignment and caller RNG/locale preservation.
+  Alternate-locale comparisons skip only when the locale is unavailable;
+  expectations verify effective collation and allow justified numerical
+  roundoff without requiring universal cross-locale equality.
+
 * Document the already available `BS_sspbc(..., ssp.name = "ssp.ror")`
   pathway (#131), its native categorical ROR-bin labels and model posterior
   probabilities. Correct the documented matrix/list return types and sample

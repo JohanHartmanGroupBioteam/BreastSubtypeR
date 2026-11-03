@@ -1091,13 +1091,26 @@ BS_cIHC.itr <- function(
 #' ER-positive subtypes start with "L" and all other labels are ER-negative;
 #' it does not define behaviour for missing labels.
 #'
-#' Before second-stage sampling, complete intermediate rows are ordered by
-#' character `PatientID`, matching the first-step merge in PCAPAM50 1.0.4 under
-#' the caller's collation. This can change selected samples, centering medians,
-#' subtype calls and derived scores relative to earlier package behavior.
-#' The first-step calculations and labels are unchanged. The caller's locale
-#' is not changed; universal input-permutation or cross-locale equivalence is
-#' not guaranteed. This ordering correction is independent of the shared
+#' PCAPAM50 retains the original PCAPAM50 1.0.4 reference's locale-sensitive
+#' character-key ordering. The first PC1-stage merge by `PatientID` and the
+#' intermediate ordering before second-stage sampling use the caller's
+#' effective `LC_COLLATE`. This ordering affects which samples are selected
+#' for cohort calibration, so centering medians, subtype calls and numerical
+#' ROR outputs can differ across environments, even with identical seeds.
+#' This is an inherited property of the reference algorithm, not an algorithmic
+#' correction in BreastSubtypeR. The package does not force a locale or
+#' normalize sample-ID case; compatibility is assessed within each execution
+#' locale. Universal cross-locale or input-permutation equivalence is not
+#' guaranteed.
+#'
+#' For reproducibility, record `Sys.getlocale("LC_COLLATE")`, exact sample IDs
+#' (including case and input order), R version, `RNGkind()`, seed, package version
+#' and source revision, and the relevant dependency environment (for example,
+#' `sessionInfo()`, including platform and numerical libraries). Matching the
+#' seed alone is insufficient. Reproduce the original execution environment
+#' rather than changing collation or ID spelling to obtain matching results.
+#' The second-stage ordering matches the first-stage return merge of the
+#' original reference; it is separate from final output presentation and the
 #' original ROR standardization described under Proliferation panel coverage.
 #'
 #' After both PCA-PAM50 steps complete, all sample-indexed outputs follow the

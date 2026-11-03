@@ -325,6 +325,45 @@ res <- BS_Multi(
 head(res$res_subtypes, 5)
 ```
 
+### PCA-PAM50 reproducibility across environments
+
+`BS_PCAPAM50()` preserves the original PCAPAM50 1.0.4 reference's
+locale-sensitive character-key ordering. The first-stage merge by `PatientID`
+and the ordering before second-stage sampling affect which samples contribute
+to cohort calibration. Different effective `LC_COLLATE` settings can therefore
+change centering medians, subtype calls and numerical ROR outputs, even when
+expression values and seeds are identical. This is a documented property
+inherited from the original algorithm, not a newly corrected algorithmic bug.
+The package does not force a locale or normalize sample-ID case.
+
+Record the effective `Sys.getlocale("LC_COLLATE")`, exact sample IDs (including
+case and input order), R version, `RNGkind()`, seed, package version/source
+revision and relevant dependency environment. `sessionInfo()` records the
+platform and numerical libraries as well as package versions. For example,
+record these alongside the saved input and result:
+
+```{r pcapam50-provenance, eval=FALSE}
+seed <- 118L
+provenance <- list(
+    LC_COLLATE = Sys.getlocale("LC_COLLATE"),
+    PatientID = as.character(SummarizedExperiment::colData(data_input$se_NC)$PatientID),
+    sample_order = colnames(data_input$se_NC),
+    R = R.version.string,
+    RNGkind = RNGkind(),
+    seed = seed,
+    BreastSubtypeR = as.character(packageVersion("BreastSubtypeR")),
+    source_revision = "record the exact installed source revision here",
+    session = sessionInfo()
+)
+```
+
+A matching seed alone does not guarantee cross-locale equality. Reproduce the
+original execution environment rather than changing collation or ID spelling
+to make results agree. The package's restoration of returned sample order occurs
+after calibration and does not remove this dependence. Universal equivalence
+under input permutation is also not guaranteed. See `?BS_PCAPAM50` and the
+[reference comparison for issue #232](https://github.com/JohanHartmanGroupBioteam/BreastSubtypeR/issues/232).
+
 **3) AUTO mode (cohort-aware selection) + visualize**
 
 AUTO selects a set of methods using implemented receptor-annotation and
