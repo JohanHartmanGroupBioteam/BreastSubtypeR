@@ -67,6 +67,14 @@ scores and risk groups.
 for gene centering.
 \item \code{outList}: list with the internal nearest-centroid results
 (\code{predictions}, \code{distances}, \code{centroids}, ...).
+Named prediction vectors follow input sample order, including
+\code{predictions.FourSubtype} only when \code{Subtype = TRUE}. The \code{distances}
+and \code{dist.RORSubtype} matrices have samples as rows and five and four
+subtypes as columns, respectively; calibrated \code{testData} has genes as
+rows and samples as columns. Sample axes follow input order and retain
+matrix dimensions for a single sample. \code{BS.all} and \code{score.ROR} remain
+data frames in input order. This output ordering/dimension guarantee
+does not change per-sample calls, scores, calibration or missingness.
 }
 }
 \description{

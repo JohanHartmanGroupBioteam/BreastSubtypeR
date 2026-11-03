@@ -2,6 +2,10 @@
 
 ## API compatibility
 
+* Align internal four-class ssBC/ssBC.v2 predictions to input sample order
+  and retain matrix dimensions for singleton internal outputs (#234).
+  Per-sample calls, numerical results, calibration and existing missingness
+  are unchanged. This complements the AUTO coverage restoration in #233.
 * In `BS_Multi(methods = "AUTO")`, restore every existing sample-indexed
   `ssBC`/`ssBC.v2` component to input assay IDs/order after calculation (#233).
   `score.ROR`, predictions, correlation matrices and calibrated `testData` now

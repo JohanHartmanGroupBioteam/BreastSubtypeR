@@ -2280,13 +2280,16 @@ makeCalls.ssBC <- function(mat,
     }
 
     ## reorder
-    Int.sbs <- Int.sbs[colnames(mat), ]
-    out.ROR <- out.ROR[colnames(mat), ]
-    out$dist.RORSubtype <- out$dist.RORSubtype[colnames(mat), ]
-    out$distances <- out$distances[colnames(mat), ]
+    Int.sbs <- Int.sbs[colnames(mat), , drop = FALSE]
+    out.ROR <- out.ROR[colnames(mat), , drop = FALSE]
+    out$dist.RORSubtype <- out$dist.RORSubtype[colnames(mat), , drop = FALSE]
+    out$distances <- out$distances[colnames(mat), , drop = FALSE]
 
-    out$testData <- out$testData[, colnames(mat)]
+    out$testData <- out$testData[, colnames(mat), drop = FALSE]
     out$predictions <- out$predictions[colnames(mat)]
+    if ("predictions.FourSubtype" %in% names(out)) {
+        out$predictions.FourSubtype <- out$predictions.FourSubtype[colnames(mat)]
+    }
 
     return(list(
         BS.all = Int.sbs,

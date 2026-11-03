@@ -117,8 +117,9 @@ an existing missing \code{score.ROR$patientID} stays missing (use row names for 
 identity). No ROR score or risk group is calculated for an added row.
 Gene/model metadata (\code{mdns}, \code{centroids}) and absent fields/methods are not
 expanded. Eligibility, calibration, predictions and numerical scores are
-unchanged; manual \code{BS_Multi} and standalone \code{BS_ssBC} retain their behavior,
-including the separate standalone four-class ordering issue (#234).
+unchanged. Manual \code{BS_Multi} and standalone \code{BS_ssBC} also return four-class
+prediction vectors in input order and retain singleton matrix dimensions;
+these output guarantees complement AUTO's full-input coverage.
 
 An entirely \code{NA} column of \code{outList$testData} represents unavailable calibrated
 expression, not zero expression or an imputed sample. External PCA/clustering
