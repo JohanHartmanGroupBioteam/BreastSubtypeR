@@ -1340,6 +1340,14 @@ BS_PCAPAM50 <- function(
 #'     for gene centering.
 #'   - `outList`: list with the internal nearest-centroid results
 #'     (`predictions`, `distances`, `centroids`, ...).
+#'     Named prediction vectors follow input sample order, including
+#'     `predictions.FourSubtype` only when `Subtype = TRUE`. The `distances`
+#'     and `dist.RORSubtype` matrices have samples as rows and five and four
+#'     subtypes as columns, respectively; calibrated `testData` has genes as
+#'     rows and samples as columns. Sample axes follow input order and retain
+#'     matrix dimensions for a single sample. `BS.all` and `score.ROR` remain
+#'     data frames in input order. This output ordering/dimension guarantee
+#'     does not change per-sample calls, scores, calibration or missingness.
 #'
 #' @details
 #' Zhao et al. (2015) introduced subgroup-specific gene centering.
@@ -1787,8 +1795,9 @@ BS_sspbc <- function(se_obj, ssp.name = "ssp.pam50") {
 #' identity). No ROR score or risk group is calculated for an added row.
 #' Gene/model metadata (`mdns`, `centroids`) and absent fields/methods are not
 #' expanded. Eligibility, calibration, predictions and numerical scores are
-#' unchanged; manual `BS_Multi` and standalone `BS_ssBC` retain their behavior,
-#' including the separate standalone four-class ordering issue (#234).
+#' unchanged. Manual `BS_Multi` and standalone `BS_ssBC` also return four-class
+#' prediction vectors in input order and retain singleton matrix dimensions;
+#' these output guarantees complement AUTO's full-input coverage.
 #'
 #' An entirely `NA` column of `outList$testData` represents unavailable calibrated
 #' expression, not zero expression or an imputed sample. External PCA/clustering

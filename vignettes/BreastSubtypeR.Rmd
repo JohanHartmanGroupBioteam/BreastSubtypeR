@@ -393,8 +393,11 @@ sample labels; evaluated values and existing missingness are unchanged. Row
 names identify score rows even when a native `score.ROR$patientID` is missing.
 No ROR score or group is inferred for an added row, including from `NODE`.
 Gene/model metadata (`mdns`, `centroids`) and absent fields/methods are unchanged.
-Manual `BS_Multi` and standalone `BS_ssBC` behavior is unchanged; AUTO alignment
-does not resolve standalone four-class ordering/singleton issue #234.
+Manual `BS_Multi` and standalone `BS_ssBC` also return internal four-class
+prediction vectors in input sample order and retain matrix dimensions for
+singleton correlation and calibrated-expression outputs (#234). This
+complements AUTO's full-input coverage (#233); per-sample calls, numerical
+results, calibration and existing missingness are unchanged.
 
 Entirely `NA` columns in calibrated `testData` mean that calibrated measurements
 are unavailable. They are not replaced with input expression, zeros or imputed
