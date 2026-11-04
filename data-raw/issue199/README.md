@@ -126,6 +126,70 @@ hash-pinned historical Shiny table; the six shared fields come from candidate
 `colData`. No additional clinical fields are attached to the public
 `SummarizedExperiment`.
 
+### File-byte provenance and issue #235
+
+The active [shiny-tables.tsv](manifests/shiny-tables.tsv) resolves `file`
+under `inst/RshinyTest/`. The active
+[issue199-regression-manifest.tsv](../../tests/testthat/fixtures/issue199-regression-manifest.tsv)
+resolves `file` under `tests/testthat/fixtures/`. Their `sha256` and `bytes`
+fields describe raw **committed Git blob contents**. `source_sha256` identifies
+the packaged `data/<object>.RData` container bytes and is unchanged. File
+SHA-256 is computed from content bytes, separately from Git object IDs or
+the historical serialized-R-object fingerprints.
+
+The [correction ledger](manifests/line-ending-corrections-v1.tsv) preserves the
+eight previous text-file hashes and sizes alongside the corrected values.
+At pinned commit `8519fedca7d06dca013ee52b3c128b17286e17f3`, those files have LF
+line endings. Strict byte-for-byte LF-to-CRLF substitution reproduces both
+the old SHA-256 and old byte count for every entry, preserving encoding,
+final-newline presence and every other byte. The old digests therefore identify
+the verified CRLF representation; no scientific file or value was changed.
+The pin identifies the byte-comparison snapshot, not a newly inferred original
+generation event. Source archives/input hashes, function fingerprints and
+generation-environment records retain their historical meanings.
+
+From a full local Git repository, maintainers can use Python 3.9+ (standard
+library only) and Git to verify all rows and packaged source-container hashes:
+
+~~~text
+python3 /checkout/data-raw/issue199/verify_manifest_bytes.py --repo /checkout --ref 8519fedca7d06dca013ee52b3c128b17286e17f3 --shiny-manifest /checkout/data-raw/issue199/manifests/shiny-tables.tsv --regression-manifest /checkout/tests/testthat/fixtures/issue199-regression-manifest.tsv
+~~~
+
+The manifest arguments are explicit filesystem expectation inputs, so corrected
+metadata can be checked before committing it. The target files are always read
+as raw bytes from the resolved commit with `git cat-file blob`, without checkout
+filters or text conversion. Output reports that commit and representation.
+To also verify the historical representations, append
+`--historical-crlf /checkout/data-raw/issue199/manifests/line-ending-corrections-v1.tsv`.
+This separately labelled check uses each ledger row's pinned commit and performs
+the strict substitution in memory only. Canonical checks never normalize bytes
+to obtain a match. Missing files, duplicate/ambiguous entries, invalid metadata,
+hash mismatches and size mismatches fail with nonzero status. No downloads,
+dependency installation, repair, index update or file rewrite is performed.
+Git subprocesses clear inherited `GIT_*` overrides before applying their safety
+controls, so repository, worktree, index, object-store and namespace environment
+settings cannot redirect `--repo` or the tests' temporary repositories. Linked
+worktrees are supported through Git's normal discovery. Ambiguous-ref warnings
+are forced on per invocation, independently of repository/user settings; no
+persistent Git configuration is changed.
+
+These checks establish committed-byte identity only. They do not verify
+arbitrary working-tree files, generated exports or package tarballs. Git
+checkout line endings may differ; installed-package users do not need Git or
+Python. The verifier and its maintainer tests are under `data-raw/`, already
+excluded from package builds. Run the isolated synthetic-byte tests with
+`python3 /checkout/data-raw/issue199/test_verify_manifest_bytes.py`. Their LF/CRLF
+working-tree cases are local simulations, not cross-platform execution evidence.
+
+`export-shiny-examples.R` hashes the files it actually writes, so its optional
+manifest describes **generated filesystem output**. Text-mode output can depend
+on the generation platform even with `eol = "\n"`. For an authorized export,
+set both `--output-dir=/scratch/shiny-export` and
+`--manifest=/scratch/shiny-export/generated-output.tsv` outside the checkout.
+Retain that manifest with its generation environment; do not overwrite the
+canonical repository manifest with it. The exporter, its serialization and the
+archived fixture writers were not rerun or changed for this correction.
+
 PR #228 merged the #199 integration after the scoped review was completed.
 `DESCRIPTION` remains at 1.5.12; release and version-target decisions are separate.
 

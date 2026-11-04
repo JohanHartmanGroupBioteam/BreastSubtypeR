@@ -43,6 +43,20 @@ network access when the package tests run.
   (Git checkout line endings may differ). Do not regenerate these fixtures
   with current code. The existing version-specific correction exclusions remain.
 
+`issue199-regression-manifest.tsv` records SHA-256 and byte counts of the five
+listed files' raw committed Git blob contents; its `file` names resolve under
+`tests/testthat/fixtures/`. Issue #235 corrects only the hash/size fields for
+`issue199-TCGA-B-C-changes.tsv` and `make-cihc-itr-1.5.5.R`. Their previous values
+identify the strict CRLF representation of the pinned LF blobs, not different
+scientific values. All three binary entries and all fixture payloads remain
+unchanged. The full-repository
+[historical correction ledger](../../../data-raw/issue199/manifests/line-ending-corrections-v1.tsv)
+preserves old/new hashes, sizes and the comparison commit. The original input
+hashes and serialized-object fingerprints in the other manifests are unchanged.
+See the source-only [verification instructions](../../../data-raw/issue199/README.md#file-byte-provenance-and-issue-235).
+This Git-blob check does not attest to arbitrary checkout or tarball bytes;
+ordinary installed-package tests have no new Git or Python requirement.
+
 All 24 test files that previously loaded a public example now explicitly load
 the historical snapshot through `load_historical_example()`. Those loader migrations changed no numerical expected value, method setting,
 reference formula or tolerance. The 25th direct dependency in the Stage 3A inventory is the protected

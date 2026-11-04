@@ -45,3 +45,11 @@ large expression sources are not needed for this export step. Publication
 remains subject to the data-distribution review described in the dataset
 provenance documentation.
 
+The exporter's optional manifest identifies the generated filesystem bytes.
+Keep exports and their manifests outside the checkout using `--output-dir` and
+`--manifest`; do not copy that manifest over the canonical repository manifest.
+The latter records raw committed bytes and retains the historical CRLF digests
+in a correction ledger. Maintainer verification from a full Git checkout is
+described in [the provenance instructions](../../data-raw/issue199/README.md#file-byte-provenance-and-issue-235).
+It does not verify arbitrary working-tree files, exported tables or tarballs.
+
