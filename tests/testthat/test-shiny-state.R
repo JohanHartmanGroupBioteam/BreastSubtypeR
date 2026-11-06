@@ -24,6 +24,195 @@ shiny_upload <- function(name) {
                type = "text/plain", datapath = path)
 }
 
+test_that("the upload observer delivers only validated measurements and identities to Mapping", {
+    env <- shiny_app_env()
+    folder <- withr::local_tempdir()
+    upload <- function(name, records) {
+        path <- tempfile(tmpdir = folder)
+        writeLines(enc2utf8(records), path, useBytes = TRUE)
+        data.frame(name = name, size = file.info(path)$size,
+                   type = "text/plain", datapath = path)
+    }
+    captures <- list()
+    testthat::local_mocked_bindings(Mapping = function(se_obj, RawCounts, impute, ...) {
+        captures[[length(captures) + 1L]] <<- list(
+            assay = SummarizedExperiment::assay(se_obj),
+            patients = SummarizedExperiment::colData(se_obj)$PatientID,
+            probes = SummarizedExperiment::rowData(se_obj)$probe,
+            raw = RawCounts, impute = impute)
+        stop("Reached synthetic Mapping boundary.")
+    }, .package = "BreastSubtypeR")
+    shiny::testServer(env$server, {
+        session$setInputs(is_raw_counts = "norm", BSmethod = "PAM50", k_subtypes = "5")
+        # If S1 is silently consumed, 2 and 1 still intersect the annotation.
+        session$setInputs(GEX = upload("expr.txt", c("S1\tS2", "2\t101", "n/a\t102", "1\t103")),
+            clinic = upload("clin.txt", c("PatientID", "S2", "S1")),
+            anno = upload("anno.txt", c("probe\tENTREZID", "3\t1003", "1\t1001", "2\t1002")))
+        session$setInputs(map = 1)
+        expect_length(captures, 0L)
+        expect_match(reactive_files$error, 'line 3, probe 2, sample S1 = "n/a"', fixed = TRUE)
+        expect_null(reactive_files$GEX)
+        session$setInputs(GEX = upload("expr.txt", c("S1\tS2", "2\t101", "4\t102", "1\t103")))
+        session$setInputs(map = 2)
+        expected <- matrix(c(2, 4, 1, 101, 102, 103), 3L,
+            dimnames = list(as.character(1:3), c("S1", "S2")))
+        expect_identical(captures[[1L]], list(assay = expected, patients = colnames(expected),
+            probes = rownames(expected), raw = FALSE, impute = FALSE))
+
+        session$setInputs(is_raw_counts = "raw",
+            clinic = upload("clin.CSV", c('"PatientID"', '"07"', '"007"')),
+            anno = upload("anno.csv", c("probe,ENTREZID,Length", "0001,1001,1000", "0002,1002,2000")))
+        for (token in c("n/a", "#N/A", "-", '"1,25"', "NA", "NaN", "")) {
+            session$setInputs(GEX = upload("expr.CSV", c("007,PrObE,07", "12,0002,30",
+                paste0(token, ",0001,40"))))
+            session$setInputs(map = session$input$map + 1L)
+            expect_match(reactive_files$error, "line 3, probe 0001, sample 007", fixed = TRUE)
+            expect_length(captures, 1L)
+        }
+        session$setInputs(GEX = upload("expr.CSV", c("007,PrObE,07", "12,0002,30", "24,0001,40")))
+        session$setInputs(map = session$input$map + 1L)
+        expected <- matrix(c(12, 24, 30, 40), 2L,
+            dimnames = list(c("0002", "0001"), c("007", "07")))
+        expect_identical(captures[[2L]], list(assay = expected, patients = colnames(expected),
+            probes = rownames(expected), raw = TRUE, impute = FALSE))
+
+        # Partial annotation/clinical overlap, explicit numeric IDs and a
+        # literal "NA" sample ID. Missing measurements keep their R values.
+        session$setInputs(is_raw_counts = "norm",
+            GEX = upload("expr.csv", c('probe,"S,\u03b2",NA,extra', "0002,NaN,1.2345678901234567,-20",
+                "unmapped,6.75,1,3", "0001,NA,,-10")),
+            clinic = upload("clin.csv", c("PatientID,ER", "NA,ERneg", '"S,\u03b2",ERpos')),
+            anno = upload("anno.csv", c("probe,ENTREZID", "0001,1001", "0002,1002")))
+        session$setInputs(map = session$input$map + 1L)
+        expected <- matrix(c(NaN, NA_real_, 1.2345678901234567, NA_real_), 2L,
+            dimnames = list(c("0002", "0001"), c("S,\u03b2", "NA")))
+        expect_identical(captures[[3L]], list(assay = expected, patients = colnames(expected),
+            probes = rownames(expected), raw = FALSE, impute = FALSE))
+
+        session$setInputs(GEX = upload("expr.txt", c('probe\tS"1', 'p"1\t3.75')),
+            clinic = upload("clin.txt", c("PatientID\tlabel", 'S"1\t"first sample"')),
+            anno = upload("anno.txt", c('probe\tENTREZID', 'p"1\t"1001"')))
+        session$setInputs(map = session$input$map + 1L)
+        expected <- matrix(3.75, 1L, dimnames = list('p"1', 'S"1'))
+        expect_identical(captures[[4L]], list(assay = expected, patients = colnames(expected),
+            probes = rownames(expected), raw = FALSE, impute = FALSE))
+
+        session$setInputs(clinic = upload("clin.csv", c("PatientID", "S1", "S2")),
+            anno = upload("anno.csv", c("probe,ENTREZID", "10,101", "g2,102", "g3,103")))
+        for (rows in list(c("S1,S2", "10,100", "20,200", "30,1,25"),
+                          c("S1,S2", "10,1,25", "20,2,25", "30,3,25"),
+                          c("unused,S1,S2", "10,100,7", "20,200,8", "30,300,9"))) {
+            session$setInputs(GEX = upload("expr.csv", rows))
+            session$setInputs(map = session$input$map + 1L)
+            expect_match(reactive_files$error, "explicit probe header")
+            expect_null(reactive_files$GEX)
+            expect_length(captures, 4L)
+        }
+        session$setInputs(GEX = upload("expr.csv", c("S1,S2", "10,100", "20,200", "30,1.25")))
+        session$setInputs(map = session$input$map + 1L)
+        expect_match(reactive_files$error, "No overlapping probes")
+        expect_length(captures, 4L)
+        session$setInputs(anno = upload("anno.csv", c("probe,ENTREZID", "1,101", "2,102", "3,103")))
+        session$setInputs(map = session$input$map + 1L)
+        expected <- matrix(c(10, 20, 30, 100, 200, 1.25), 3L,
+            dimnames = list(as.character(1:3), c("S1", "S2")))
+        expect_identical(captures[[5L]], list(assay = expected, patients = colnames(expected),
+            probes = rownames(expected), raw = FALSE, impute = FALSE))
+
+        session$setInputs(clinic = upload("clin.csv", c("PatientID", "S1", "S2", "S3")))
+        for (short in c("2,4,6", "2,4,5")) {
+            session$setInputs(GEX = upload("expr.csv", c("probe,S1,S2,S3", "1,1,2,3", short)))
+            session$setInputs(map = session$input$map + 1L)
+            expect_match(reactive_files$error, "line 3 has 3 fields, expected 4")
+            expect_null(reactive_files$data_input)
+            expect_length(captures, 5L)
+        }
+        session$setInputs(GEX = upload("expr.csv", c("probe,S1,S2,S3,", "1,1,2,3,", "2,4,,6,")))
+        session$setInputs(map = session$input$map + 1L)
+        expected <- matrix(c(1, 4, 2, NA, 3, 6), 2L,
+            dimnames = list(c("1", "2"), c("S1", "S2", "S3")))
+        expect_identical(captures[[6L]], list(assay = expected, patients = colnames(expected),
+            probes = rownames(expected), raw = FALSE, impute = FALSE))
+    })
+})
+
+test_that("an invalid measurement clears mapped results and exports until corrected re-upload", {
+    env <- shiny_app_env()
+    folder <- withr::local_tempdir()
+    csv <- function(name, records) {
+        path <- tempfile(tmpdir = folder)
+        writeLines(records, path)
+        data.frame(name = name, size = file.info(path)$size,
+                   type = "text/csv", datapath = path)
+    }
+    good <- shiny_upload("OSLO2EMIT0_GEX_log2.FPKM.txt")
+    bad <- good
+    bad$datapath <- withr::local_tempfile()
+    lines <- readLines(good$datapath)
+    row <- strsplit(lines[2L], "\t", fixed = TRUE)[[1L]]
+    row[2L] <- "n/a"
+    lines[2L] <- paste(row, collapse = "\t")
+    writeLines(lines, bad$datapath)
+    bad$size <- file.info(bad$datapath)$size
+    original_mapping <- BreastSubtypeR::Mapping
+    count <- 0L
+    testthat::local_mocked_bindings(Mapping = function(...) {
+        count <<- count + 1L
+        original_mapping(...)
+    }, .package = "BreastSubtypeR")
+    shiny::testServer(env$server, {
+        shiny_defaults(session)
+        session$setInputs(run = 1)
+        calls <- current_prediction()$calls
+        expect_true(file.exists(output$download))
+        session$setInputs(GEX = bad, clinic = shiny_upload("OSLO2EMIT0_clinical.txt"),
+                          anno = shiny_upload("OSLO2EMIT0_anno.txt"))
+        session$setInputs(map = 2)
+        expect_identical(count, 1L)
+        expect_match(output$analysis_error$html, "invalid measurement", fixed = TRUE)
+        expect_null(reactive_files$data_input)
+        expect_null(reactive_files$mapped_key)
+        expect_false(mapping_current())
+        expect_null(current_prediction())
+        expect_null(output$download_control)
+        expect_error(output$download, "No current prediction")
+        session$setInputs(export_kind = "full")
+        expect_error(output$download, "No current prediction")
+        session$setInputs(GEX = good)
+        session$setInputs(map = 3)
+        expect_identical(count, 2L)
+        expect_null(reactive_files$error)
+        expect_true(mapping_current())
+        session$setInputs(run = 2)
+        expect_identical(current_prediction()$calls, calls)
+        expect_true(file.exists(output$download))
+        session$setInputs(export_kind = "calls")
+        expect_true(file.exists(output$download))
+
+        session$setInputs(GEX = csv("expr.csv", c("S1,S2", "10,100", "20,200", "30,1,25")),
+            clinic = csv("clin.csv", c("PatientID", "S1", "S2")),
+            anno = csv("anno.csv", c("probe,ENTREZID", "10,101", "g2,102", "g3,103")))
+        session$setInputs(map = 4)
+        expect_identical(count, 2L)
+        expect_match(reactive_files$error, "line 4 has 3 fields, expected 2")
+        expect_false(mapping_current())
+        expect_null(reactive_files$data_input)
+        expect_null(current_prediction())
+        expect_null(output$download_control)
+        expect_error(output$download, "No current prediction")
+        session$setInputs(export_kind = "full")
+        expect_error(output$download, "No current prediction")
+        session$setInputs(GEX = good, clinic = shiny_upload("OSLO2EMIT0_clinical.txt"),
+                          anno = shiny_upload("OSLO2EMIT0_anno.txt"))
+        session$setInputs(map = 5)
+        expect_true(mapping_current())
+        expect_identical(count, 3L)
+        session$setInputs(run = 3)
+        expect_identical(current_prediction()$calls, calls)
+        expect_true(file.exists(output$download))
+    })
+})
+
 test_that("mapping resolves from the installed namespace without injection", {
     skip_if_not_installed("shiny")
     skip_if_not_installed("bslib")

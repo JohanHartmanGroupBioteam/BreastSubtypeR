@@ -64,6 +64,12 @@ test_that("the six Shiny tables retain schemas, IDs and exact candidate values",
 
 test_that("installed Shiny examples map, calculate AUTO and download candidate calls", {
     withr::local_preserve_seed()
+    original_mapping <- BreastSubtypeR::Mapping
+    mapping_input <- NULL
+    testthat::local_mocked_bindings(Mapping = function(se_obj, ...) {
+        mapping_input <<- SummarizedExperiment::assay(se_obj)
+        original_mapping(se_obj = se_obj, ...)
+    }, .package = "BreastSubtypeR")
     for (name in c("OSLO2EMIT0obj", "TCGABRCAobj")) {
         obj <- shiny199_object(name)
         raw <- identical(name, "TCGABRCAobj")
@@ -86,6 +92,9 @@ test_that("installed Shiny examples map, calculate AUTO and download candidate c
             expect_null(reactive_files$error)
             expect_true(mapping_current())
             expect_identical(reactive_files$RawCounts, raw)
+            expected_input <- as.matrix(SummarizedExperiment::assay(obj$se_obj))
+            storage.mode(expected_input) <- "double"
+            expect_identical(mapping_input, expected_input)
             mapped <- reactive_files$data_input
             expect_identical(names(mapped), c("se_NC", "se_SSP"))
             for (component in names(mapped)) {
