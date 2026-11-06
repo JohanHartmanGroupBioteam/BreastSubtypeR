@@ -292,6 +292,23 @@ install.packages(c("shiny", "bslib"))
    separate method calls and entropy;
    **Full metrics (incl. ROR)** is available for supported single NC methods.
 
+For expression uploads, use comma-delimited `.csv` or tab-delimited text with
+genes in rows and sample IDs in the header. Label the gene-ID column `probe`
+when the layout is ambiguous, including when a named leading ID column
+contains numeric IDs. An R export may omit the corner header if every data
+row has exactly one more field than the header and the IDs corroborate that
+layout. If only numeric-looking IDs overlap, all leading IDs must match
+annotation. If the entire final sample is missing in an omitted-corner export,
+label the ID column `probe` or write `NA` explicitly. Use a decimal point for measurements.
+Keep every sample field on every row. Normalized expression accepts `NA`, `NaN`
+and empty fields with their delimiters. Unnamed empty fields at the end of
+the header and every data record are accepted as consistent export padding.
+Place feature metadata such as symbols and descriptions in the annotation
+table. Raw counts require a value in every measurement field.
+The importer passes explicit `Inf` and `-Inf` through to preprocessing.
+A numeric token that overflows R's double range (for example, `1e999`) raises
+an input error that identifies the probe and sample.
+
 Relevant selected Full metrics carry the experimental 18-gene ROR-PC notice
 and display labels. Exports retain their existing column names and data,
 with the interpretation recorded in the existing provenance comments.
