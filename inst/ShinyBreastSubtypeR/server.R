@@ -20,13 +20,15 @@ bs_callout <- function(title, body, color = c("info","success","warning","danger
 
 `%||%` <- function(a, b) if (!is.null(a)) a else b
 
-# Read CSV/TXT with minimal assumptions
-.read_table <- function(inFile) {
-  ext <- tools::file_ext(inFile$name)
-  sep <- if (tolower(ext) == "csv") "," else "\t"
-  utils::read.table(inFile$datapath, header = TRUE, sep = sep,
-                    row.names = NULL, check.names = FALSE,
-                    quote = "", comment.char = "", stringsAsFactors = FALSE, fill = TRUE)
+.upload_separator <- function(name) {
+  if (tolower(tools::file_ext(name)) == "csv") "," else "\t"
+}
+
+# Read the matching key as text, including leading zeroes. Other metadata
+# columns retain read.table's usual types.
+.read_table <- function(inFile, key) {
+  read_metadata <- getFromNamespace(".read_shiny_metadata", "BreastSubtypeR")
+  read_metadata(inFile$datapath, .upload_separator(inFile$name), key)
 }
 
 # Small helper to print tables like "ER+=42, ER-=18"
@@ -110,13 +112,7 @@ bs_callout <- function(title, body, color = c("info","success","warning","danger
   out
 }
 
-# Force matrix numeric (keeps rownames)
-.as_numeric_matrix <- function(df) {
-  m <- suppressWarnings(data.matrix(df))
-  m <- as.matrix(m)
-  rownames(m) <- rownames(df)
-  m
-}
+.read_expression <- getFromNamespace(".read_shiny_expression", "BreastSubtypeR")
 
 # tiny DOI helper
 .doi <- function(doi) sprintf("<a href='https://doi.org/%s' target='_blank' rel='noopener noreferrer'>doi</a>", doi)
@@ -689,28 +685,18 @@ server <- function(input, output, session) {
                                      stringsAsFactors = FALSE, check.names = FALSE)
       stopifnot("PatientID" %in% names(clinic_df))
       rownames(clinic_df) <- clinic_df$PatientID
-      reactive_files$clinic <- clinic_df
       
       incProgress(0.5, detail = "Annotation...")
       anno_df <- utils::read.table(anno_path, header = TRUE, sep = "\t",
                                    stringsAsFactors = FALSE, check.names = FALSE)
       stopifnot(all(c("probe","ENTREZID") %in% names(anno_df)))
       rownames(anno_df) <- anno_df$probe
-      reactive_files$anno <- anno_df
       
       incProgress(0.75, detail = "Expression...")
-      gex_df <- utils::read.table(gex_path, header = TRUE, sep = "\t",
-                                  stringsAsFactors = FALSE, check.names = FALSE, quote = "")
-      # probe column to rownames if present
-      if (any(grepl("^probe$", names(gex_df), ignore.case = TRUE))) {
-        probe_col <- grep("^probe$", names(gex_df), ignore.case = TRUE)[1]
-        rownames(gex_df) <- gex_df[[probe_col]]
-        gex_df[[probe_col]] <- NULL
-      } else if (!is.null(gex_df[[1]]) && !is.numeric(gex_df[[1]])) {
-        rownames(gex_df) <- as.character(gex_df[[1]])
-        gex_df[[1]] <- NULL
-      }
-      reactive_files$GEX <- .as_numeric_matrix(gex_df)
+      reactive_files$GEX <- .read_expression(gex_path, "\t", clinic_df$PatientID,
+                                             anno_df$probe, raw_counts = FALSE)
+      reactive_files$clinic <- clinic_df
+      reactive_files$anno <- anno_df
       reactive_files$RawCounts <- FALSE
       
       incProgress(1, detail = "Done")
@@ -733,37 +719,21 @@ server <- function(input, output, session) {
     withProgress(message = "Running Mapping...", value = 0, {
       incProgress(0.15, detail = "Reading inputs...")
       
-      # GEX
       if (have_uploads) {
-        gex_df <- .read_table(input$GEX)
-        if (any(grepl("^probe$", names(gex_df), ignore.case = TRUE))) {
-          probe_col <- grep("^probe$", names(gex_df), ignore.case = TRUE)[1]
-          rownames(gex_df) <- gex_df[[probe_col]]
-          gex_df[[probe_col]] <- NULL
-        } else if (!is.null(gex_df[[1]]) && !is.numeric(gex_df[[1]])) {
-          rownames(gex_df) <- as.character(gex_df[[1]])
-          gex_df[[1]] <- NULL
-        }
-        reactive_files$GEX <- .as_numeric_matrix(gex_df)
+        reactive_files$GEX <- reactive_files$clinic <- reactive_files$anno <- NULL
+        clinic_df <- .read_table(input$clinic, "PatientID")
+        stopifnot("PatientID" %in% names(clinic_df))
+        rownames(clinic_df) <- clinic_df$PatientID
+        anno_df <- .read_table(input$anno, "probe")
+        stopifnot(all(c("probe","ENTREZID") %in% names(anno_df)))
+        rownames(anno_df) <- anno_df$probe
+        reactive_files$GEX <- .read_expression(input$GEX$datapath,
+            .upload_separator(input$GEX$name), clinic_df$PatientID, anno_df$probe, raw_mode())
+        reactive_files$clinic <- clinic_df
+        reactive_files$anno <- anno_df
         reactive_files$RawCounts <- raw_mode()
         showNotification(sprintf("Data type: %s", if (reactive_files$RawCounts) "Raw counts" else "Normalized (log2)"),
                          type = "message")
-      }
-      
-      # Clinical
-      if (have_uploads) {
-        clinic_df <- .read_table(input$clinic)
-        stopifnot("PatientID" %in% names(clinic_df))
-        rownames(clinic_df) <- clinic_df$PatientID
-        reactive_files$clinic <- clinic_df
-      }
-      
-      # Annotation
-      if (have_uploads) {
-        anno_df <- .read_table(input$anno)
-        stopifnot(all(c("probe","ENTREZID") %in% names(anno_df)))
-        rownames(anno_df) <- anno_df$probe
-        reactive_files$anno <- anno_df
       }
       
       incProgress(0.5, detail = "Aligning...")
