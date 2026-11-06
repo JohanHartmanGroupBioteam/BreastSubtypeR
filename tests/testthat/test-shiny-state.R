@@ -1322,6 +1322,8 @@ test_that("reference choices preserve Unicode in C and UTF-8 locales", {
         if (!available) return(list(available = FALSE, reason = paste(
             "No", locale, "LC_CTYPE available; tried",
             paste(candidates, collapse = ", "), paste(diagnostics, collapse = "; "))))
+        ## Load the assay dependency before making UI-rendering warnings fatal.
+        loadNamespace("SummarizedExperiment")
         withCallingHandlers({
             library(shiny)
             setwd(app_dir)
