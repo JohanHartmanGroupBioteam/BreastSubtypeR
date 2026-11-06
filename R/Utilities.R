@@ -662,12 +662,17 @@ get_methods <- function(pheno) {
         methods <- c("AIMS", "sspbc")
     }
 
-    list(
+    selection <- list(
         samples_ER.icd = samples_ER.icd,
         samples_ERHER2.icd = samples_ERHER2.icd,
         methods = methods,
         cohort.select = cohort.select
     )
+    # Use the actual normalized pair counts, before any subgroup size cutoffs.
+    if (cohort.select == "mixed" &&
+        n_ERposHER2pos + n_ERposHER2neg + n_ERnegHER2pos + n_ERnegHER2neg == 0L)
+        selection$zero_mixed_pairs <- TRUE
+    selection
 }
 
 
