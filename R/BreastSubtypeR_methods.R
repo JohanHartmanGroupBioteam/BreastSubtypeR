@@ -2257,8 +2257,25 @@ BS_Multi <- function(data_input,
     # Restore only existing ssBC results after all native calibration/scoring.
     if (!is_manual) {
         for (method in intersect(c("ssBC", "ssBC.v2"), names(results))) {
-            if (!is.null(results[[method]]))
-                results[[method]] <- .restore_auto_ssbc(results[[method]], samples)
+            result <- results[[method]]
+            zero_pair_clinical <- NULL
+            if (method == "ssBC.v2" && !Subtype && isTRUE(AUTO.output$zero_mixed_pairs)) {
+                # Routing normalizes receptor labels. A malformed column must
+                # not authorize the historical zero-pair schema by coercion.
+                valid_receptor <- function(x) {
+                    is.null(dim(x)) && length(x) == length(samples) &&
+                        (is.character(x) || is.logical(x) || is.factor(x) || is.numeric(x))
+                }
+                receptor_names <- names(colData(data_input$se_NC))
+                if (sum(receptor_names == "ER") != 1L || sum(receptor_names == "HER2") != 1L ||
+                    !valid_receptor(pheno$ER) || !valid_receptor(pheno$HER2))
+                    stop("Invalid receptor columns for AUTO ssBC.v2.", call. = FALSE)
+                if (!any(rownames(data_input$se_NC) %in% rownames(result$outList$centroids)))
+                    stop("Cannot restore zero-pair AUTO ssBC.v2 without PAM50 gene overlap.",
+                         call. = FALSE)
+                zero_pair_clinical <- hasClinical
+            } else if (is.null(result)) next
+            results[[method]] <- .restore_auto_ssbc(result, samples, zero_pair_clinical)
         }
     }
 

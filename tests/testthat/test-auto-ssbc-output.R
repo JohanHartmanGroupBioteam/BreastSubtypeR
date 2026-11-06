@@ -76,6 +76,118 @@ test_that("AUTO restores each component's own identities without changing payloa
     expect_error(BreastSubtypeR:::.restore_auto_ssbc(broken, ids), "native matrix dimensions")
 })
 
+test_that("mixed AUTO preserves the complete five-class return with zero receptor pairs", {
+    withr::local_seed(239)
+    ix <- c(seq(2, 36, 2), seq(1, 36, 2))
+    original <- auto233_subset(auto233_input(), ix)
+    ids <- colnames(original$se_NC)
+    er <- rep(c("ER+", "ER-"), 18)
+    peers <- c("parker.original", "genefu.scale", "genefu.robust", "ssBC",
+        "cIHC", "cIHC.itr", "PCAPAM50", "AIMS", "sspbc")
+    for (her2 in list(rep(NA_character_, 36), rep("2+", 36))) {
+        input <- auto233_annotate(original, er, her2)
+        for (n in names(input)) {
+            input[[n]]$PatientID <- factor(ids, levels = c("unused", rev(ids)))
+            input[[n]]$TSIZE <- rep(1, 36)
+            input[[n]]$NODE <- rep(4, 36)
+        }
+        for (clinical in c(FALSE, TRUE)) {
+            seed <- .Random.seed
+            actual <- auto233_run(input, subtype = FALSE, clinical = clinical)
+            # Recreate the pre-#239 assembly at this input: each native return
+            # already covers the full cohort. Compare every method and summary.
+            historical <- testthat::with_mocked_bindings(
+                auto233_run(input, subtype = FALSE, clinical = clinical),
+                .restore_auto_ssbc = function(result, ids, ...) result, .package = "BreastSubtypeR")
+            expect_identical(actual, historical)
+            expect_identical(.Random.seed, seed)
+            expect_identical(setdiff(names(actual$results), "ssBC.v2"), peers)
+            expect_identical(rownames(actual$res_subtypes), ids)
+            expect_identical(actual$res_subtypes$ssBC.v2, rep(NA, length(ids)))
+            expect_false("patientID" %in% names(actual$results$ssBC.v2$score.ROR))
+            entropy <- apply(actual$res_subtypes[peers], 1, function(row) {
+                p <- prop.table(table(row))
+                -sum(p * log2(p))
+            })
+            expect_equal(actual$res_subtypes$entropy, unname(entropy), tolerance = 1e-14)
+            # NCP-02 is a native four-class error, before AUTO restoration.
+            expect_error(suppressMessages(BS_Multi(input, Subtype = TRUE, hasClinical = clinical)),
+                "undefined columns selected", fixed = TRUE)
+        }
+    }
+})
+
+test_that("only the complete historical zero-pair schema passes validation", {
+    ids_input <- auto233_subset(auto233_input(), c(4, 1, 3, 2))
+    x <- auto233_annotate(ids_input, rep(c("ER+", "ER-"), 2), rep(NA_character_, 4))$se_NC
+    ids <- colnames(x)
+    a <- suppressMessages(BS_ssBC(x, s = "ER.v2"))
+    restore <- BreastSubtypeR:::.restore_auto_ssbc
+    expect_identical(restore(a, ids, zero_pair_clinical = FALSE), a)
+    expect_error(restore(a, ids), "invalid score.ROR schema")
+    expect_error(restore(a, ids, zero_pair_clinical = TRUE), "zero-pair")
+    reject <- function(z) expect_error(restore(z, ids, zero_pair_clinical = FALSE), "zero-pair")
+    for (f in c("BS.all", "score.ROR")) {
+        z <- a; z[[f]] <- z[[f]][-1, , drop = FALSE]; reject(z)
+        for (bad in list(rev(ids), c("foreign", ids[-1]), c(ids[2], ids[-1]),
+                         c(NA_character_, ids[-1]), c("", ids[-1]))) {
+            z <- a; attr(z[[f]], "row.names") <- bad; reject(z)
+        }
+    }
+    z <- a; z$BS.all$PatientID <- rev(ids); reject(z)
+    z <- a; z$BS.all$BS <- rep(NA_character_, 4); reject(z)
+    z <- a; z$score.ROR$patientID <- ids; reject(z)
+    z <- a; z$score.ROR$Confidence <- NULL; reject(z)
+    z <- a; z$score.ROR$Confidence <- rep(NA_real_, 4); reject(z)
+    z <- a; z$score.ROR$Confidence[1] <- TRUE; reject(z)
+    z <- a; names(z$score.ROR)[1] <- names(z$score.ROR)[2]; reject(z)
+    z <- a; z$score.ROR <- NULL; reject(z)
+    z <- a; z$outList$predictions <- NULL; reject(z)
+    z <- a; z$outList$predictions.FourSubtype <- a$outList$predictions; reject(z)
+    z <- a; z$outList$predictions[1] <- "LumA"; reject(z)
+    z <- a; names(z$outList$predictions) <- rev(ids); reject(z)
+    for (f in c("distances", "dist.RORSubtype")) {
+        z <- a; z$outList[[f]] <- z$outList[[f]][-1, , drop = FALSE]; reject(z)
+        z <- a; rownames(z$outList[[f]]) <- rev(ids); reject(z)
+        z <- a; colnames(z$outList[[f]])[1] <- "other"; reject(z)
+        z <- a; z$outList[[f]][1, 1] <- 0; reject(z)
+    }
+    z <- a; colnames(z$outList$testData) <- rev(ids); reject(z)
+    z <- a; z$outList$testData <- matrix(NA_real_, 1, 4, dimnames = list("ESR1", ids)); reject(z)
+    z <- a; z$outList$centroids <- NULL; reject(z)
+    z <- a; z$mdns <- NULL; reject(z)
+})
+
+test_that("recognized pairs and malformed annotations cannot authorize a keyless score table", {
+    # Two patients in the same stratum reach the native zero-overlap path
+    # independently of the reviewed policy for evaluated singletons.
+    her2 <- rep(NA_character_, 36)
+    her2[c(1, 3)] <- "HER2-"
+    input <- auto233_annotate(auto233_subset(auto233_input(), 1:36),
+        rep(c("ER+", "ER-"), 18), her2)
+    native <- BS_ssBC
+    no_overlap <- function(se_obj, s, ...) {
+        # Isolate the actual native zero-overlap path in ER.v2 while allowing
+        # the other AUTO classifiers to use their original public expression.
+        if (s == "ER.v2") rownames(se_obj) <- paste0("absent_", seq_len(nrow(se_obj)))
+        native(se_obj, s, ...)
+    }
+    expect_error(testthat::with_mocked_bindings(suppressMessages(BS_Multi(input)),
+        BS_ssBC = no_overlap, .package = "BreastSubtypeR"), "invalid score.ROR schema")
+
+    # Routing recognizes this alias. The native classifier uses literal labels
+    # and produces the same keyless shape. The normalized pair still counts.
+    input$se_NC$HER2[c(1, 3)] <- "negative"
+    expect_warning(expect_error(suppressMessages(BS_Multi(input)), "invalid score.ROR schema"),
+        "coerced HER2")
+    input$se_NC$HER2 <- I(rep("2+", 36))
+    expect_no_error(suppressMessages(BS_Multi(input)))
+    input$se_NC$HER2 <- I(rep(list("2+"), 36))
+    expect_error(suppressMessages(BS_Multi(input)), "Invalid receptor columns")
+    input$se_NC$HER2 <- NULL
+    expect_error(suppressMessages(BS_Multi(input)), "requires both")
+})
+
 test_that("OSLO AUTO preserves native evaluated values for all flags and ID orders", {
     withr::local_seed(233)
     original <- auto233_input()
@@ -91,7 +203,7 @@ test_that("OSLO AUTO preserves native evaluated values for all flags and ID orde
             # Disable only the new post-calculation assembly to compare unchanged
             # BS.all, aggregates, entropy and every unaffected method as objects.
             baseline <- testthat::with_mocked_bindings(auto233_run(input, subtype, clinical),
-                .restore_auto_ssbc = function(result, ids) result, .package = "BreastSubtypeR")
+                .restore_auto_ssbc = function(result, ids, ...) result, .package = "BreastSubtypeR")
             expect_identical(actual[names(actual) != "results"], baseline[names(baseline) != "results"])
             expect_identical(names(actual$results), names(baseline$results))
             for (method in names(actual$results)) {
@@ -133,7 +245,7 @@ test_that("AUTO thresholds, unavailable annotations and absent methods keep thei
                 levels = c("unused", rev(colnames(input[[n]]))))
         actual <- suppressWarnings(auto233_run(input))
         baseline <- suppressWarnings(testthat::with_mocked_bindings(auto233_run(input),
-            .restore_auto_ssbc = function(result, ids) result, .package = "BreastSubtypeR"))
+            .restore_auto_ssbc = function(result, ids, ...) result, .package = "BreastSubtypeR"))
         expect_identical(intersect(c("ssBC", "ssBC.v2"), names(actual$results)), expected_methods[[case]])
         expect_identical(actual[names(actual) != "results"], baseline[names(baseline) != "results"])
         for (method in expected_methods[[case]])
