@@ -137,6 +137,23 @@ associated with Fernandez-Martinez et al. (2024). \code{ER.v2} uses the four
 ER/HER2 columns and \code{TN.v2} uses \code{TNBC}; see \code{\link[=BS_ssBC]{BS_ssBC()}} for their names.
 The original \code{ssBC} methods retain the Zhao et al. (2015) reference quantiles.
 }
+\section{Singleton no-calls}{
+
+In standalone \code{BS_ssBC()} and manual or AUTO \code{BS_Multi()}, a one-tumor
+ssBC/ssBC.v2 receptor subgroup retains its sample ID with missing calls,
+confidence, correlations, calibrated expression, ER/HER2 expression scores
+and all applicable ROR scores and groups. For this deliberate no-call the
+experimental 18-gene ROR-PC group is missing even with \code{NODE >= 4} and
+nonmissing \code{TSIZE}. The usual high group for that node count and tumor-size
+condition still applies to other evaluated NC cases.
+
+Each singleton subgroup gives one warning. For example, for patient S1
+in the ER_neg stratum the warning is
+\verb{ssBC/ssBC.v2: subgroup 'ER_neg' has n=1 (sample S1); no subtype or risk estimate.}
+This replaces the earlier warning about a low-confidence fallback label.
+Direct input with no represented PAM50 genes is unsupported.
+}
+
 \section{Research ROR interpretation}{
 
 The research ROR outputs use Spearman centroid correlations, following

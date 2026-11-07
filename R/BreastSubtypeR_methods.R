@@ -1352,6 +1352,7 @@ BS_PCAPAM50 <- function(
 #' @details
 #' Zhao et al. (2015) introduced subgroup-specific gene centering.
 #' Fernandez-Martinez et al. (2020) described its HER2/ER-specific application.
+#'
 #' The updated quantiles match the public `SIGMA.txt` reference in the
 #' [Perou Lab normalization repository](https://github.com/perou-lab/PAM50_ER_HER2_normalization),
 #' associated with Fernandez-Martinez et al. (2024).
@@ -1359,6 +1360,21 @@ BS_PCAPAM50 <- function(
 #' `HER2pos_ERneg` and `HER2pos_ERpos`; `TN.v2` uses `TNBC`.
 #' The original `ER` and `TN` reference quantiles remain separate.
 #' See [BreastSubtypeRobj] for the pinned numerical reference.
+#'
+#' @section Singleton no-calls:
+#' In standalone `BS_ssBC()` and manual or AUTO `BS_Multi()`, a one-tumor
+#' ssBC/ssBC.v2 receptor subgroup retains its sample ID with missing calls,
+#' confidence, correlations, calibrated expression, ER/HER2 expression scores
+#' and all applicable ROR scores and groups. For this deliberate no-call the
+#' experimental 18-gene ROR-PC group is missing even with `NODE >= 4` and
+#' nonmissing `TSIZE`. The usual high group for that node count and tumor-size
+#' condition still applies to other evaluated NC cases.
+#'
+#' Each singleton subgroup gives one warning. For example, for patient S1
+#' in the ER_neg stratum the warning is
+#' `ssBC/ssBC.v2: subgroup 'ER_neg' has n=1 (sample S1); no subtype or risk estimate.`
+#' This replaces the earlier warning about a low-confidence fallback label.
+#' Direct input with no represented PAM50 genes is unsupported.
 #'
 #' @references
 #' Zhao X, Rødland EA, Tibshirani R, Plevritis S.
@@ -1707,6 +1723,7 @@ BS_sspbc <- function(se_obj, ssp.name = "ssp.pam50") {
 #' Intrinsic Subtyping with Multiple Approaches (BS_Multi)
 #'
 #' @name BS_Multi
+#' @inheritSection BS_ssBC Singleton no-calls
 #' @inheritSection Mapping Research ROR interpretation
 #' @inheritSection Mapping Original research ROR boundary policy
 #' @inheritSection Mapping Proliferation panel coverage

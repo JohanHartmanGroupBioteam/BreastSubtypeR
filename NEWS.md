@@ -2,6 +2,16 @@
 
 ## API compatibility
 
+* Standalone and multi-method ssBC/ssBC.v2 now report a no-call for a
+  one-tumor receptor subgroup. The patient remains in the output with missing
+  calibrated expression, subtype and risk metrics, including the experimental
+  NODE-dependent group even with four or more positive nodes. Other evaluated
+  NC cases retain the existing NODE rule. The warning now identifies the
+  stratum and patient and says "no subtype or risk estimate" in place of the
+  earlier low-confidence fallback label.
+* `Vis_pie()` displays "No assigned subtype calls" for a nonempty table of
+  missing calls. It requires a nonempty data frame with a `Subtype` column.
+
 * Align internal four-class ssBC/ssBC.v2 predictions to input sample order
   and retain matrix dimensions for singleton internal outputs (#234).
   Per-sample calls, numerical results, calibration and existing missingness

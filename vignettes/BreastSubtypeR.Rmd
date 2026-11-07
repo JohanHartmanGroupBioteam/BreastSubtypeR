@@ -399,6 +399,12 @@ singleton correlation and calibrated-expression outputs (#234). This
 complements AUTO's full-input coverage (#233); per-sample calls, numerical
 results, calibration and existing missingness are unchanged.
 
+If an evaluated ssBC or ssBC.v2 receptor subgroup contains only one tumor,
+each measured gene equals its own subgroup quantile. The method warns and
+retains the patient with missing subtype calls, calibrated expression and risk
+metrics. This includes the experimental risk group even when `NODE >= 4`.
+This rule also applies to manual and standalone calls.
+
 Entirely `NA` columns in calibrated `testData` mean that calibrated measurements
 are unavailable. They are not replaced with input expression, zeros or imputed
 values. External PCA/clustering consumers must filter these columns from a
@@ -598,8 +604,9 @@ contains both experimental columns. `BS_Multi()` aggregates this notice once
 per top-level call when a returned component contains them, not per method,
 patient or iteration. Package loading, `Mapping()`, `hasClinical = FALSE`
 and AIMS/SSPBC-only results do not emit this warning. The notice also applies
-when all numerical values are missing: NODE >= 4 with nonmissing tumor size
-can still produce the existing `high` category.
+when all numerical values are missing. With nonmissing tumor size, NODE >= 4
+can still produce the existing `high` category for other evaluated NC cases;
+a deliberate ssBC/ssBC.v2 singleton no-call has a missing experimental group.
 
 `options(warn = 2)` intentionally converts this warning to an error. An
 expert workflow that has recorded the interpretation can handle this class

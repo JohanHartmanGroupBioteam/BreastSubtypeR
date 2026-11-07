@@ -172,7 +172,19 @@ test_that("true four-class API results plot without relabeling five-class calls"
     expect_s4_class(visual_draw(multi), "Heatmap")
 })
 
-test_that("existing all-no-call and unusual-input behavior is not repaired", {
+test_that("Vis_pie distinguishes missing calls from malformed input", {
+    for (bad in list(NULL, list(Subtype = NA_character_), data.frame(PatientID = "A"),
+                     data.frame(SubtypeOther = NA_character_), data.frame(Subtype = character()))) {
+        expect_error(Vis_pie(bad), "nonempty data frame with a Subtype column", fixed = TRUE)
+    }
+    missing <- Vis_pie(data.frame(Subtype = c(NA_character_, NA_character_)))
+    expect_identical(missing$labels$subtitle, "2 samples; 0 assigned calls")
+    mixed <- Vis_pie(data.frame(Subtype = c("LumA", NA_character_, "LumA", "Her2")))
+    expect_equal(sum(mixed$data$Freq), 3)
+    expect_no_error(ggplot2::ggplot_build(mixed))
+})
+
+test_that("all-no-call plots render and unusual-input checks are preserved", {
     ex <- visual_example()
     none <- ex$out
     none$Subtype[] <- NA_character_
@@ -183,8 +195,10 @@ test_that("existing all-no-call and unusual-input behavior is not repaired", {
     h <- visual_draw(Vis_Multi(no_methods))
     expect_true(all(is.na(h@matrix)))
     expect_true(all(is.na(get("value", h@top_annotation@anno_list$Entropy@fun@var_env))))
-    # These are pre-existing failures, not invitations to change the policy.
-    expect_error(ggplot2::ggplot_build(Vis_pie(none)), "Var1")
+    pie <- Vis_pie(none)
+    expect_identical(pie$labels$title, "No assigned subtype calls")
+    expect_no_error(ggplot2::ggplot_build(pie))
+    # Preserve the existing errors for other unsupported plot inputs.
     constant <- ex$x
     constant[1, ] <- 1
     expect_error(Vis_PCA(constant, ex$out), "constant/zero")

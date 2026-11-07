@@ -27,7 +27,7 @@ ssbc234_inputs <- function() {
             rep(NA_character_, 4)))
 }
 
-ssbc234_fallbacks <- function(cohort, s) {
+ssbc234_singletons <- function(cohort, s) {
     # Independently enumerated singleton strata, confirmed on installed main
     # 930ade96 before the output-only correction. No warning is ignored merely
     # because a small cohort might warn: exact subgroup, ID and count must match.
@@ -40,8 +40,8 @@ ssbc234_fallbacks <- function(cohort, s) {
         missing = switch(s, ER.v2 = c(ERneg_HER2neg = 5L, HER2pos_ERpos = 4L), integer()),
         integer())
     if (!length(strata)) return(character())
-    sprintf(paste0("ssBC/ssBC.v2 fallback: subgroup '%s' had n=1; ",
-        "sample(s): OSLO2EMIT0.%03d; low-confidence label."), names(strata), strata)
+    sprintf(paste0("ssBC/ssBC.v2: subgroup '%s' has n=1 ",
+        "(sample OSLO2EMIT0.%03d); no subtype or risk estimate."), names(strata), strata)
 }
 
 ssbc234_with_warnings <- function(expr, expected, clinical) {
@@ -73,7 +73,7 @@ test_that("ssBC preserves ordered sample axes and matrix dimensions for every st
                 SummarizedExperiment::colData(x)$PatientID <- if (factor_ids)
                     factor(ids, levels = c("unused", rev(ids))) else ids
                 before <- x
-                expected_warnings <- ssbc234_fallbacks(cohort, s)
+                expected_warnings <- ssbc234_singletons(cohort, s)
                 run <- function() BS_ssBC(x, s = s, Subtype = subtype, hasClinical = clinical)
                 if (cohort == "all_missing" && subtype && s != "TN.v2") {
                     # Existing upstream failure occurs before final assembly;
@@ -140,12 +140,19 @@ test_that("ssBC preserves ordered sample axes and matrix dimensions for every st
                     expect_true(all(is.na(a$score.ROR$patientID[unavailable])))
                     expect_identical(as.character(a$score.ROR$patientID[!unavailable]), ids[!unavailable])
                 }
-                if (cohort == "singleton") {
-                    # Preserve the successful native fallback's missing ROR
-                    # correlations, even though its expression/call is present.
-                    expect_true(all(is.na(out$dist.RORSubtype)))
-                    expect_true(any(!is.na(out$testData)))
-                    expect_false(is.na(out$predictions))
+                for (msg in expected_warnings) {
+                    id <- sub(".*sample (OSLO2EMIT0[.][0-9]+).*", "\\1", msg)
+                    expect_identical(out$predictions[[id]], NA_character_)
+                    if (subtype) expect_identical(out$predictions.FourSubtype[[id]], NA_character_)
+                    expect_true(all(is.na(out$distances[id, ])))
+                    expect_true(all(is.na(out$dist.RORSubtype[id, ])))
+                    expect_true(all(is.na(out$testData[, id])))
+                    scores <- a$score.ROR[id, , drop = FALSE]
+                    expect_identical(as.character(scores$patientID), id)
+                    for (key in setdiff(names(scores), "patientID")) {
+                        expected <- if (grepl("Group|^Call", key)) NA_character_ else NA_real_
+                        expect_identical(scores[[key]], expected)
+                    }
                 }
                 expect_identical(x, before)
             }

@@ -1909,23 +1909,29 @@ makeCalls.ssBC <- function(mat,
             # restrict to PAM50 genes first
             pam50 <- rownames(BreastSubtypeRobj$centroid)
             samp <- samples_selected[[element]]
-            if (length(samp) == 0L) {
-                # return a well-formed empty result for this subgroup
-                pred <- setNames(character(0), character(0))
-                empty <- list(
+            if (length(samp) <= 1L) {
+                # A singleton's within-stratum gene quantiles equal its own values.
+                # Preserve its identity and axes without returning uncalibrated data.
+                genes <- pam50
+                if (length(samp) == 1L) {
+                    represented <- intersect(rownames(mat), pam50)
+                    if (length(represented)) genes <- represented
+                    warning(sprintf("ssBC/ssBC.v2: subgroup '%s' has n=1 (sample %s); no subtype or risk estimate.",
+                                    element, samp), call. = FALSE)
+                }
+                classes <- colnames(BreastSubtypeRobj$centroid)
+                pred <- setNames(rep(NA_character_, length(samp)), samp)
+                missing <- list(
                     predictions = pred,
-                    testData = matrix(numeric(0), nrow = length(pam50), ncol = 0, dimnames = list(pam50, NULL)),
-                    distances = matrix(numeric(0),
-                        nrow = 0, ncol = ncol(BreastSubtypeRobj$centroid),
-                        dimnames = list(NULL, colnames(BreastSubtypeRobj$centroid))
-                    ),
-                    dist.RORSubtype = matrix(numeric(0),
-                        nrow = 0, ncol = 4,
-                        dimnames = list(NULL, colnames(BreastSubtypeRobj$centroid)[seq_len(4)])
-                    )
+                    testData = matrix(NA_real_, length(genes), length(samp),
+                                      dimnames = list(genes, samp)),
+                    distances = matrix(NA_real_, length(samp), length(classes),
+                                       dimnames = list(samp, classes)),
+                    dist.RORSubtype = matrix(NA_real_, length(samp), 4L,
+                                             dimnames = list(samp, classes[seq_len(4L)]))
                 )
-                if (Subtype) empty$predictions.FourSubtype <- pred
-                return(empty)
+                if (Subtype) missing$predictions.FourSubtype <- pred
+                return(missing)
             }
 
             # restrict to PAM50 genes first (keep matrix even for n=1)
@@ -1960,7 +1966,7 @@ makeCalls.ssBC <- function(mat,
             # gene-specific quantiles: align safely
             gene.sigma.o <- gene.sigma[rownames(x.m), element, drop = TRUE]
 
-            # keep an uncentered copy for singleton fallback
+            # Retain the legacy error path for larger subgroups.
             x.raw <- x.m
 
             # per-row quantile with guards
@@ -1993,7 +1999,7 @@ makeCalls.ssBC <- function(mat,
                 return(res_prim)
             }
 
-            # --- fallback for n=1 or corner cases: nearest centroid on Spearman ---
+            # Legacy recovery if the primary predictor errors on a larger subgroup.
             ct <- BreastSubtypeRobj$centroid
             common <- intersect(rownames(ct), rownames(x.m))
             if (length(common) == 0L) {
@@ -2021,7 +2027,7 @@ makeCalls.ssBC <- function(mat,
                 return(empty)
             }
 
-            xs <- x.raw[common, 1, drop = TRUE] # NEW: use the uncentered vector for correlation when n=1
+            xs <- x.raw[common, 1, drop = TRUE]
             ctc <- ct[common, , drop = FALSE]
 
             # Spearman similarity; NA-safe
@@ -2065,7 +2071,7 @@ makeCalls.ssBC <- function(mat,
 
             out_fb <- list(
                 predictions = pred_label,
-                testData = x.raw, # <-- was x.m; use uncentered for singleton
+                testData = x.raw,
                 distances = distances_mat,
                 dist.RORSubtype = matrix(NA_real_,
                     nrow = 1, ncol = 4,
@@ -2224,6 +2230,13 @@ makeCalls.ssBC <- function(mat,
         hasClinical = hasClinical,
         Subtype = Subtype
     )
+
+    # NODE >= 4 alone ordinarily yields a high experimental group. A singleton
+    # is explicitly unassessed even under that rule; keep this exception local.
+    singleton_ids <- unlist(samples_selected[lengths(samples_selected) == 1L], use.names = FALSE)
+    if (hasClinical && length(singleton_ids)) {
+        out.ROR[singleton_ids, "ROR-PC Group (Subtype + Clinic + Prolif.Subtype)"] <- NA_character_
+    }
 
     ## supplementing NA samples
     if (length(out$predictions) != ncol(mat)) {
