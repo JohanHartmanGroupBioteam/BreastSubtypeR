@@ -1188,7 +1188,7 @@ Vis_PCA <- function(x, out, Eigen = FALSE) {
 #' distribution of breast cancer subtypes in a cohort, based on the provided
 #' `Subtype` data.
 #'
-#' @param out A data frame containing two columns: `"PatientID"` and
+#' @param out A nonempty data frame containing two columns: `"PatientID"` and
 #'   `"Subtype"`. The `"PatientID"` column should contain unique patient
 #'   identifiers, and the `"Subtype"` column should specify the assigned subtype
 #'   for each patient.
@@ -1202,6 +1202,8 @@ Vis_PCA <- function(x, out, Eigen = FALSE) {
 #' the caption reports both counts. Percentages are rounded to two decimals
 #' before drawing the slices, preserving the existing slice geometry and
 #' subtype order. Missing calls are not added as an extra slice.
+#' If every call is missing, the plot displays "No assigned subtype calls"
+#' and reports the sample count and zero assigned calls.
 #'
 #' @examples
 #' data("OSLO2EMIT0obj")
@@ -1220,6 +1222,15 @@ Vis_PCA <- function(x, out, Eigen = FALSE) {
 #' @export
 
 Vis_pie <- function(out) {
+    if (!is.data.frame(out) || nrow(out) == 0L || !"Subtype" %in% names(out)) {
+        stop("Vis_pie requires a nonempty data frame with a Subtype column.", call. = FALSE)
+    }
+    if (all(is.na(out$Subtype))) {
+        return(ggplot() + theme_void() +
+            labs(title = "No assigned subtype calls",
+                 subtitle = sprintf("%d samples; 0 assigned calls", nrow(out))) +
+            .bsr_plot_theme())
+    }
     data <- data.frame(table(out$Subtype))
     data <- data %>%
         dplyr::mutate(

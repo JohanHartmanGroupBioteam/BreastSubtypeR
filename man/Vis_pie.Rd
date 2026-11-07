@@ -7,7 +7,7 @@
 Vis_pie(out)
 }
 \arguments{
-\item{out}{A data frame containing two columns: \code{"PatientID"} and
+\item{out}{A nonempty data frame containing two columns: \code{"PatientID"} and
 \code{"Subtype"}. The \code{"PatientID"} column should contain unique patient
 identifiers, and the \code{"Subtype"} column should specify the assigned subtype
 for each patient.}
@@ -27,6 +27,8 @@ missing subtype calls are excluded from the assigned-call denominator;
 the caption reports both counts. Percentages are rounded to two decimals
 before drawing the slices, preserving the existing slice geometry and
 subtype order. Missing calls are not added as an extra slice.
+If every call is missing, the plot displays "No assigned subtype calls"
+and reports the sample count and zero assigned calls.
 }
 \examples{
 data("OSLO2EMIT0obj")
