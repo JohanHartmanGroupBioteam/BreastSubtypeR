@@ -331,6 +331,9 @@ domapping <- function(
     if (length(y) == 0) {
         stop("Please provide feature annotation to do probeID mapping ")
     }
+    if (is.factor(y$probe)) {
+        y$probe <- as.character(y$probe)
+    }
     ## change data type
     y$ENTREZID <- suppressWarnings(as.integer(as.character(y$ENTREZID)))
     n_bad <- sum(is.na(y$ENTREZID))
