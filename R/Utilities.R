@@ -684,6 +684,9 @@ get_methods <- function(pheno) {
 get_consensus_subtype <- function(patient_row) {
     patient_row <- unlist(patient_row, use.names = FALSE)
     counts <- table(patient_row)
+    if (!length(counts)) {
+        return(NA_character_)
+    }
     max_subtype <- names(counts)[which.max(counts)]
     return(max_subtype)
 }
@@ -726,8 +729,9 @@ get_average_subtype <- function(res_ihc_iterative, consensus_subtypes) {
 
             res_ihc$distances <- as.data.frame(res_ihc$distances)
 
-            ## if FALSE, make the cell as NULL
+            ## Only an observed vote for the five-class consensus contributes.
             keep <- res_ihc$predictions == consensus_subtypes
+            keep[is.na(keep)] <- FALSE
             res_ihc$distances[!keep, ] <- as.list(rep(NA, ncol(res_ihc$distances)))
 
             ## convert every column to numeric (preserving NA), same as before
@@ -791,8 +795,9 @@ get_average_subtype <- function(res_ihc_iterative, consensus_subtypes) {
 
             res_ihc$distances.Subtype <- data.frame(res_ihc$dist.RORSubtype)
 
-            ## if FALSE, make the cell as NULL
+            ## Use the same five-class votes for ROR similarities.
             keep <- res_ihc$predictions == consensus_subtypes
+            keep[is.na(keep)] <- FALSE
             res_ihc$distances.Subtype[!keep, ] <-
                 as.list(rep(NA, ncol(res_ihc$distances.Subtype)))
 
@@ -836,6 +841,13 @@ get_average_subtype <- function(res_ihc_iterative, consensus_subtypes) {
     ## only when subtype is supported by consensus_subtypes
     ## for each iteration and each patient
     sum_cols_save.Subtype <- sum_cols_save.Subtype / count_weight_save.Subtype
+
+    ## An uncalled patient has no contributing iterations in either matrix.
+    uncalled <- is.na(consensus_subtypes)
+    if (any(uncalled)) {
+        mean_cols_save[uncalled, ] <- NA_real_
+        sum_cols_save.Subtype[uncalled, ] <- NA_real_
+    }
 
     res <- list(
         mean_distance = mean_cols_save,
