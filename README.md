@@ -252,8 +252,9 @@ published Lien calculation. Its prognostic performance and risk-category
 thresholds have not been independently validated; it must not guide patient
 care. Its separate NODE-dependent grouping retains inclusive upper bounds
 for NODE = 0 or 1--3: equality at the lower boundary is **low**, unlike the
-original ROR policy above. With nonmissing tumor size, NODE >= 4 assigns
-**high** independently of the score. Relevant NC calls emit
+original ROR policy above. For an evaluated patient with valid binary
+`TSIZE` (0 or 1), NODE >= 4 assigns **high** independently of the score.
+Missing or invalid `TSIZE` leaves this group missing. Relevant NC calls emit
 `bsr_experimental_ror_pc_warning`; `BS_Multi()` aggregates the notice once.
 See `?BS_parker` and the [ROR guide (pinned source guidance)](https://github.com/JohanHartmanGroupBioteam/BreastSubtypeR/blob/8519fedca7d06dca013ee52b3c128b17286e17f3/vignettes/BreastSubtypeR.Rmd#L521)
 for exact cutoffs, references and warning handling, including `options(warn = 2)`.

@@ -541,10 +541,47 @@ and `NODE` columns in `colData` and adds clinical ROR outputs. `TSIZE` is binary
 (0 for at most 2 cm, 1 for more than 2 cm); it enters ROR-C and both ROR-PC
 scores. No numerical ROR score uses `NODE`.
 
+Supply a binary code even when the measured diameter is available. R accepts
+numeric 0/1, logical FALSE/TRUE, and character or factor labels representing
+exactly zero or one (including `" 1 "`, `"1.0"` and `"1e0"`).
+Character-backed vctrs and haven labelled vectors use their stored text; numeric
+haven labels use their stored codes. Clinical scoring reads these annotations before
+patient alignment. SPSS-labelled columns require haven, and declared missing
+codes or ranges (including 0 or 1) are excluded from invalid-code warnings.
+An `integer64` column requires the optional `bit64` package. S4Vectors `Rle`
+accepts numeric, integer, logical, factor and character binary codes.
+Label and AsIs wrappers preserve the underlying codes and factor labels. For
+SPSS-labelled columns, haven validates the declared codes and ranges, including
+those carrying transparent labels. A conversion can leave a missing-value
+declaration attached to an ordinary vector or factor. Resolve the original
+missing-value rules to genuine `NA` before converting to ordinary binary codes
+or subsetting the input. For SPSS input, the labelled output of
+`haven::zap_missing()` can be supplied directly. Unverified declarations,
+unknown classes mixed into a haven column, and attributes outside the
+documented set stop the entire clinical call. For example, custom provenance
+in an attribute or in an `Rle`'s `metadata()` or `mcols()` prevents the call
+from returning subtype or genomic results. After resolving missingness,
+retain provenance separately and remove only metadata verified to have no
+effect on the values. Calls with `hasClinical = FALSE` and SSP-only calls
+are unaffected. Other S4 classes and unsupported Rle storage also raise a
+clinical-input error.
+Nonmissing values in dates, durations, complex or opaque numeric columns
+outside the haven family trigger the invalid-TSIZE warning even when stored
+as 0 or 1. The call returns its other results and masks the three clinical
+scores and three groups for each affected patient. A genuine
+missing value or numeric NaN leaves the clinical scores and groups missing.
+Other inputs, including infinities and the literal R strings `"NA"` and
+`"NaN"`, produce one `bsr_invalid_tsize_warning` per public call. Each
+affected evaluated patient retains subtype and genomic results, with missing
+scores and groups for ROR-C, original ROR-PC and experimental 18-gene
+ROR-PC, including at NODE >= 4. Other patients retain their clinical scores.
+Previously saved analyses with invalid size codes may contain numerical
+extrapolations or unsupported risk groups.
+
 For `NODE`, supply the actual nonnegative integer number of positive lymph
 nodes as numeric values when available. Only the additional risk group
 `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)` distinguishes 0, 1--3 and
-4 or more positive nodes. With nonmissing `TSIZE`, 4 or more nodes receive high
+4 or more positive nodes. With valid binary `TSIZE`, 4 or more nodes receive high
 risk; 0 and 1--3 use different score cutoffs. Binary 0/1 coding is accepted,
 but cannot distinguish 1--3 from 4 or more positive nodes. The NC wrappers
 check that `NODE` is numeric; the additional group then requires finite
@@ -604,7 +641,7 @@ contains both experimental columns. `BS_Multi()` aggregates this notice once
 per top-level call when a returned component contains them, not per method,
 patient or iteration. Package loading, `Mapping()`, `hasClinical = FALSE`
 and AIMS/SSPBC-only results do not emit this warning. The notice also applies
-when all numerical values are missing. With nonmissing tumor size, NODE >= 4
+when all numerical values are missing. With valid binary tumor size, NODE >= 4
 can still produce the existing `high` category for other evaluated NC cases;
 a deliberate ssBC/ssBC.v2 singleton no-call has a missing experimental group.
 
@@ -801,7 +838,7 @@ separate deployment with different data-handling responsibilities.
 - Run single methods, or run multiple classifiers at once with `BS_Multi` and `AUTO` enabled for cohort-aware selection.\
 - Choose 5-class (incl. Normal-like) or 4-class (AIMS is 5-class only).\
 - Inspect per-sample concordance (entropy), heatmap and pie summaries.\
-- Export current Calls-only results, or Full metrics for supported single NC methods. AUTO, AIMS and sspbc provide Calls-only exports. NC Full metrics include ROR-S/ROR-P; enabling **Use clinical variables (ROR)** with valid numeric `TSIZE`/`NODE` adds clinical ROR-C/ROR-PC outputs. AUTO exports calls and entropy with clinical ROR disabled.
+- Export current Calls-only results, or Full metrics for supported single NC methods. AUTO, AIMS and sspbc provide Calls-only exports. NC Full metrics include ROR-S/ROR-P; enabling **Use clinical variables (ROR)** adds clinical ROR-C/ROR-PC outputs for patients with usable codes. Invalid size codes generate a warning and missing clinical scores and groups for affected patients. A missing clinical column or observation disables clinical output for the cohort. AUTO exports calls and entropy with clinical ROR disabled.
 
 ## Preprocessing, prediction and downloads
 

@@ -24,8 +24,7 @@ bs_callout <- function(title, body, color = c("info","success","warning","danger
   if (tolower(tools::file_ext(name)) == "csv") "," else "\t"
 }
 
-# Read the matching key as text, including leading zeroes. Other metadata
-# columns retain read.table's usual types.
+# Preserve matching keys and TSIZE labels needed for clinical scoring.
 .read_table <- function(inFile, key) {
   read_metadata <- getFromNamespace(".read_shiny_metadata", "BreastSubtypeR")
   read_metadata(inFile$datapath, .upload_separator(inFile$name), key)
@@ -441,8 +440,8 @@ server <- function(input, output, session) {
               <li><b>Minimum:</b> <code>PatientID</code>.</li>
               <li><b>Method-specific:</b> cIHC/itr/PCAPAM50 need <code>ER</code>. ssBC needs <code>ER</code> (and <code>HER2</code> for ER.v2) or <code>TN</code>.</li>
               <li><b>For clinical ROR:</b> Supply both <code>TSIZE</code> and <code>NODE</code>.
-              Shiny attempts numeric conversion; all values in both columns must be finite to enable clinical ROR.
-              If validation fails, Shiny displays a warning and proceeds without clinical ROR; subtype analysis can still proceed.</li>
+              Missing clinical observations or nonfinite NODE disable clinical ROR for the cohort. In uploaded TSIZE fields, blank, NA and NaN denote missing values.
+              With complete annotations, an invalid TSIZE gives a warning and missing size-dependent research ROR scores and groups only for the affected patients, including those with four or more positive nodes. Subtype calls and genomic ROR remain available.</li>
               <li><b>Clinical coding:</b> <code>TSIZE</code> is 0 (at most 2 cm) or 1 (more than 2 cm).
               <code>NODE</code> is the number of positive lymph nodes. The additional subtype-specific ROR-PC risk group requires finite nonnegative integer counts;
               negative or fractional values give a warning and a missing group for that sample, while numerical ROR scores remain available.
@@ -778,14 +777,17 @@ server <- function(input, output, session) {
     cd <- as.data.frame(SummarizedExperiment::colData(se))
     missing <- setdiff(c("TSIZE","NODE"), names(cd))
     if (length(missing) > 0) { out$msg <- paste("missing column(s):", paste(missing, collapse = ", ")); return(out) }
-    for (nm in c("TSIZE","NODE")) if (!is.numeric(cd[[nm]])) cd[[nm]] <- suppressWarnings(as.numeric(cd[[nm]]))
-    SummarizedExperiment::colData(se)$TSIZE <- cd$TSIZE
-    SummarizedExperiment::colData(se)$NODE  <- cd$NODE
-    if (any(!is.finite(cd$TSIZE)) || any(!is.finite(cd$NODE))) { out$msg <- "non-numeric or NA in TSIZE/NODE"; return(out) }
+    if (!is.numeric(cd$NODE)) cd$NODE <- suppressWarnings(as.numeric(cd$NODE))
+    SummarizedExperiment::colData(se)$NODE <- cd$NODE
+    # Pass supplied TSIZE values, including factor labels, to the shared decoder.
+    if (anyNA(cd$TSIZE) || any(!is.finite(cd$NODE))) {
+      out$msg <- "missing TSIZE or nonfinite NODE"
+      return(out)
+    }
     out$use <- TRUE; out$se <- se; out
   }
   
-  observeEvent(input$run, tryCatch({
+  observeEvent(input$run, tryCatch(withCallingHandlers({
     invalidate_prediction()
     if (!mapping_current()) stop("Run Step 1 (Preprocess & map) before subtyping.")
     provenance <- list(inputs = input_key(), parameters = prediction_parameters())
@@ -958,5 +960,8 @@ server <- function(input, output, session) {
           plot = out, matrix = mat))
       }
     })
-  }, error = report_error))
+  }, bsr_invalid_tsize_warning = function(w) {
+    showNotification(conditionMessage(w), type = "warning", duration = 15)
+    invokeRestart("muffleWarning")
+  }), error = report_error))
 }

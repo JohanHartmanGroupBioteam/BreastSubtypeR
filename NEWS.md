@@ -2,6 +2,46 @@
 
 ## API compatibility
 
+* For evaluated patients with invalid binary `TSIZE`, clinical NC methods mask
+  ROR-C, original ROR-PC and experimental 18-gene ROR-PC scores and groups. The mask applies even at `NODE >= 4`. Subtype calls, genomic
+  ROR and other patients' valid results are preserved. Previously, finite codes
+  such as 2 or 25 could produce scores and groups.
+* Invalid codes raise one `bsr_invalid_tsize_warning` per public call.
+  Its `patient_ids` field contains the affected evaluated IDs. This replaces
+  generic coercion warnings such as "NAs introduced by coercion" and also
+  flags codes that used to pass silently. With `options(warn = 2)`, an
+  unhandled warning stops the call.
+* Iterative cIHC ignores missing iteration votes. Patients with no usable votes
+  retain averaged calibrated expression and have missing calls, centroid
+  similarities and numerical ROR scores. Valid binary `TSIZE` and `NODE >= 4`
+  still yield the experimental high-risk group. Missing or invalid `TSIZE`
+  withholds that group. ssBC singleton subgroups retain their no-call behavior.
+* Clinical scoring checks TSIZE missing-value declarations before row selection,
+  including on ordinary factors and vectors and on layered Hmisc/haven labels.
+  Haven validates SPSS codes and ranges, including declarations wrapped in
+  labels or AsIs. Conflicting or residual declarations stop clinical scoring.
+  Resolve their missing values to NA before converting to ordinary binary codes.
+  Clinical calls now accept the labelled output of `haven::zap_missing()`
+  directly. An unknown extra class on a haven column or an unlisted attribute,
+  including custom provenance, stops the whole clinical call. Opaque numeric
+  classes outside the haven family retain per-patient masking and a warning.
+  Genomic-only and SSP-only calls are unaffected.
+* Clinical scoring respects SPSS user-missing codes and ranges, including
+  declared 0 and 1, and requires haven for SPSS-labelled TSIZE. Genuine and
+  declared missing values are excluded from the invalid-code warning.
+* TSIZE accepts binary codes in S4Vectors Rle and base AsIs wrappers and
+  stored numeric/integer codes with Hmisc/expss-style label metadata.
+  Unverified labelled missing-value declarations require explicit conversion.
+  Unsupported numeric classes mask the same six fields and warn even when
+  the storage contains 0/1. Other S4 classes and unsupported Rle storage
+  raise an input error. Metadata matching requires one clinical record per
+  predicted ID and permits an empty ID on an excluded ssBC row.
+* Shiny recognizes a whole `TRUE/FALSE` or `T/F` column as logical in CSV and TSV
+  uploads, including quoted fields. In mixed text, only exact numeric binary
+  labels are usable. Blank, NA and NaN upload markers retain the cohort-wide
+  clinical downgrade. Numeric `integer64` codes use their actual integer values,
+  correcting the earlier interpretation of their storage bits.
+
 * Standalone and multi-method ssBC/ssBC.v2 now report a no-call for a
   one-tumor receptor subgroup. The patient remains in the output with missing
   calibrated expression, subtype and risk metrics, including the experimental

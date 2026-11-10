@@ -334,7 +334,8 @@ test_that("nonfinite numerical ROR scores never receive a risk category", {
         expect_identical(is.na(res[[g]]), c(TRUE, FALSE, TRUE, FALSE), info = g)
         expect_valid_or_missing(res[[g]], info = g)
     }
-    expect_identical(unname(res[[add_group]]), c(NA, "high", "high", NA))
+    expect_match(attr(res, "conditions"), "TSIZE", fixed = TRUE)
+    expect_identical(unname(res[[add_group]]), c(NA, "high", NA, NA))
 })
 
 test_that("missing proliferation scores leave sample order, calls and RNG untouched", {
@@ -441,6 +442,9 @@ test_that("every exported ROR score is finite or NA and nonfinite results have N
         tsize <- input
         tsize$df.cln$TSIZE[2] <- value
         res <- run_ror(tsize)
+        expect_match(attr(res, "conditions"), "TSIZE", fixed = TRUE)
+        # run_ror attaches its warning log to the table; compare the payload below.
+        attr(res, "conditions") <- character()
         info <- paste("TSIZE", value)
         for (s in c("ROR-C (Subtype + Clinic)", "ROR-PC (Subtype + Clinic + Prolif)", add_score)) {
             expect_finite_or_na(res[[s]], info = info)
@@ -497,8 +501,9 @@ test_that("every exported ROR score is finite or NA and nonfinite results have N
     for (g in c("ROR-C Group (Subtype + Clinic)", "ROR-PC Group (Subtype + Clinic + Prolif)")) {
         expect_true(is.na(res[[g]][3]), info = g)
     }
-    ## 6. NODE >= 4 (P3) keeps the independent override with a missing score
-    expect_identical(unname(res[[add_group]][3]), "high")
+    ## An invalid size prevents the NODE >= 4 override for P3.
+    expect_match(attr(res, "conditions"), "TSIZE", fixed = TRUE)
+    expect_identical(unname(res[[add_group]][3]), NA_character_)
     ## 4. ordinary finite results: every exported score finite, groups valid
     for (s in c(parker_scores, add_score)) expect_true(all(is.finite(full[[s]])), info = s)
 })

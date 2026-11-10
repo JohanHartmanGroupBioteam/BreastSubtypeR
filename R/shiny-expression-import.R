@@ -81,8 +81,19 @@
     df <- utils::read.table(text = lines, header = TRUE, sep = sep, row.names = NULL,
                             check.names = FALSE, quote = '"', comment.char = "", fill = TRUE,
                             colClasses = "character", na.strings = character())
-    # Only the matching key bypasses read.table's usual type conversion.
     other <- names(df) != key
+    if (key == "PatientID" && "TSIZE" %in% names(df)) {
+        # Keep the upload's missing markers, even in a mixed text column.
+        size <- df$TSIZE
+        size[trimws(size) %in% c("", "NA", "NaN")] <- NA_character_
+        df$TSIZE <- size
+        # read.table historically infers logical values for a whole T/F column.
+        # Mixed columns must keep their labels: type.convert can round a
+        # non-binary decimal to exactly zero or one.
+        logical_column <- all(is.na(size) | size %in% c("T", "F", "TRUE", "FALSE"))
+        if (!logical_column && any(.decode_tsize(size)$invalid))
+            other <- other & names(df) != "TSIZE"
+    }
     df[other] <- lapply(df[other], utils::type.convert, as.is = TRUE)
     df
 }
