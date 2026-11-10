@@ -76,7 +76,7 @@ additional group; numerical ROR scores remain available. Missing \code{NODE}
 For NODE = 0 or 1--3, an undefined numerical \code{NA} or \code{NaN} additional
 ROR-PC score has an actual missing risk category, not the text \code{"NaN"}.
 The numerical score is unchanged. The independent NODE >= 4 high-risk
-rule still applies with nonmissing tumor size, even if the score is missing.
+rule still applies with valid binary tumor size, even if the score is missing.
 See \code{\link[=Mapping]{Mapping()}} for clinical missing-value behavior.}
 }
 \value{
@@ -98,6 +98,61 @@ summary, not a calibrated subtype probability or clinical reliability.
 It differs from \code{\link[=InputCoverage]{InputCoverage()}}, multi-method entropy and SSP model
 probabilities. No score or classifier is changed by this interpretation.
 }
+\section{Binary tumor size for clinical ROR}{
+
+When clinical NC scoring is requested, supply \code{TSIZE = 0} for a tumor
+measuring at most 2 cm and \code{TSIZE = 1} for a tumor larger than 2 cm.
+R accepts numeric or integer codes, logical \code{FALSE} or \code{TRUE}, and
+character or factor labels representing exactly zero or one (for example
+\code{" 1 "}, \code{"1.0"} or \code{"1e0"}). Convert measured diameters to codes before use.
+Character-backed vctrs and haven labelled vectors use their stored text;
+numeric haven labels use the stored codes. Clinical scoring interprets the
+original TSIZE class before aligning patients or selecting subcohorts. SPSS
+user-missing codes and ranges are treated as missing, including declared 0
+or 1, and are excluded from invalid-code warnings. SPSS-labelled columns
+require the optional haven package for clinical scoring. An \code{integer64}
+column requires the optional \code{bit64} package. Numeric, integer, logical,
+factor and character codes may also be supplied as an S4Vectors \code{Rle}.
+An \code{AsIs} wrapper preserves the rules for the underlying vector.
+Label and display metadata preserve stored codes and factor labels.
+Clinical scoring checks declarations on the original column, including
+\code{Rle} containers and run values. For SPSS-labelled columns, haven
+validates \code{na_values} and \code{na_range} and resolves missing codes before
+scoring. Transparent labels and \code{AsIs} may also wrap a declaration.
+Unverified declarations stop clinical scoring, including residual attributes
+on a factor or ordinary vector after conversion. Resolve the source
+missing-value rules to genuine \code{NA} before supplying ordinary binary codes.
+For SPSS input, \code{haven::zap_missing()} resolves declared codes to genuine
+\code{NA}. Its labelled output can be supplied directly as TSIZE.
+An unverified declaration, an unknown class combined with a haven class,
+or an unlisted attribute stops the whole clinical call. It returns no
+subtype or genomic results. Supported display attributes are \code{names},
+\code{comment}, \code{label}, \code{labels}, \code{value.labels}, \code{units}, \code{format.spss},
+\code{format.sas}, \code{format.stata} and \code{display_width}. Factors also use
+\code{levels}, and verified SPSS inputs may use \code{na_values} and \code{na_range}.
+The display attribute list also applies to names in \code{Rle} metadata and
+metadata columns (\code{metadata()} and \code{mcols()}). For example, a custom
+provenance attribute stops the clinical call. After resolving missingness,
+retain provenance separately and remove only metadata verified to have
+no effect on the values. Calls with \code{hasClinical = FALSE} and SSP-only
+calls are unaffected.
+Dates, durations, complex values and opaque numeric classes outside the
+haven family trigger the invalid-TSIZE warning for nonmissing entries,
+even if stored as 0/1. The call returns its other results and masks the
+three clinical scores and three groups for each affected patient.
+Other S4 classes and unsupported Rle storage raise a clinical-input error.
+
+A genuine missing value or numeric \code{NaN} gives missing clinical scores
+and groups without a coding warning. Other values, including infinities
+and the literal R strings \code{"NA"} and \code{"NaN"}, trigger one
+\code{bsr_invalid_tsize_warning} per public invocation identifying affected
+evaluated patients. Their ROR-C, original ROR-PC and experimental
+18-gene ROR-PC scores and groups are missing, including the experimental
+group at four or more positive nodes. These patients retain their subtype,
+confidence, correlations, ROR-S and ROR-P. Other patients retain their
+clinical results. Earlier versions could use an invalid code in the formulas.
+}
+
 \section{Research ROR interpretation}{
 
 The research ROR outputs use Spearman centroid correlations, following
@@ -145,7 +200,7 @@ than once per method, sample or iteration. There is no such warning on
 package loading, in \code{\link[=Mapping]{Mapping()}}, with \code{hasClinical = FALSE}, or for
 AIMS/SSPBC-only results. An all-NA score column does not establish
 that its companion category is absent: the existing NODE >= 4 rule can
-still assign \code{high} with nonmissing tumor size.
+still assign \code{high} with valid binary tumor size.
 
 This is an intentional warning: \code{options(warn = 2)} turns it into an error.
 An expert workflow can handle only the
@@ -248,7 +303,7 @@ no observed panel value or a nonfinite panel estimate gives a missing
 score. Every exported numerical ROR score is finite or \code{NA}: a \code{NaN} or
 infinite result, including overflow in the final score transformation, has
 a missing group rather than \code{low}, \code{med} or \code{high}. The independent NODE >= 4
-high-risk rule for the additional score still applies with nonmissing tumor
+high-risk rule for the additional score still applies with valid binary tumor
 size. Finite original-score equalities follow the boundary policy above.
 }
 

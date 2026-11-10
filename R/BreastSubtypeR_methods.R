@@ -104,7 +104,7 @@ NULL
 #'       * `TN` - per-sample annotation required for `ssBC` with `s="TN"` / `"TN.v2"`;
 #'         AUTO uses TNBC-specific cohort handling only when all evaluable TN annotations indicate TN.
 #'     - **Clinical covariates for ROR (NC-based methods only)**:
-#'       * `TSIZE`: Tumor size (0 = \eqn{\le 2}{<= 2} cm; 1 = \eqn{> 2}{> 2} cm). Must be numeric (0/1).
+#'       * `TSIZE`: Tumor size (0 = \eqn{\le 2}{<= 2} cm; 1 = \eqn{> 2}{> 2} cm). See the binary tumor size section below.
 #'       * `NODE`: Number of positive lymph nodes. Supply the actual nonnegative
 #'         integer count as a numeric value when available. Binary 0/1 is accepted
 #'         but cannot distinguish 1--3 from 4 or more positive nodes. The
@@ -264,7 +264,7 @@ NULL
 #' ROR-PC scores use `TSIZE`,
 #' but no numerical ROR score uses `NODE`. Only the additional risk group
 #' `ROR-PC Group (Subtype + Clinic + Prolif.Subtype)` uses `NODE` categories
-#' 0, 1--3 and 4 or more. With nonmissing `TSIZE`, 4 or more positive nodes
+#' 0, 1--3 and 4 or more. With valid binary `TSIZE`, 4 or more positive nodes
 #' receive high risk; the other categories use different score cutoffs.
 #'
 #' `NODE` is the number of positive lymph nodes. For this additional group,
@@ -287,7 +287,60 @@ NULL
 #' the original Parker risk groups are unchanged.
 #' For NODE = 0 or 1--3, an undefined numerical `NA` or `NaN` additional
 #' ROR-PC score has an actual missing category. The independent NODE >= 4
-#' high-risk rule still applies with nonmissing `TSIZE`.
+#' high-risk rule still applies with valid binary `TSIZE`.
+#'
+#' @section Binary tumor size for clinical ROR:
+#' When clinical NC scoring is requested, supply `TSIZE = 0` for a tumor
+#' measuring at most 2 cm and `TSIZE = 1` for a tumor larger than 2 cm.
+#' R accepts numeric or integer codes, logical `FALSE` or `TRUE`, and
+#' character or factor labels representing exactly zero or one (for example
+#' `" 1 "`, `"1.0"` or `"1e0"`). Convert measured diameters to codes before use.
+#' Character-backed vctrs and haven labelled vectors use their stored text;
+#' numeric haven labels use the stored codes. Clinical scoring interprets the
+#' original TSIZE class before aligning patients or selecting subcohorts. SPSS
+#' user-missing codes and ranges are treated as missing, including declared 0
+#' or 1, and are excluded from invalid-code warnings. SPSS-labelled columns
+#' require the optional haven package for clinical scoring. An `integer64`
+#' column requires the optional `bit64` package. Numeric, integer, logical,
+#' factor and character codes may also be supplied as an S4Vectors `Rle`.
+#' An `AsIs` wrapper preserves the rules for the underlying vector.
+#' Label and display metadata preserve stored codes and factor labels.
+#' Clinical scoring checks declarations on the original column, including
+#' `Rle` containers and run values. For SPSS-labelled columns, haven
+#' validates `na_values` and `na_range` and resolves missing codes before
+#' scoring. Transparent labels and `AsIs` may also wrap a declaration.
+#' Unverified declarations stop clinical scoring, including residual attributes
+#' on a factor or ordinary vector after conversion. Resolve the source
+#' missing-value rules to genuine `NA` before supplying ordinary binary codes.
+#' For SPSS input, `haven::zap_missing()` resolves declared codes to genuine
+#' `NA`. Its labelled output can be supplied directly as TSIZE.
+#' An unverified declaration, an unknown class combined with a haven class,
+#' or an unlisted attribute stops the whole clinical call. It returns no
+#' subtype or genomic results. Supported display attributes are `names`,
+#' `comment`, `label`, `labels`, `value.labels`, `units`, `format.spss`,
+#' `format.sas`, `format.stata` and `display_width`. Factors also use
+#' `levels`, and verified SPSS inputs may use `na_values` and `na_range`.
+#' The display attribute list also applies to names in `Rle` metadata and
+#' metadata columns (`metadata()` and `mcols()`). For example, a custom
+#' provenance attribute stops the clinical call. After resolving missingness,
+#' retain provenance separately and remove only metadata verified to have
+#' no effect on the values. Calls with `hasClinical = FALSE` and SSP-only
+#' calls are unaffected.
+#' Dates, durations, complex values and opaque numeric classes outside the
+#' haven family trigger the invalid-TSIZE warning for nonmissing entries,
+#' even if stored as 0/1. The call returns its other results and masks the
+#' three clinical scores and three groups for each affected patient.
+#' Other S4 classes and unsupported Rle storage raise a clinical-input error.
+#'
+#' A genuine missing value or numeric `NaN` gives missing clinical scores
+#' and groups without a coding warning. Other values, including infinities
+#' and the literal R strings `"NA"` and `"NaN"`, trigger one
+#' `bsr_invalid_tsize_warning` per public invocation identifying affected
+#' evaluated patients. Their ROR-C, original ROR-PC and experimental
+#' 18-gene ROR-PC scores and groups are missing, including the experimental
+#' group at four or more positive nodes. These patients retain their subtype,
+#' confidence, correlations, ROR-S and ROR-P. Other patients retain their
+#' clinical results. Earlier versions could use an invalid code in the formulas.
 #'
 #' @section Research ROR interpretation:
 #' The research ROR outputs use Spearman centroid correlations, following
@@ -335,7 +388,7 @@ NULL
 #' package loading, in [Mapping()], with `hasClinical = FALSE`, or for
 #' AIMS/SSPBC-only results. An all-NA score column does not establish
 #' that its companion category is absent: the existing NODE >= 4 rule can
-#' still assign `high` with nonmissing tumor size.
+#' still assign `high` with valid binary tumor size.
 #'
 #' This is an intentional warning: `options(warn = 2)` turns it into an error.
 #' An expert workflow can handle only the
@@ -432,7 +485,7 @@ NULL
 #' score. Every exported numerical ROR score is finite or `NA`: a `NaN` or
 #' infinite result, including overflow in the final score transformation, has
 #' a missing group rather than `low`, `med` or `high`. The independent NODE >= 4
-#' high-risk rule for the additional score still applies with nonmissing tumor
+#' high-risk rule for the additional score still applies with valid binary tumor
 #' size. Finite original-score equalities follow the boundary policy above.
 #'
 #' @details
@@ -532,6 +585,7 @@ Mapping <- function(se_obj,
 #' Original Parker Intrinsic Subtyping (BS_parker)
 #'
 #' @name BS_parker
+#' @inheritSection Mapping Binary tumor size for clinical ROR
 #' @inheritSection Mapping Research ROR interpretation
 #' @inheritSection Mapping Original research ROR boundary policy
 #' @inheritSection Mapping Proliferation panel coverage
@@ -590,7 +644,7 @@ Mapping <- function(se_obj,
 #' For NODE = 0 or 1--3, an undefined numerical `NA` or `NaN` additional
 #' ROR-PC score has an actual missing risk category, not the text `"NaN"`.
 #' The numerical score is unchanged. The independent NODE >= 4 high-risk
-#' rule still applies with nonmissing tumor size, even if the score is missing.
+#' rule still applies with valid binary tumor size, even if the score is missing.
 #' See [Mapping()] for clinical missing-value behavior.
 #'
 #' @return A list containing PAM50 intrinsic subtype calls using the Parker
@@ -664,7 +718,7 @@ BS_parker <- function(se_obj,
 
     ## Extract data from SummarizedExperiment
     gene_expr <- assay(se_obj)
-    pheno <- colData(se_obj) %>% data.frame()
+    pheno <- .nc_pheno(se_obj, hasClinical)
 
     # Handle clinical metadata if required
     if (hasClinical) {
@@ -707,6 +761,7 @@ BS_parker <- function(se_obj,
 #' Conventional IHC Intrinsic Subtyping (BS_cIHC)
 #'
 #' @name BS_cIHC
+#' @inheritSection Mapping Binary tumor size for clinical ROR
 #' @inheritSection Mapping Research ROR interpretation
 #' @inheritSection Mapping Original research ROR boundary policy
 #' @inheritSection Mapping Proliferation panel coverage
@@ -790,7 +845,7 @@ BS_cIHC <- function(
     ## Extract data from SummarizedExperiment
     gene_expr <- assay(se_obj)
     # Extract clinical metadata if required
-    pheno <- colData(se_obj) %>% data.frame()
+    pheno <- .nc_pheno(se_obj, hasClinical)
 
     if (!all(c("PatientID", "ER") %in% colnames(pheno))) {
         stop("The 'colData' of 'se_obj' must include 'PatientID' and 'ER' columns.")
@@ -840,6 +895,7 @@ BS_cIHC <- function(
 #' Iterative Conventional IHC Intrinsic Subtyping (BS_cIHC.itr)
 #'
 #' @name BS_cIHC.itr
+#' @inheritSection Mapping Binary tumor size for clinical ROR
 #' @inheritSection Mapping Research ROR interpretation
 #' @inheritSection Mapping Original research ROR boundary policy
 #' @inheritSection Mapping Proliferation panel coverage
@@ -937,7 +993,13 @@ BS_cIHC <- function(
 #'     across iterations) and, when `Subtype = TRUE`, `BS.Subtype` (four-class
 #'     consensus call). The consensus is the most frequent call over the
 #'     iterations; ties are resolved in favour of the alphabetically first
-#'     subtype (Basal, Her2, LumA, LumB, Normal).
+#'     subtype (Basal, Her2, LumA, LumB, Normal). Missing iteration votes
+#'     are ignored. A patient with no usable votes has a missing consensus
+#'     call, centroid similarities and numerical ROR scores. The averaged
+#'     calibrated expression is retained. With valid binary `TSIZE`, an
+#'     observed `NODE >= 4` still gives the experimental high-risk group.
+#'     Missing or invalid `TSIZE` withholds that clinical group. An ssBC
+#'     singleton subgroup retains its own no-call behavior.
 #'   - `score.ROR`: `data.frame` with the per-sample centroid correlations
 #'     (averaged over the iterations whose call equals the consensus call),
 #'     calls, confidence, ESR1/ERBB2 expression and the ROR-S and ROR-P scores
@@ -984,7 +1046,7 @@ BS_cIHC.itr <- function(
     ## Extract data from SummarizedExperiment
     gene_expr <- assay(se_obj)
     # Extract clinical metadata if required
-    pheno <- colData(se_obj) %>% data.frame()
+    pheno <- .nc_pheno(se_obj, hasClinical)
 
     if (!all(c("PatientID", "ER") %in% colnames(pheno))) {
         stop("The 'colData' of 'se_obj' must include 'PatientID' and 'ER' columns.")
@@ -1037,6 +1099,7 @@ BS_cIHC.itr <- function(
 #' PCA-PAM50 Intrinsic Subtyping (BS_PCAPAM50)
 #'
 #' @name BS_PCAPAM50
+#' @inheritSection Mapping Binary tumor size for clinical ROR
 #' @inheritSection Mapping Research ROR interpretation
 #' @inheritSection Mapping Original research ROR boundary policy
 #' @inheritSection Mapping Proliferation panel coverage
@@ -1163,7 +1226,7 @@ BS_PCAPAM50 <- function(
     ## Extract data from SummarizedExperiment
     gene_expr <- assay(se_obj)
     # Extract clinical metadata if required
-    pheno <- colData(se_obj) %>% data.frame()
+    pheno <- .nc_pheno(se_obj, hasClinical)
 
     if (!all(c("PatientID", "ER") %in% colnames(pheno))) {
         stop("The 'colData' of 'se_obj' must include 'PatientID' and 'ER' columns.")
@@ -1223,15 +1286,22 @@ BS_PCAPAM50 <- function(
     )
 
     call <- rlang::call2(makeCalls.PC1ihc, !!!arguments)
-    res_PC1IHC <- eval(call)
+    tsize_warnings <- .tsize_warning_collector()
+    res_PC1IHC <- withCallingHandlers(eval(call),
+        bsr_invalid_tsize_warning = tsize_warnings$collect)
 
     ## second step
     if (hasClinical) {
+        stage_ids <- as.character(res_PC1IHC$BS.all$PatientID)
+        rows <- match(stage_ids, pheno$PatientID)
+        if (anyNA(rows) || anyDuplicated(stage_ids))
+            stop("PCAPAM50 stage-one PatientID values must uniquely match clinical metadata.",
+                 call. = FALSE)
         df.pc1pam <- data.frame(
             PatientID = res_PC1IHC$BS.all$PatientID,
             PAM50 = res_PC1IHC$BS.all$BS,
-            TSIZE = pheno[res_PC1IHC$BS.all$PatientID, ]$TSIZE,
-            NODE = pheno[res_PC1IHC$BS.all$PatientID, ]$NODE,
+            TSIZE = pheno$TSIZE[rows],
+            NODE = pheno$NODE[rows],
             stringsAsFactors = FALSE
         )
     } else {
@@ -1256,7 +1326,8 @@ BS_PCAPAM50 <- function(
     )
 
     call <- rlang::call2(makeCalls.v1PAM, !!!arguments2)
-    res_PCAPAM50 <- eval(call)
+    res_PCAPAM50 <- withCallingHandlers(eval(call),
+        bsr_invalid_tsize_warning = tsize_warnings$collect)
 
     ## Restore all sample-indexed outputs after both steps; values are unchanged.
     idx <- na.omit(match(samples, res_PCAPAM50$BS.all$PatientID))
@@ -1274,6 +1345,7 @@ BS_PCAPAM50 <- function(
     ol$dist.RORSubtype <- ol$dist.RORSubtype[ord, , drop = FALSE]
     res_PCAPAM50$outList <- ol
 
+    tsize_warnings$warn()
     .warn_experimental_ror_pc(res_PCAPAM50)
     return(res_PCAPAM50)
 }
@@ -1282,6 +1354,7 @@ BS_PCAPAM50 <- function(
 #' Subgroup-Specific Gene-Centering Intrinsic Subtyping (BS_ssBC)
 #'
 #' @name BS_ssBC
+#' @inheritSection Mapping Binary tumor size for clinical ROR
 #' @inheritSection Mapping Research ROR interpretation
 #' @inheritSection Mapping Original research ROR boundary policy
 #' @inheritSection Mapping Proliferation panel coverage
@@ -1367,7 +1440,7 @@ BS_PCAPAM50 <- function(
 #' confidence, correlations, calibrated expression, ER/HER2 expression scores
 #' and all applicable ROR scores and groups. For this deliberate no-call the
 #' experimental 18-gene ROR-PC group is missing even with `NODE >= 4` and
-#' nonmissing `TSIZE`. The usual high group for that node count and tumor-size
+#' valid binary `TSIZE`. The usual high group for that node count and tumor-size
 #' condition still applies to other evaluated NC cases.
 #'
 #' Each singleton subgroup gives one warning. For example, for patient S1
@@ -1422,7 +1495,7 @@ BS_ssBC <- function(
     gene_expr <- assay(se_obj)
 
     # Extract clinical metadata if hasClinical is TRUE
-    pheno <- colData(se_obj) %>% data.frame()
+    pheno <- .nc_pheno(se_obj, hasClinical)
     if (!"PatientID" %in% colnames(pheno)) {
         stop("The 'colData' of 'se_obj' must include a 'PatientID' column.")
     }
@@ -1724,6 +1797,7 @@ BS_sspbc <- function(se_obj, ssp.name = "ssp.pam50") {
 #'
 #' @name BS_Multi
 #' @inheritSection BS_ssBC Singleton no-calls
+#' @inheritSection Mapping Binary tumor size for clinical ROR
 #' @inheritSection Mapping Research ROR interpretation
 #' @inheritSection Mapping Original research ROR boundary policy
 #' @inheritSection Mapping Proliferation panel coverage
@@ -1940,7 +2014,9 @@ BS_Multi <- function(data_input,
     }
 
     ## extract pheno table
-    pheno <- colData(data_input$se_NC) %>% data.frame()
+    # Routing uses receptor metadata only. Read the original TSIZE column
+    # after selecting methods so SSP-only calls need no clinical decoder.
+    pheno <- .nc_pheno(data_input$se_NC, FALSE)
     if (!"PatientID" %in% colnames(pheno)) {
         stop("colData(se_NC) must have a 'PatientID' column.")
     }
@@ -2012,7 +2088,17 @@ BS_Multi <- function(data_input,
         if (is_TN_cohort) cohort.select <- "TNBC"
     }
 
+    ## AUTO can subset the assay before an NC wrapper sees its clinical data.
+    if (hasClinical && any(!methods %in% c("AIMS", "sspbc"))) {
+        cd <- colData(data_input$se_NC)
+        if (.needs_tsize_decode(cd$TSIZE)) {
+            cd$TSIZE <- .scoring_tsize(cd$TSIZE)
+            SummarizedExperiment::colData(data_input$se_NC) <- cd
+        }
+    }
+
     ## run each method
+    tsize_warnings <- .tsize_warning_collector()
     results <- withCallingHandlers(lapply(methods, function(method) {
         ## try NC-based
         if (method == "parker.original") {
@@ -2251,7 +2337,8 @@ BS_Multi <- function(data_input,
         }
 
         stop("Unknown method: ", method)
-    }), bsr_experimental_ror_pc_warning = function(w) {
+    }), bsr_invalid_tsize_warning = tsize_warnings$collect,
+    bsr_experimental_ror_pc_warning = function(w) {
         invokeRestart("muffleWarning")
     })
 
@@ -2371,6 +2458,7 @@ BS_Multi <- function(data_input,
         res <- list(res_subtypes = res_subtypes, results = results)
     }
     experimental <- which(vapply(results, .has_experimental_ror_pc, logical(1)))
+    tsize_warnings$warn()
     if (length(experimental)) {
         .warn_experimental_ror_pc(results[[experimental[1L]]])
     }

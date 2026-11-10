@@ -172,8 +172,13 @@ test_that("original ROR boundary changes preserve missing and nonfinite results"
                 if (kind == "proliferation") changed$out$testData[, at] <- value
                 if (kind == "size") changed$clinical$TSIZE[
                     match(names(input$out$predictions)[at], changed$clinical$PatientID)] <- value
-                ans <- BreastSubtypeR:::RORgroup(changed$out, changed$clinical,
+                score <- function() BreastSubtypeR:::RORgroup(changed$out, changed$clinical,
                     hasClinical = clinical)
+                if (clinical && kind == "size" && is.infinite(value)) {
+                    expect_warning(ans <- score(), class = "bsr_invalid_tsize_warning")
+                } else {
+                    ans <- score()
+                }
                 affected <- switch(kind, correlation = 1:4, proliferation = c(2, 4), size = 3:4)
                 models <- if (clinical) 1:4 else 1:2
                 for (m in intersect(affected, models)) {

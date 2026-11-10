@@ -470,6 +470,7 @@ sspPredict <- function(x, y, std = FALSE, distm = "spearman", Subtype = TRUE) {
 #'
 #' @param out The result of sspPredict() function.
 #' @param out clinical table
+#' @param no_call_ids IDs of ssBC singleton no-calls excluded from clinical scoring.
 #' @param Subtype Logic.
 #' @param hasClinical Logic. Specify whether clinical information is included.
 #'   Tumor size is in "TSIZE" (0 = at most 2 cm; 1 = more than 2 cm).
@@ -486,7 +487,8 @@ RORgroup <- function(
         out,
         df.cln,
         Subtype = FALSE,
-        hasClinical = FALSE) {
+        hasClinical = FALSE,
+        no_call_ids = character()) {
     sample <- data.frame(patientID = names(out$predictions))
 
     distance <- data.frame(out$distances, row.names = names(out$predictions))
@@ -652,11 +654,22 @@ RORgroup <- function(
     )
 
     if (hasClinical) {
-        Clinical <- df.cln[match(names(out$predictions), df.cln$PatientID), ]
-        rownames(Clinical) <- Clinical$PatientID
-
-        if ("TSIZE" %in% colnames(Clinical)) {
-            xT <- as.numeric(as.vector(Clinical$TSIZE))
+        if ("TSIZE" %in% names(df.cln)) {
+            size <- .decode_tsize(df.cln$TSIZE)
+            ids <- as.character(df.cln$PatientID)
+            predicted <- names(out$predictions)
+            rows <- match(predicted, ids)
+            if (length(predicted) != length(out$predictions) || anyNA(predicted) ||
+                any(!nzchar(predicted)) || anyDuplicated(predicted) || anyNA(rows) ||
+                anyDuplicated(ids[ids %in% predicted]))
+                stop("Every predicted PatientID must be nonempty and match exactly one clinical record.",
+                     call. = FALSE)
+            Clinical <- df.cln[rows, intersect(c("PatientID", "NODE"), names(df.cln)), drop = FALSE]
+            rownames(Clinical) <- ids[rows]
+            xT <- size$value[rows]
+            no_call <- ids[rows] %in% no_call_ids
+            xT[no_call] <- NA_real_
+            .warn_invalid_tsize(ids[rows][size$invalid[rows] & !no_call])
 
             combined <- 0.0442770 * out$distances[, 1] +
                 0.1170297 * out$distances[, 2] +
@@ -777,7 +790,7 @@ RORgroup <- function(
                 ## check if NA NODE
                 ## grouping by NA NODE
                 patients.NA <- rownames(Clinical)[is.na(Clinical$NODE) |
-                    is.na(Clinical$TSIZE)]
+                    is.na(xT)]
 
                 if (length(patients.NA) > 0) {
                     cprskg.Subtype[patients.NA] <- NA_character_
@@ -2224,19 +2237,15 @@ makeCalls.ssBC <- function(mat,
     out$dist.RORSubtype <- -1 * out$dist.RORSubtype
     out$distances <- -1 * out$distances
 
-    ## calculate and grouping ROR score
+    # A deliberate singleton no-call cannot receive a clinical risk estimate.
+    # Mask the decoded score input; the supplied TSIZE class may not store NA.
+    singleton_ids <- unlist(samples_selected[lengths(samples_selected) == 1L], use.names = FALSE)
     out.ROR <- RORgroup(
         out, df.cln,
         hasClinical = hasClinical,
-        Subtype = Subtype
+        Subtype = Subtype,
+        no_call_ids = singleton_ids
     )
-
-    # NODE >= 4 alone ordinarily yields a high experimental group. A singleton
-    # is explicitly unassessed even under that rule; keep this exception local.
-    singleton_ids <- unlist(samples_selected[lengths(samples_selected) == 1L], use.names = FALSE)
-    if (hasClinical && length(singleton_ids)) {
-        out.ROR[singleton_ids, "ROR-PC Group (Subtype + Clinic + Prolif.Subtype)"] <- NA_character_
-    }
 
     ## supplementing NA samples
     if (length(out$predictions) != ncol(mat)) {

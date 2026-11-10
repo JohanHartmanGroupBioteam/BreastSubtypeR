@@ -44,6 +44,9 @@ Imports:
     utils
 Suggests:
     S4Vectors,
+    bit64,
+    haven,
+    vctrs,
     htmltools,
     lifecycle,
     tidyverse,

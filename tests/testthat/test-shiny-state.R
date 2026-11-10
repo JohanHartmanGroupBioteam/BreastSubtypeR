@@ -213,6 +213,86 @@ test_that("an invalid measurement clears mapped results and exports until correc
     })
 })
 
+test_that("clinical upload masks invalid TSIZE by patient and corrected re-upload restores exports", {
+    env <- shiny_app_env()
+    warnings <- character()
+    env$showNotification <- function(ui, ..., type = "default") {
+        if (identical(type, "warning")) warnings <<- c(warnings, as.character(ui))
+        invisible("test-notification")
+    }
+    folder <- withr::local_tempdir()
+    clinic <- utils::read.delim(shiny_upload("OSLO2EMIT0_clinical.txt")$datapath)
+    ids <- clinic$PatientID
+    clinic$NODE[1:3] <- 4
+    upload_size <- function(value) {
+        clinic$TSIZE <- as.character(clinic$TSIZE)
+        clinic$TSIZE[1:2] <- value
+        path <- tempfile(tmpdir = folder)
+        utils::write.table(clinic[rev(seq_along(ids)), ], path, sep = "\t",
+                           row.names = FALSE, quote = FALSE)
+        data.frame(name = "clinic.txt", size = file.size(path),
+                   type = "text/plain", datapath = path)
+    }
+    score <- c("ROR-C (Subtype + Clinic)", "ROR-PC (Subtype + Clinic + Prolif)",
+               "ROR-PC (Subtype + Clinic + Prolif.Subtype)")
+    group <- sub(" ", " Group ", score)
+    fields <- c(score, group)
+    shiny::testServer(env$server, {
+        session$setInputs(BSmethod = "PAM50", calibration = "Internal", internal = "medianCtr",
+                          hasClinical = TRUE, k_subtypes = "4", is_raw_counts = "norm",
+                          export_kind = "full")
+        session$setInputs(GEX = shiny_upload("OSLO2EMIT0_GEX_log2.FPKM.txt"),
+                          anno = shiny_upload("OSLO2EMIT0_anno.txt"), clinic = upload_size(c("0", "1")))
+        session$setInputs(map = 1)
+        se <- reactive_files$data_input$se_NC[, 1:2]
+        se$TSIZE <- factor(c("0", "1"), levels = c("1", "0"))
+        size <- .validate_has_clinical(se, TRUE)
+        expect_true(size$use)
+        expect_identical(as.character(size$se$TSIZE), c("0", "1"))
+        run <- function(n) withCallingHandlers(session$setInputs(run = n),
+            bsr_experimental_ror_pc_warning = function(w) invokeRestart("muffleWarning"))
+        run(1)
+        valid <- current_prediction()
+        session$setInputs(clinic = upload_size(c("25", "1.00000000000000000001")))
+        expect_null(current_prediction())
+        expect_error(output$download, "No current prediction")
+        session$setInputs(map = 2)
+        run(2)
+        masked <- current_prediction()
+        expect_identical(masked$calls, valid$calls)
+        expect_identical(masked$full$PatientID, ids)
+        expected <- valid$full
+        for (f in score) expected[[f]][1:2] <- NA_real_
+        for (f in group) expected[[f]][1:2] <- NA_character_
+        expect_identical(masked$full, expected)
+        expect_identical(masked$full[[group[3]]][3], "high")
+        notices <- grep("TSIZE", warnings, value = TRUE, fixed = TRUE)
+        expect_length(notices, 1L)
+        expect_match(notices, ids[1], fixed = TRUE)
+        expect_match(notices, ids[2], fixed = TRUE)
+        download <- function() utils::read.delim(output$download, comment.char = "#",
+                                                  check.names = FALSE)
+        full <- download()
+        expect_identical(full$PatientID, ids)
+        expect_true(all(is.na(full[1:2, fields])))
+        session$setInputs(export_kind = "calls")
+        expect_identical(download()$PatientID, ids)
+        session$setInputs(clinic = upload_size(c("", "1")))
+        expect_error(output$download, "No current prediction")
+        session$setInputs(map = 3)
+        run(3)
+        expect_false(any(fields %in% names(current_prediction()$full)))
+        expect_identical(current_prediction()$calls, valid$calls)
+        expect_true(any(grepl("Clinical variables disabled", warnings, fixed = TRUE)))
+        session$setInputs(clinic = upload_size(c("0", "1")), export_kind = "full")
+        expect_error(output$download, "No current prediction")
+        session$setInputs(map = 4)
+        run(4)
+        expect_identical(current_prediction()$full, valid$full)
+        expect_identical(download()$PatientID, ids)
+    })
+})
+
 test_that("mapping resolves from the installed namespace without injection", {
     skip_if_not_installed("shiny")
     skip_if_not_installed("bslib")

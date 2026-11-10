@@ -8,7 +8,7 @@ ncp03_auto_input <- function(pos, neg, measured) {
     ids <- sprintf("N%02d", rev(patients))
     clinical <- S4Vectors::DataFrame(PatientID = factor(ids, levels = c("unused", rev(ids))),
         ER = rep(c("ER+", "ER-"), c(pos, neg)), HER2 = rep("HER2-", length(ids)),
-        TSIZE = 1 + patients %% 2, NODE = patients %% 3, row.names = ids)
+        TSIZE = patients %% 2, NODE = patients %% 3, row.names = ids)
     expr <- outer(seq_len(nrow(registry)), patients,
         function(g, s) 7 + sin(g * s * .19) + cos(g + s * .23))
     pam <- match(rownames(centroids), registry$Symbol)
