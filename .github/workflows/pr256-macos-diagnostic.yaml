@@ -1,0 +1,200 @@
+name: PR256 native numerical diagnostics
+
+on:
+  push:
+    branches:
+      - codex/pr256-macos-numerical-diagnostics
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostic:
+    name: Matched baseline and candidate / macOS ARM64 / R 4.6.2
+    runs-on: macos-15
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    env:
+      R_BIOC_VERSION: "3.24"
+      R_KEEP_PKG_SOURCE: "yes"
+      _R_CHECK_FORCE_SUGGESTS_: "true"
+    steps:
+      - name: Initialize evidence
+        run: |
+          EVIDENCE_DIR="$RUNNER_TEMP/pr256-numerical-diagnostic"
+          echo "EVIDENCE_DIR=$EVIDENCE_DIR" >> "$GITHUB_ENV"
+          mkdir -p "$EVIDENCE_DIR"/{environment,baseline,candidate,comparison}
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: harness
+          persist-credentials: false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: "f6dbdbb874785008d8511155b1ba8b72f7c0f22d"
+          path: baseline
+          persist-credentials: false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: "3755d3d2f130f7ebe974109c8a82c4d5d83d441d"
+          path: candidate
+          persist-credentials: false
+
+      - name: Verify native runner and both pinned sources
+        run: |
+          test "$(uname -s)" = Darwin
+          test "$(uname -m)" = arm64
+          test "$RUNNER_ARCH" = ARM64
+          {
+            echo "workflow_commit=$GITHUB_SHA"
+            echo "workflow_ref=$GITHUB_REF"
+            echo "runner_arch=$RUNNER_ARCH"
+            echo "image_version=${ImageVersion:-unknown}"
+            uname -a
+            sw_vers
+          } | tee "$EVIDENCE_DIR/environment/runner.txt"
+          test "$(git -C harness rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C baseline rev-parse HEAD)" = f6dbdbb874785008d8511155b1ba8b72f7c0f22d
+          test "$(git -C baseline rev-parse 'HEAD^{tree}')" = 4068977bef5375af77b73f92fbc50ab8de4a1952
+          test "$(git -C candidate rev-parse HEAD)" = 3755d3d2f130f7ebe974109c8a82c4d5d83d441d
+          test "$(git -C candidate rev-parse 'HEAD^{tree}')" = 8df91fb06892adf4625acaf13e06441d05c13852
+          for source in baseline candidate; do
+            test -z "$(git -C "$source" status --porcelain --untracked-files=all)"
+            git -C "$source" rev-parse HEAD 'HEAD^{tree}' > "$EVIDENCE_DIR/$source/source.txt"
+            git -C "$source" ls-tree -r HEAD tests/testthat > "$EVIDENCE_DIR/$source/test-tree.txt"
+          done
+          cmp baseline/DESCRIPTION candidate/DESCRIPTION
+
+      - uses: r-lib/actions/setup-pandoc@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
+      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
+        with:
+          r-version: "4.6.2"
+          use-public-rspm: false
+          Ncpus: 2
+      - name: Verify exact native R
+        shell: Rscript {0}
+        run: |
+          stopifnot(as.character(getRversion()) == "4.6.2",
+            Sys.info()[["sysname"]] == "Darwin",
+            R.version$arch %in% c("aarch64", "arm64"),
+            grepl("apple-darwin", R.version$platform, fixed = TRUE))
+          capture.output(R.version, .Machine, capabilities(),
+            file = file.path(Sys.getenv("EVIDENCE_DIR"), "environment", "native-R.txt"))
+
+      - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
+        with:
+          working-directory: candidate
+          cache: false
+          dependencies: '"all"'
+          extra-packages: |
+            any::BiocManager
+            any::jsonlite
+            bioc::BiocVersion
+          needs: check
+
+      - name: Record shared dependencies
+        shell: Rscript {0}
+        run: |
+          stopifnot(as.character(BiocManager::version()) == "3.24",
+            as.character(packageVersion("BiocVersion")) == "3.24.0",
+            !length(find.package("BreastSubtypeR", quiet = TRUE)))
+          out <- file.path(Sys.getenv("EVIDENCE_DIR"), "environment")
+          saveRDS(installed.packages(), file.path(out, "installed-packages.rds"))
+          write.csv(installed.packages(), file.path(out, "installed-packages.csv"))
+          capture.output(sessionInfo(), pak::repo_get(), BiocManager::repositories(),
+            file = file.path(out, "session-and-repositories.txt"))
+
+      - name: Install both pinned packages in separate libraries
+        run: |
+          for source in baseline candidate; do
+            mkdir -p "$EVIDENCE_DIR/$source/library"
+            R CMD INSTALL --install-tests --with-keep.source \
+              --library="$EVIDENCE_DIR/$source/library" "$GITHUB_WORKSPACE/$source" \
+              2>&1 | tee "$EVIDENCE_DIR/$source/install.log"
+            for file in test-expanded-examples.R test-mapping-factor-probes.R test-shiny-example-parity.R; do
+              cmp "$source/tests/testthat/$file" "$EVIDENCE_DIR/$source/library/BreastSubtypeR/tests/testthat/$file"
+            done
+          done
+          python3 --version | tee "$EVIDENCE_DIR/environment/python-version.txt"
+          python3 -m py_compile harness/.github/scripts/pr256-decimal-audit.py
+
+      - name: Baseline unchanged focused tests
+        id: baseline_tests
+        continue-on-error: true
+        timeout-minutes: 20
+        run: |
+          Rscript --vanilla harness/.github/scripts/pr256-macos-diagnostic.R focused \
+            "$EVIDENCE_DIR/baseline/focused" "$EVIDENCE_DIR/baseline/library" \
+            "$GITHUB_WORKSPACE/baseline" "$GITHUB_WORKSPACE/harness/.github/scripts/pr256-decimal-audit.py" \
+            > "$EVIDENCE_DIR/baseline/focused.log" 2>&1
+
+      - name: Baseline numerical collection
+        id: baseline_collect
+        continue-on-error: true
+        timeout-minutes: 20
+        run: |
+          Rscript --vanilla harness/.github/scripts/pr256-macos-diagnostic.R collect \
+            "$EVIDENCE_DIR/baseline/collect" "$EVIDENCE_DIR/baseline/library" \
+            "$GITHUB_WORKSPACE/baseline" "$GITHUB_WORKSPACE/harness/.github/scripts/pr256-decimal-audit.py" \
+            > "$EVIDENCE_DIR/baseline/collect.log" 2>&1
+
+      - name: Candidate unchanged focused tests
+        id: candidate_tests
+        continue-on-error: true
+        timeout-minutes: 20
+        run: |
+          Rscript --vanilla harness/.github/scripts/pr256-macos-diagnostic.R focused \
+            "$EVIDENCE_DIR/candidate/focused" "$EVIDENCE_DIR/candidate/library" \
+            "$GITHUB_WORKSPACE/candidate" "$GITHUB_WORKSPACE/harness/.github/scripts/pr256-decimal-audit.py" \
+            > "$EVIDENCE_DIR/candidate/focused.log" 2>&1
+
+      - name: Candidate numerical collection
+        id: candidate_collect
+        continue-on-error: true
+        timeout-minutes: 20
+        run: |
+          Rscript --vanilla harness/.github/scripts/pr256-macos-diagnostic.R collect \
+            "$EVIDENCE_DIR/candidate/collect" "$EVIDENCE_DIR/candidate/library" \
+            "$GITHUB_WORKSPACE/candidate" "$GITHUB_WORKSPACE/harness/.github/scripts/pr256-decimal-audit.py" \
+            > "$EVIDENCE_DIR/candidate/collect.log" 2>&1
+
+      - name: Compare captures and require complete collection
+        env:
+          BASELINE_TESTS: ${{ steps.baseline_tests.outcome }}
+          BASELINE_COLLECT: ${{ steps.baseline_collect.outcome }}
+          CANDIDATE_TESTS: ${{ steps.candidate_tests.outcome }}
+          CANDIDATE_COLLECT: ${{ steps.candidate_collect.outcome }}
+        run: |
+          Rscript --vanilla harness/.github/scripts/pr256-macos-diagnostic.R compare \
+            "$EVIDENCE_DIR/comparison" "$EVIDENCE_DIR/baseline" "$EVIDENCE_DIR/candidate"
+          Rscript --vanilla -e 'root <- Sys.getenv("EVIDENCE_DIR"); p <- c("baseline/focused", "baseline/collect", "candidate/focused", "candidate/collect"); inventories <- lapply(p, function(x) readRDS(file.path(root, x, "dependency-inventory.rds"))); stopifnot(all(vapply(inventories, identical, logical(1), inventories[[1]])))'
+          test "$BASELINE_TESTS" = success
+          test "$BASELINE_COLLECT" = success
+          test "$CANDIDATE_TESTS" = success
+          test "$CANDIDATE_COLLECT" = success
+
+      - name: Verify both source checkouts stayed pristine
+        if: always()
+        run: |
+          for source in baseline candidate; do
+            if test -f "$source/.github/pkg.lock"; then
+              mv "$source/.github/pkg.lock" "$EVIDENCE_DIR/$source/pkg.lock"
+            fi
+            git -C "$source" status --porcelain --untracked-files=all | tee "$EVIDENCE_DIR/$source/checkout-status.txt"
+            test ! -s "$EVIDENCE_DIR/$source/checkout-status.txt"
+            git -C "$source" rev-parse HEAD 'HEAD^{tree}' > "$EVIDENCE_DIR/$source/source-after.txt"
+            cmp "$EVIDENCE_DIR/$source/source.txt" "$EVIDENCE_DIR/$source/source-after.txt"
+          done
+
+      - name: Upload all diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pr256-native-numerical-diagnostic-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/pr256-numerical-diagnostic
+          retention-days: 14
+          if-no-files-found: error
