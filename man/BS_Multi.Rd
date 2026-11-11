@@ -154,6 +154,41 @@ This replaces the earlier warning about a low-confidence fallback label.
 Direct input with no represented PAM50 genes is unsupported.
 }
 
+\section{No member in any selected receptor subgroup}{
+
+With \code{s = "ER"}, \code{"ER.v2"} or \code{"TN"}, a cohort can have no sample in any
+selected receptor subgroup, for example when every \code{ER} value is missing,
+or for \code{ER.v2} when \code{HER2} is entirely missing or \code{"2+"}. No sample is then
+evaluated. Every sample is returned in input order with missing calls,
+correlations, confidence, ER/HER2 expression scores and ROR scores and
+groups, including the experimental group at \code{NODE >= 4}. \code{score.ROR} has no
+\code{patientID} column (its row names identify samples) and \code{outList$testData}
+has no gene rows. No singleton warning is given; with clinical output the
+experimental ROR-PC notice is still raised.
+
+With \code{Subtype = TRUE} this result also contains \code{BS.Subtype}, \code{Call.Subtype}
+(directly after \code{Call}) and \code{predictions.FourSubtype}, all missing.
+Previously these four-class calls stopped with "undefined columns selected".
+The four-class result requires at least one represented PAM50 gene, unique
+receptor columns that are plain vectors, and a single character or factor
+\code{PatientID} column whose labels are identical to the assay column names in
+assay order.
+Inputs that do not meet these conditions keep their previous error. The
+gene condition is structural, for returning no estimate; it is not a
+minimum gene coverage for classification. In AUTO, a mixed cohort with no
+recognized ER/HER2 pair returns this result for \code{ssBC.v2} in both class
+settings, with the other methods unchanged.
+
+ssBC subgroup membership uses the literal labels \code{"ER+"}, \code{"ER-"},
+\code{"HER2+"}, \code{"HER2-"}, \code{"TN"} and \code{"nonTN"}, even where AUTO routing
+normalizes other codings. Other values are not members and are not
+reinterpreted, so an unavailable result does not certify the supplied
+annotation; \code{\link[=Mapping]{Mapping()}} converts common encodings. Alias-coded AUTO inputs
+still fail, with the same error as the corresponding five-class call. \code{TN.v2} keeps its existing
+representation, including a \code{patientID} column and missing calibrated
+expression for all PAM50 genes.
+}
+
 \section{Binary tumor size for clinical ROR}{
 
 When clinical NC scoring is requested, supply \code{TSIZE = 0} for a tumor

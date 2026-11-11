@@ -1449,6 +1449,39 @@ BS_PCAPAM50 <- function(
 #' This replaces the earlier warning about a low-confidence fallback label.
 #' Direct input with no represented PAM50 genes is unsupported.
 #'
+#' @section No member in any selected receptor subgroup:
+#' With `s = "ER"`, `"ER.v2"` or `"TN"`, a cohort can have no sample in any
+#' selected receptor subgroup, for example when every `ER` value is missing,
+#' or for `ER.v2` when `HER2` is entirely missing or `"2+"`. No sample is then
+#' evaluated. Every sample is returned in input order with missing calls,
+#' correlations, confidence, ER/HER2 expression scores and ROR scores and
+#' groups, including the experimental group at `NODE >= 4`. `score.ROR` has no
+#' `patientID` column (its row names identify samples) and `outList$testData`
+#' has no gene rows. No singleton warning is given; with clinical output the
+#' experimental ROR-PC notice is still raised.
+#'
+#' With `Subtype = TRUE` this result also contains `BS.Subtype`, `Call.Subtype`
+#' (directly after `Call`) and `predictions.FourSubtype`, all missing.
+#' Previously these four-class calls stopped with "undefined columns selected".
+#' The four-class result requires at least one represented PAM50 gene, unique
+#' receptor columns that are plain vectors, and a single character or factor
+#' `PatientID` column whose labels are identical to the assay column names in
+#' assay order.
+#' Inputs that do not meet these conditions keep their previous error. The
+#' gene condition is structural, for returning no estimate; it is not a
+#' minimum gene coverage for classification. In AUTO, a mixed cohort with no
+#' recognized ER/HER2 pair returns this result for `ssBC.v2` in both class
+#' settings, with the other methods unchanged.
+#'
+#' ssBC subgroup membership uses the literal labels `"ER+"`, `"ER-"`,
+#' `"HER2+"`, `"HER2-"`, `"TN"` and `"nonTN"`, even where AUTO routing
+#' normalizes other codings. Other values are not members and are not
+#' reinterpreted, so an unavailable result does not certify the supplied
+#' annotation; [Mapping()] converts common encodings. Alias-coded AUTO inputs
+#' still fail, with the same error as the corresponding five-class call. `TN.v2` keeps its existing
+#' representation, including a `patientID` column and missing calibrated
+#' expression for all PAM50 genes.
+#'
 #' @references
 #' Zhao X, Rødland EA, Tibshirani R, Plevritis S.
 #' *Molecular subtyping for clinically defined breast cancer subgroups.*
@@ -1532,6 +1565,7 @@ BS_ssBC <- function(
         s = s,
         Subtype = Subtype,
         hasClinical = hasClinical,
+        receptor_data = colData(se_obj),
         .homonyms = "last"
     )
 
@@ -1797,6 +1831,7 @@ BS_sspbc <- function(se_obj, ssp.name = "ssp.pam50") {
 #'
 #' @name BS_Multi
 #' @inheritSection BS_ssBC Singleton no-calls
+#' @inheritSection BS_ssBC No member in any selected receptor subgroup
 #' @inheritSection Mapping Binary tumor size for clinical ROR
 #' @inheritSection Mapping Research ROR interpretation
 #' @inheritSection Mapping Original research ROR boundary policy
@@ -2363,7 +2398,7 @@ BS_Multi <- function(data_input,
         for (method in intersect(c("ssBC", "ssBC.v2"), names(results))) {
             result <- results[[method]]
             zero_pair_clinical <- NULL
-            if (method == "ssBC.v2" && !Subtype && isTRUE(AUTO.output$zero_mixed_pairs)) {
+            if (method == "ssBC.v2" && isTRUE(AUTO.output$zero_mixed_pairs)) {
                 # Routing normalizes receptor labels. A malformed column must
                 # not authorize the historical zero-pair schema by coercion.
                 valid_receptor <- function(x) {
@@ -2379,7 +2414,8 @@ BS_Multi <- function(data_input,
                          call. = FALSE)
                 zero_pair_clinical <- hasClinical
             } else if (is.null(result)) next
-            results[[method]] <- .restore_auto_ssbc(result, samples, zero_pair_clinical)
+            results[[method]] <- .restore_auto_ssbc(result, samples, zero_pair_clinical,
+                                                    zero_pair_subtype = Subtype)
         }
     }
 

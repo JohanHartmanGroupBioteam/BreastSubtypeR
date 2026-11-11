@@ -2,6 +2,20 @@
 
 ## API compatibility
 
+* Four-class (`Subtype = TRUE`) ssBC with `s = "ER"`, `"ER.v2"` or `"TN"` no
+  longer stops with "undefined columns selected" when no sample belongs to any
+  selected receptor subgroup and the input is otherwise well formed. Standalone
+  `BS_ssBC()`, manual `BS_Multi()` and the AUTO mixed-cohort route with no
+  recognized ER/HER2 pair return the existing five-class empty result plus
+  missing `BS.Subtype`, `Call.Subtype` and `predictions.FourSubtype`. This needs
+  at least one represented PAM50 gene, unique plain-vector receptor columns and
+  a single character or factor `PatientID` column whose labels are identical to
+  the assay column names in assay order; other inputs keep their previous
+  error. Receptor labels are matched literally and are not normalized;
+  alias-coded AUTO inputs still fail, now with the same error as the
+  corresponding five-class call. TN.v2, all
+  five-class results and the other methods' results, summaries and entropy are
+  unchanged.
 * For evaluated patients with invalid binary `TSIZE`, clinical NC methods mask
   ROR-C, original ROR-PC and experimental 18-gene ROR-PC scores and groups. The mask applies even at `NODE >= 4`. Subtype calls, genomic
   ROR and other patients' valid results are preserved. Previously, finite codes

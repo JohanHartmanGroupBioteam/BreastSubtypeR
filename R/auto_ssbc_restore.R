@@ -10,12 +10,14 @@
     invisible(ids)
 }
 
-# With no recognized pair, native five-class ER.v2 has already restored every
-# sample. Its score table has no patientID column and keeps logical NA in every
+# With no recognized pair, native ER.v2 has already restored every sample.
+# Its score table has no patientID column and keeps logical NA in every
 # column. Validate this complete return before passing it through verbatim.
-.validate_empty_auto_ssbc <- function(result, ids, clinical) {
+# The four-class return (NCP-02) adds only BS.Subtype, Call.Subtype after Call
+# and predictions.FourSubtype; the five-class schema is unchanged.
+.validate_empty_auto_ssbc <- function(result, ids, clinical, subtype = FALSE) {
     classes <- c("Basal", "Her2", "LumA", "LumB", "Normal")
-    fields <- c(classes, "Call", "Confidence",
+    fields <- c(classes, "Call", if (subtype) "Call.Subtype", "Confidence",
         "ROR-S (Subtype Only)", "ROR-S Group (Subtype Only)",
         "ROR-P (Subtype + Prolif)", "ROR-P Group (Subtype + Prolif)",
         if (clinical) c("ROR-C (Subtype + Clinic)", "ROR-C Group (Subtype + Clinic)",
@@ -24,7 +26,11 @@
             "ROR-PC Group (Subtype + Clinic + Prolif.Subtype)"), "ER", "HER2")
     n <- length(ids)
     missing <- rep(NA, n)
-    calls <- data.frame(PatientID = ids, BS = missing, row.names = ids)
+    calls <- if (subtype) {
+        data.frame(PatientID = ids, BS = missing, BS.Subtype = missing, row.names = ids)
+    } else {
+        data.frame(PatientID = ids, BS = missing, row.names = ids)
+    }
     scores <- as.data.frame(stats::setNames(rep(list(missing), length(fields)), fields),
         row.names = ids, check.names = FALSE)
     if (!identical(attributes(result), list(names = c("BS.all", "score.ROR", "mdns", "outList"))) ||
@@ -37,19 +43,22 @@
     models <- new.env(parent = emptyenv())
     utils::data("BreastSubtypeRobj", package = "BreastSubtypeR", envir = models)
     model <- models$BreastSubtypeRobj
-    expected <- list(predictions = stats::setNames(rep(NA_character_, n), ids),
-        testData = matrix(numeric(), 0L, n, dimnames = list(NULL, ids)),
+    no_call <- stats::setNames(rep(NA_character_, n), ids)
+    expected <- c(list(predictions = no_call),
+        if (subtype) list(predictions.FourSubtype = no_call),
+        list(testData = matrix(numeric(), 0L, n, dimnames = list(NULL, ids)),
         distances = correlations(classes), dist.RORSubtype = correlations(classes[1:4]),
-        centroids = model$centroid)
+        centroids = model$centroid))
     if (!identical(result$outList, expected) || !identical(result$mdns, model$ssBC.subgroupQuantile))
         stop("Invalid zero-pair AUTO ssBC.v2 prediction or model fields.", call. = FALSE)
     invisible(NULL)
 }
 
-.restore_auto_ssbc <- function(result, ids, zero_pair_clinical = NULL) {
+.restore_auto_ssbc <- function(result, ids, zero_pair_clinical = NULL,
+                               zero_pair_subtype = FALSE) {
     .auto_ssbc_ids(ids, length(ids), "input assay")
     if (!is.null(zero_pair_clinical)) {
-        .validate_empty_auto_ssbc(result, ids, zero_pair_clinical)
+        .validate_empty_auto_ssbc(result, ids, zero_pair_clinical, zero_pair_subtype)
         return(result)
     }
     if (anyDuplicated(names(result)) || anyDuplicated(names(result$outList)))
