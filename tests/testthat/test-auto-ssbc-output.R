@@ -110,9 +110,33 @@ test_that("mixed AUTO preserves the complete five-class return with zero recepto
                 -sum(p * log2(p))
             })
             expect_equal(actual$res_subtypes$entropy, unname(entropy), tolerance = 1e-14)
-            # NCP-02 is a native four-class error, before AUTO restoration.
-            expect_error(suppressMessages(BS_Multi(input, Subtype = TRUE, hasClinical = clinical)),
-                "undefined columns selected", fixed = TRUE)
+            # NCP-02: the four-class call keeps every peer unchanged and adds
+            # only the four-class fields to the same empty ssBC.v2 result.
+            seed <- .Random.seed
+            four <- auto233_run(input, subtype = TRUE, clinical = clinical)
+            expect_identical(.Random.seed, seed)
+            expect_identical(names(four), c("res_subtypes", "res_subtypes.Subtype", "results"))
+            expect_identical(four$results$ssBC.v2, ncp02_four_from_five(actual$results$ssBC.v2))
+            expect_identical(four$results$ssBC.v2, ncp02_explicit_empty(ids, clinical))
+            control <- auto233_run(input, subtype = TRUE, clinical = clinical, methods = peers)
+            expect_identical(four$results[peers], control$results)
+            for (field in c("res_subtypes", "res_subtypes.Subtype")) {
+                summary <- four[[field]]
+                expect_identical(rownames(summary), ids)
+                expect_identical(summary$ssBC.v2, rep(NA, length(ids)))
+                summary$ssBC.v2 <- NULL
+                expect_identical(summary, control[[field]])
+            }
+            calls4 <- four$res_subtypes.Subtype[peers]
+            expect_identical(calls4$AIMS, ifelse(four$res_subtypes$AIMS == "Normal",
+                NA_character_, four$res_subtypes$AIMS))
+            entropy4 <- apply(calls4, 1, function(row) {
+                row <- row[!is.na(row)]
+                if (!length(row)) return(NA_real_)
+                p <- prop.table(table(row))
+                -sum(p * log2(p))
+            })
+            expect_equal(four$res_subtypes.Subtype$entropy, unname(entropy4), tolerance = 1e-14)
         }
     }
 })

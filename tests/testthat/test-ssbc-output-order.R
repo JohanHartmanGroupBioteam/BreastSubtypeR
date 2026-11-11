@@ -75,15 +75,19 @@ test_that("ssBC preserves ordered sample axes and matrix dimensions for every st
                 before <- x
                 expected_warnings <- ssbc234_singletons(cohort, s)
                 run <- function() BS_ssBC(x, s = s, Subtype = subtype, hasClinical = clinical)
-                if (cohort == "all_missing" && subtype && s != "TN.v2") {
-                    # Existing upstream failure occurs before final assembly;
-                    # this correction must not silently change its behavior.
-                    ssbc234_with_warnings(expect_error(run(), "undefined columns selected", fixed = TRUE),
-                        character(), FALSE)
-                    expect_identical(x, before)
-                    next
-                }
                 a <- ssbc234_with_warnings(run(), expected_warnings, clinical)
+                if (cohort == "all_missing" && subtype && s != "TN.v2") {
+                    # NCP-02: no sample has a selected receptor stratum. The
+                    # four-class return is the five-class empty return plus
+                    # only the four-class fields, in their canonical places.
+                    five <- ssbc234_with_warnings(BS_ssBC(x, s = s, Subtype = FALSE,
+                        hasClinical = clinical), expected_warnings, clinical)
+                    expect_identical(a, ncp02_four_from_five(five))
+                    expect_identical(a, ncp02_explicit_empty(ids, clinical))
+                    expect_false("patientID" %in% names(a$score.ROR))
+                    expect_identical(ncol(a$score.ROR), if (clinical) 20L else 14L)
+                    expect_identical(x, before)
+                }
                 out <- a$outList
                 expect_identical(names(a), c("BS.all", "score.ROR", "mdns", "outList"))
                 expect_identical(names(out), c("predictions", if (subtype) "predictions.FourSubtype",

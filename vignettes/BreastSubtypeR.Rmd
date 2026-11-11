@@ -405,6 +405,18 @@ retains the patient with missing subtype calls, calibrated expression and risk
 metrics. This includes the experimental risk group even when `NODE >= 4`.
 This rule also applies to manual and standalone calls.
 
+If no sample belongs to any selected ER, ER.v2 or TN receptor subgroup, for
+example because every `ER` value is missing, or for ER.v2 because every `HER2`
+value is missing or `"2+"`, ssBC evaluates no sample. It returns all samples
+with missing calls and risk metrics, a score table identified by row names,
+and calibrated `testData` without gene rows. Four-class calls return the same
+result with the four-class fields added. They need at least one represented
+PAM50 gene, unique plain-vector receptor columns and a single character or
+factor `PatientID` column whose labels are identical to the assay column names
+in assay order; other inputs keep their previous error (see `?BS_ssBC`).
+Receptor labels are matched literally, so other codings should be converted
+first, for example with `Mapping()`. TN.v2 keeps its existing representation.
+
 Entirely `NA` columns in calibrated `testData` mean that calibrated measurements
 are unavailable. They are not replaced with input expression, zeros or imputed
 values. External PCA/clustering consumers must filter these columns from a

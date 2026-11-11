@@ -1831,6 +1831,46 @@ makeCalls.v1PAM <- function(mat,
     ))
 }
 
+# NCP-02: four-class ER, ER.v2 or TN ssBC in which no sample belongs to any
+# selected receptor stratum. Decided from the inputs before any scoring; an
+# all-missing result, a missing call or a caught error never qualifies. The
+# literal stratum labels are not normalized: an unrecognized label is not a
+# member, as in the five-class path. Sample identities must already agree.
+# `receptor_data` is the caller's original colData. data.frame() coercion
+# renames a duplicated column and flattens one-column matrices, so the
+# receptor and PatientID columns are checked before coercion: each must occur
+# once and be a plain vector of the sample length (character, logical, factor
+# or numeric receptors; character or factor PatientID labels).
+.ssbc_empty_four_class <- function(s, mat, df.cln, samples_selected, centroid,
+                                   receptor_data = df.cln) {
+    if (!s %in% c("ER", "ER.v2", "TN") || any(lengths(samples_selected) > 0L))
+        return(FALSE)
+    n <- ncol(mat)
+    ids <- colnames(mat)
+    receptors <- switch(s, ER = "ER", ER.v2 = c("ER", "HER2"), TN = "TN")
+    plain_column <- function(name, types) {
+        if (sum(names(receptor_data) == name) != 1L) return(FALSE)
+        x <- receptor_data[[name]]
+        !isS4(x) && is.null(dim(x)) && length(x) == n && any(vapply(types, function(f) f(x), TRUE))
+    }
+    valid_receptor <- function(name)
+        plain_column(name, list(is.character, is.logical, is.factor, is.numeric))
+    isTRUE(n > 0L) && any(rownames(mat) %in% rownames(centroid)) &&
+        all(vapply(receptors, valid_receptor, logical(1))) &&
+        is.character(ids) && !anyNA(ids) && all(nzchar(ids)) && !anyDuplicated(ids) &&
+        plain_column("PatientID", list(is.character, is.factor)) &&
+        identical(as.character(receptor_data[["PatientID"]]), ids) &&
+        identical(as.character(df.cln$PatientID), ids)
+}
+
+# The five-class empty score frame with the four-class call in its canonical
+# position after Call. No row is scored here; padding supplies every sample.
+.ssbc_add_empty_call_subtype <- function(score) {
+    at <- match("Call", names(score))
+    score$Call.Subtype <- character(0)
+    score[append(setdiff(names(score), "Call.Subtype"), "Call.Subtype", after = at)]
+}
+
 
 #' PAM50 subtyping by subgroup-specific gene centering (Zhao et al., 2015).
 #' Fernandez-Martinez et al. (2020) described the HER2/ER-specific application.
@@ -1857,7 +1897,8 @@ makeCalls.ssBC <- function(mat,
     df.cln,
     s = c("ER", "TN", "ER.v2", "TN.v2"),
     Subtype = FALSE,
-    hasClinical = FALSE) {
+    hasClinical = FALSE,
+    receptor_data = df.cln) {
     ## loading dataset
     data_env <- new.env(parent = emptyenv())
     data("BreastSubtypeRobj", envir = data_env, package = "BreastSubtypeR")
@@ -2240,12 +2281,28 @@ makeCalls.ssBC <- function(mat,
     # A deliberate singleton no-call cannot receive a clinical risk estimate.
     # Mask the decoded score input; the supplied TSIZE class may not store NA.
     singleton_ids <- unlist(samples_selected[lengths(samples_selected) == 1L], use.names = FALSE)
-    out.ROR <- RORgroup(
-        out, df.cln,
-        hasClinical = hasClinical,
-        Subtype = Subtype,
-        no_call_ids = singleton_ids
-    )
+    # Keep the established `if (Subtype)` coercion for the Subtype argument.
+    empty_four_class <- FALSE
+    if (Subtype) {
+        empty_four_class <- .ssbc_empty_four_class(s, mat, df.cln, samples_selected,
+            BreastSubtypeRobj$centroid, receptor_data)
+    }
+    if (empty_four_class) {
+        # No sample is evaluated. Keep the established five-class empty
+        # representation and add the four-class call; padding follows below.
+        out.ROR <- .ssbc_add_empty_call_subtype(RORgroup(
+            out, df.cln,
+            hasClinical = hasClinical,
+            Subtype = FALSE
+        ))
+    } else {
+        out.ROR <- RORgroup(
+            out, df.cln,
+            hasClinical = hasClinical,
+            Subtype = Subtype,
+            no_call_ids = singleton_ids
+        )
+    }
 
     ## supplementing NA samples
     if (length(out$predictions) != ncol(mat)) {
