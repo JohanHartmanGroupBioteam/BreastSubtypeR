@@ -1,0 +1,208 @@
+# Proposal only: commit only to validation/pr256-macos-3755d3d.
+# The workflow commit is distinct from the candidate package commit below.
+# Bioc 3.24 is the development series; Bioc 3.22 is compatible with R 4.5.
+# setup-r still consults api.r-hub.io for R version metadata.
+name: PR256 native macOS validation
+
+on:
+  push:
+    branches:
+      - validation/pr256-macos-3755d3d
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    name: macOS ARM64 / R ${{ matrix.r }} / Bioc ${{ matrix.bioc }}
+    runs-on: macos-15
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - r: "4.6.2"
+            bioc: "3.24"
+          - r: "4.5.3"
+            bioc: "3.22"
+    defaults:
+      run:
+        shell: bash
+    env:
+      EXPECTED_SHA: "3755d3d2f130f7ebe974109c8a82c4d5d83d441d"
+      EXPECTED_TREE: "8df91fb06892adf4625acaf13e06441d05c13852"
+      EXPECTED_R: ${{ matrix.r }}
+      R_BIOC_VERSION: ${{ matrix.bioc }}
+      R_KEEP_PKG_SOURCE: "yes"
+      _R_CHECK_FORCE_SUGGESTS_: "true"
+      EVIDENCE_DIR: ${{ runner.temp }}/pr256-macos-evidence
+
+    steps:
+      - name: Create evidence directories
+        run: mkdir -p "$EVIDENCE_DIR"/{environment,build,check}
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: "3755d3d2f130f7ebe974109c8a82c4d5d83d441d"
+          persist-credentials: false
+
+      - name: Verify the exact candidate and native runner
+        id: identity
+        run: |
+          sha="$(git rev-parse HEAD)"
+          tree="$(git rev-parse 'HEAD^{tree}')"
+          {
+            echo "package_commit=$sha"
+            echo "package_tree=$tree"
+            echo "workflow_commit=$GITHUB_SHA"
+            echo "workflow_ref=$GITHUB_REF"
+            echo "run=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo "attempt=$GITHUB_RUN_ATTEMPT"
+          } | tee "$EVIDENCE_DIR/source.txt"
+          {
+            echo "runner_arch=$RUNNER_ARCH"
+            echo "image_os=${ImageOS:-unknown}"
+            echo "image_version=${ImageVersion:-unknown}"
+            uname -a
+            sw_vers
+            xcode-select -p
+          } | tee "$EVIDENCE_DIR/environment/runner.txt"
+          test "$sha" = "$EXPECTED_SHA"
+          test "$tree" = "$EXPECTED_TREE"
+          test -z "$(git status --porcelain --untracked-files=all)"
+          test "$(uname -s)" = "Darwin"
+          test "$(uname -m)" = "arm64"
+          test "$RUNNER_ARCH" = "ARM64"
+
+      - uses: r-lib/actions/setup-pandoc@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
+
+      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
+        with:
+          r-version: ${{ matrix.r }}
+          use-public-rspm: false
+          Ncpus: 2
+
+      - name: Verify exact native R before installing dependencies
+        shell: Rscript {0}
+        run: |
+          capture.output(R.version, file = file.path(
+            Sys.getenv("EVIDENCE_DIR"), "environment", "R-version.txt"))
+          stopifnot(
+            as.character(getRversion()) == Sys.getenv("EXPECTED_R"),
+            Sys.info()[["sysname"]] == "Darwin",
+            R.version$arch %in% c("aarch64", "arm64"),
+            grepl("apple-darwin", R.version$platform, fixed = TRUE)
+          )
+
+      - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
+        with:
+          cache: false
+          dependencies: '"all"'
+          extra-packages: |
+            any::BiocManager
+            any::jsonlite
+            any::rcmdcheck
+            bioc::BiocVersion
+          needs: check
+
+      - name: Preserve any remaining dependency lockfile outside the checkout
+        if: always()
+        run: |
+          if test -f .github/pkg.lock; then
+            mv .github/pkg.lock "$EVIDENCE_DIR/environment/pkg.lock"
+          fi
+
+      - name: Verify Bioconductor and record the installed environment
+        shell: Rscript {0}
+        run: |
+          out <- file.path(Sys.getenv("EVIDENCE_DIR"), "environment")
+          capture.output(sessionInfo(), file = file.path(out, "session-info.txt"))
+          ip <- installed.packages(fields = c("RemotePkgRef", "RemoteRepos"))
+          write.csv(ip[, c("Package", "Version", "Built", "LibPath",
+                          "RemotePkgRef", "RemoteRepos")],
+                    file.path(out, "installed-packages.csv"), row.names = FALSE)
+          capture.output(pak::repo_get(), file = file.path(out, "repositories.txt"))
+          expected <- Sys.getenv("R_BIOC_VERSION")
+          installed <- strsplit(as.character(packageVersion("BiocVersion")),
+                                ".", fixed = TRUE)[[1L]]
+          stopifnot(
+            as.character(getRversion()) == Sys.getenv("EXPECTED_R"),
+            paste(installed[1:2], collapse = ".") == expected,
+            as.character(BiocManager::version()) == expected,
+            !length(find.package("BreastSubtypeR", quiet = TRUE))
+          )
+          capture.output(BiocManager::repositories(version = expected),
+                         file = file.path(out, "bioconductor-repositories.txt"))
+          capture.output(rmarkdown::pandoc_version(),
+                         file = file.path(out, "pandoc-version.txt"))
+
+      - name: Build the exact source with vignettes
+        id: build
+        working-directory: ${{ runner.temp }}/pr256-macos-evidence/build
+        run: |
+          R CMD build --no-manual "$GITHUB_WORKSPACE" 2>&1 | tee build.log
+          if grep -E '^(WARNING[: ]|Warning( messages?)?:|Warning in )' build.log; then
+            echo "::error::R CMD build reported a warning"
+            exit 1
+          fi
+          shopt -s nullglob
+          tarballs=(*.tar.gz)
+          test "${#tarballs[@]}" -eq 1
+          test "${tarballs[0]}" = "BreastSubtypeR_1.5.12.tar.gz"
+          tar -tzf "${tarballs[0]}" > tarball-contents.txt
+          shasum -a 256 "${tarballs[0]}" | tee tarball.sha256
+          echo "tarball=$PWD/${tarballs[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: R CMD check including the full package test suite
+        id: check
+        working-directory: ${{ runner.temp }}/pr256-macos-evidence/check
+        env:
+          TARBALL: ${{ steps.build.outputs.tarball }}
+        run: |
+          (cd "$EVIDENCE_DIR/build" && shasum -a 256 --check tarball.sha256)
+          R CMD check --no-manual "$TARBALL" 2>&1 | tee check.log
+
+      - name: Require a complete check with no errors or warnings
+        id: assess
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        env:
+          RCMDCHECK_RUN_OUTCOME: ${{ steps.check.outcome }}
+        run: |
+          Rscript "$GITHUB_WORKSPACE/.github/scripts/bioccheck-ci.R" rcmdcheck \
+            "$EVIDENCE_DIR/check/BreastSubtypeR.Rcheck" "$EVIDENCE_DIR/check" \
+            2>&1 | tee "$EVIDENCE_DIR/check/assessment.log"
+
+      - name: Verify the full testthat summary
+        shell: Rscript {0}
+        run: |
+          result <- jsonlite::read_json(file.path(
+            Sys.getenv("EVIDENCE_DIR"), "check", "rcmdcheck-result.json"))
+          summary <- unlist(result$test_summary, use.names = FALSE)
+          stopifnot(length(summary) == 1L)
+          pattern <- "\\[ FAIL ([0-9]+) \\| WARN ([0-9]+) \\| SKIP ([0-9]+) \\| PASS ([0-9]+) \\]"
+          counts <- regmatches(summary, regexec(pattern, summary))[[1L]]
+          stopifnot(length(counts) == 5L)
+          counts <- as.integer(counts[-1L])
+          names(counts) <- c("FAIL", "WARN", "SKIP", "PASS")
+          print(counts)
+          writeLines(summary, file.path(
+            Sys.getenv("EVIDENCE_DIR"), "check", "testthat-summary.txt"))
+          stopifnot(counts[["FAIL"]] == 0L, counts[["WARN"]] == 0L,
+                    counts[["PASS"]] > 0L)
+
+      - name: Verify the candidate checkout stayed pristine
+        if: ${{ always() && steps.identity.outcome == 'success' }}
+        run: |
+          git status --porcelain --untracked-files=all | tee "$EVIDENCE_DIR/checkout-status.txt"
+          test ! -s "$EVIDENCE_DIR/checkout-status.txt"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test "$(git rev-parse 'HEAD^{tree}')" = "$EXPECTED_TREE"
+
+      - name: Upload all validation evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pr256-macos-arm64-r${{ matrix.r }}-bioc${{ matrix.bioc }}-3755d3d-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/pr256-macos-evidence
+          retention-days: 14
+          if-no-files-found: error
