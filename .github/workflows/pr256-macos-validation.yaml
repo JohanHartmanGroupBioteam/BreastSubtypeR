@@ -35,11 +35,13 @@ jobs:
       R_BIOC_VERSION: ${{ matrix.bioc }}
       R_KEEP_PKG_SOURCE: "yes"
       _R_CHECK_FORCE_SUGGESTS_: "true"
-      EVIDENCE_DIR: ${{ runner.temp }}/pr256-macos-evidence
 
     steps:
       - name: Create evidence directories
-        run: mkdir -p "$EVIDENCE_DIR"/{environment,build,check}
+        run: |
+          EVIDENCE_DIR="$RUNNER_TEMP/pr256-macos-evidence"
+          echo "EVIDENCE_DIR=$EVIDENCE_DIR" >> "$GITHUB_ENV"
+          mkdir -p "$EVIDENCE_DIR"/{environment,build,check}
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
