@@ -1,0 +1,284 @@
+name: "Mapping oracle native ARM64 focused validation"
+"on":
+  push:
+    branches:
+      - "validation/mapping-oracle-392f62d"
+permissions:
+  contents: "read"
+jobs:
+  focused:
+    name: "Pinned baseline and candidate / macOS ARM64 / R 4.6.2"
+    runs-on: "macos-15"
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: "bash"
+    env:
+      R_BIOC_VERSION: "3.24"
+      R_KEEP_PKG_SOURCE: "yes"
+      _R_CHECK_FORCE_SUGGESTS_: "true"
+    steps:
+      - name: "Initialize evidence"
+        run: |
+          EVIDENCE_DIR="$RUNNER_TEMP/mapping-oracle-evidence"
+          echo "EVIDENCE_DIR=$EVIDENCE_DIR" >> "$GITHUB_ENV"
+          echo "PACKAGE_LIB_ROOT=$RUNNER_TEMP/mapping-oracle-libraries" >> "$GITHUB_ENV"
+          mkdir -p "$EVIDENCE_DIR"/{environment,baseline,candidate,mutations}
+      - name: "Checkout workflow infrastructure"
+        uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+        with:
+          path: "harness"
+          persist-credentials: false
+      - name: "Checkout pinned baseline"
+        uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+        with:
+          path: "baseline"
+          ref: "392f62d3c5788003fdfb8f5ac7304b80c217fdc8"
+          persist-credentials: false
+      - name: "Checkout pinned candidate"
+        uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+        with:
+          path: "candidate"
+          ref: "381f3a04c7d028ecb9a345fa162784eeddfecf38"
+          persist-credentials: false
+      - name: "Verify native runner and source identities"
+        run: |
+          test "$(uname -s)" = Darwin
+          test "$(uname -m)" = arm64
+          test "$RUNNER_ARCH" = ARM64
+          {
+            echo "workflow_commit=$GITHUB_SHA"
+            echo "runner_arch=$RUNNER_ARCH"
+            echo "image_version=${ImageVersion:-unknown}"
+            uname -a
+            sw_vers
+          } | tee "$EVIDENCE_DIR/environment/runner.txt"
+          test "$(git -C harness rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C baseline rev-parse HEAD)" = 392f62d3c5788003fdfb8f5ac7304b80c217fdc8
+          test "$(git -C baseline rev-parse 'HEAD^{tree}')" = 08ecc7d3345d166514e8c104ecd76e51105c8703
+          test "$(git -C candidate rev-parse HEAD)" = 381f3a04c7d028ecb9a345fa162784eeddfecf38
+          test "$(git -C candidate rev-parse 'HEAD^{tree}')" = d31aab2cc6a1c0cdc6c6d38d9a88e55f3c707c3f
+          test "$(git -C candidate show -s --format=%P)" = 392f62d3c5788003fdfb8f5ac7304b80c217fdc8
+          test "$(git -C baseline rev-parse HEAD:tests/testthat/test-mapping-factor-probes.R)" = 914f5f0e717e36551c18472820f7eee401767771
+          test "$(git -C candidate rev-parse HEAD:tests/testthat/test-mapping-factor-probes.R)" = 93476301f5afe2ce07d3027b09d35e52584d4114
+          for source in baseline candidate; do
+            test -z "$(git -C "$source" status --porcelain --untracked-files=all)"
+            git -C "$source" rev-parse HEAD 'HEAD^{tree}' > "$EVIDENCE_DIR/$source/source.txt"
+            git -C "$source" ls-tree -r HEAD tests/testthat > "$EVIDENCE_DIR/$source/test-tree.txt"
+            shasum -a 256 "$source"/tests/testthat/test-mapping-*.R > "$EVIDENCE_DIR/$source/test-sha256.txt"
+          done
+          cmp baseline/DESCRIPTION candidate/DESCRIPTION
+      - name: "Set up pandoc"
+        uses: "r-lib/actions/setup-pandoc@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05"
+      - name: "Set up native R"
+        uses: "r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05"
+        with:
+          r-version: "4.6.2"
+          use-public-rspm: false
+          Ncpus: 2
+      - name: "Verify exact native R"
+        run: |
+          stopifnot(as.character(getRversion()) == "4.6.2",
+            Sys.info()[["sysname"]] == "Darwin",
+            R.version$arch %in% c("aarch64", "arm64"),
+            grepl("apple-darwin", R.version$platform, fixed = TRUE))
+          capture.output(R.version, .Machine, capabilities(),
+            file = file.path(Sys.getenv("EVIDENCE_DIR"), "environment", "native-R.txt"))
+        shell: "Rscript {0}"
+      - name: "Resolve shared dependencies"
+        uses: "r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05"
+        with:
+          working-directory: "candidate"
+          cache: false
+          dependencies: "\"all\""
+          extra-packages: |
+            any::BiocManager
+            bioc::BiocVersion
+          needs: "check"
+      - name: "Preserve dependency lockfile outside source"
+        run: |
+          if test -f candidate/.github/pkg.lock; then
+            mv candidate/.github/pkg.lock "$EVIDENCE_DIR/environment/pkg.lock"
+          fi
+        if: "always()"
+      - name: "Verify Bioconductor and record shared dependency inventory"
+        run: |
+          stopifnot(as.character(BiocManager::version()) == "3.24",
+            as.character(packageVersion("BiocVersion")) == "3.24.0",
+            !length(find.package("BreastSubtypeR", quiet = TRUE)))
+          out <- file.path(Sys.getenv("EVIDENCE_DIR"), "environment")
+          ip <- installed.packages()
+          write.csv(ip, file.path(out, "installed-packages.csv"))
+          saveRDS(ip, file.path(out, "shared-dependencies.rds"))
+          capture.output(sessionInfo(), .libPaths(), pak::repo_get(), BiocManager::repositories(),
+            file = file.path(out, "session-and-repositories.txt"))
+        shell: "Rscript {0}"
+      - name: "Install pinned baseline and candidate in separate libraries"
+        run: |
+          for source in baseline candidate; do
+            mkdir -p "$PACKAGE_LIB_ROOT/$source"
+            R CMD INSTALL --install-tests --with-keep.source \
+              --library="$PACKAGE_LIB_ROOT/$source" "$GITHUB_WORKSPACE/$source" \
+              2>&1 | tee "$EVIDENCE_DIR/$source/install.log"
+            for file in "$source"/tests/testthat/test-mapping-*.R; do
+              cmp "$file" "$PACKAGE_LIB_ROOT/$source/BreastSubtypeR/tests/testthat/$(basename "$file")"
+            done
+          done
+      - name: "Baseline installed focused tests"
+        run: |
+          source_name <- Sys.getenv("SOURCE_NAME")
+           outdir <- file.path(Sys.getenv("EVIDENCE_DIR"), source_name)
+           lib <- file.path(Sys.getenv("PACKAGE_LIB_ROOT"), source_name)
+           .libPaths(c(lib, .libPaths()))
+           stopifnot(normalizePath(find.package("BreastSubtypeR")) ==
+             normalizePath(file.path(lib, "BreastSubtypeR")))
+           deps <- installed.packages(lib.loc = .libPaths()[-1L])
+           stopifnot(identical(deps, readRDS(file.path(Sys.getenv("EVIDENCE_DIR"),
+             "environment", "shared-dependencies.rds"))))
+           capture.output(sessionInfo(), .libPaths(), file = file.path(outdir, "process-environment.txt"))
+           log <- file(file.path(outdir, "focused.log"), open = "wt")
+           sink(log, split = TRUE); sink(log, type = "message")
+           library(BreastSubtypeR)
+           library(testthat)
+
+          expected <- c("test-mapping-factor-probes.R")
+          root <- system.file("tests/testthat", package = "BreastSubtypeR")
+          stopifnot(all(file.exists(file.path(root, expected))))
+          filter <- "^mapping-(factor-probes)$"
+          res <- test_package("BreastSubtypeR", filter = filter, reporter = "summary",
+            stop_on_failure = FALSE, stop_on_warning = FALSE)
+          d <- as.data.frame(res)
+          write.table(d[c("file","test","nb","passed","failed","error","warning","skipped")],
+            file.path(outdir,"focused-blocks.tsv"), sep = "\t", row.names = FALSE)
+          counts <- aggregate(d[c("passed","failed","error","warning","skipped")], list(file = d$file), sum)
+          write.table(counts, file.path(outdir,"focused-files.tsv"), sep = "\t", row.names = FALSE)
+          print(counts)
+          sink(type = "message"); sink(); close(log)
+          stopifnot(setequal(unique(d$file), expected), all(counts$passed > 0))
+          stopifnot(any(d$failed > 0), !any(d$error | d$warning | d$skipped),
+            all(d$failed == 0 | grepl("^Mapping resolves factor probe labels", d$test)))
+          writeLines("Expected mean-oracle failures reproduced; baseline test did not pass.",
+            file.path(outdir,"assessment.txt"))
+        shell: "Rscript {0}"
+        env:
+          SOURCE_NAME: "baseline"
+        continue-on-error: true
+        id: "baseline_tests"
+      - name: "Candidate installed focused tests"
+        run: |
+          source_name <- Sys.getenv("SOURCE_NAME")
+           outdir <- file.path(Sys.getenv("EVIDENCE_DIR"), source_name)
+           lib <- file.path(Sys.getenv("PACKAGE_LIB_ROOT"), source_name)
+           .libPaths(c(lib, .libPaths()))
+           stopifnot(normalizePath(find.package("BreastSubtypeR")) ==
+             normalizePath(file.path(lib, "BreastSubtypeR")))
+           deps <- installed.packages(lib.loc = .libPaths()[-1L])
+           stopifnot(identical(deps, readRDS(file.path(Sys.getenv("EVIDENCE_DIR"),
+             "environment", "shared-dependencies.rds"))))
+           capture.output(sessionInfo(), .libPaths(), file = file.path(outdir, "process-environment.txt"))
+           log <- file(file.path(outdir, "focused.log"), open = "wt")
+           sink(log, split = TRUE); sink(log, type = "message")
+           library(BreastSubtypeR)
+           library(testthat)
+
+          expected <- c("test-mapping-b6-integration.R","test-mapping-donor-equivalence.R","test-mapping-factor-donors.R","test-mapping-factor-examples.R","test-mapping-factor-probes.R","test-mapping-max-singleton.R","test-mapping-robustness.R","test-mapping-ssp-ror.R","test-mapping-undefined-statistics.R")
+          root <- system.file("tests/testthat", package = "BreastSubtypeR")
+          stopifnot(all(file.exists(file.path(root, expected))))
+          filter <- "^mapping-(b6-integration|donor-equivalence|factor-donors|factor-examples|factor-probes|max-singleton|robustness|ssp-ror|undefined-statistics)$"
+          res <- test_package("BreastSubtypeR", filter = filter, reporter = "summary",
+            stop_on_failure = FALSE, stop_on_warning = FALSE)
+          d <- as.data.frame(res)
+          write.table(d[c("file","test","nb","passed","failed","error","warning","skipped")],
+            file.path(outdir,"focused-blocks.tsv"), sep = "\t", row.names = FALSE)
+          counts <- aggregate(d[c("passed","failed","error","warning","skipped")], list(file = d$file), sum)
+          write.table(counts, file.path(outdir,"focused-files.tsv"), sep = "\t", row.names = FALSE)
+          print(counts)
+          sink(type = "message"); sink(); close(log)
+          stopifnot(setequal(unique(d$file), expected), all(counts$passed > 0))
+          stopifnot(!any(d$failed | d$error | d$warning | d$skipped))
+          writeLines("All nine installed Mapping files executed without failures/errors/warnings/skips.",
+            file.path(outdir,"assessment.txt"))
+        shell: "Rscript {0}"
+        env:
+          SOURCE_NAME: "candidate"
+        id: "candidate_tests"
+      - name: "Retained four mutation probes"
+        run: |
+          .libPaths(c(file.path(Sys.getenv("PACKAGE_LIB_ROOT"),"candidate"), .libPaths()))
+          stopifnot(normalizePath(find.package("BreastSubtypeR")) ==
+            normalizePath(file.path(Sys.getenv("PACKAGE_LIB_ROOT"),"candidate","BreastSubtypeR")))
+          out <- file.path(Sys.getenv("EVIDENCE_DIR"),"mutations")
+          setwd(out)
+          dir.create("evidence")
+          log <- file("mutations.log", "wt"); sink(log, split = TRUE); sink(log,type = "message")
+          library(BreastSubtypeR); library(testthat)
+          original <- BreastSubtypeR::Mapping
+          target <- system.file("tests/testthat/test-mapping-factor-probes.R",package="BreastSubtypeR")
+          make_mutant <- function(kind) {
+           force(kind)
+           function(...) {
+            args<-list(...); z<-args[[1]]
+            if(kind=="membership") {
+             cd<-SummarizedExperiment::rowData(z)
+             if("z" %in% as.character(cd$probe)) cd$ENTREZID[as.character(cd$probe)=="z"]<-800001L
+             SummarizedExperiment::rowData(z)<-cd;args[[1]]<-z
+            }
+            if(kind=="factor-codes" && is.factor(SummarizedExperiment::rowData(z)$probe)) {
+             SummarizedExperiment::rowData(z)$probe<-as.integer(SummarizedExperiment::rowData(z)$probe);args[[1]]<-z
+            }
+            out<-do.call(original,args)
+            if(kind=="sample-order") for(n in c("se_NC","se_SSP")) out[[n]]<-out[[n]][,rev(seq_len(ncol(out[[n]])))]
+            if(kind=="perturbation" && nrow(out$se_NC)>0 && ncol(out$se_NC)>0) {
+             m<-SummarizedExperiment::assay(out$se_NC);m[1,1]<-m[1,1]+1e-4;SummarizedExperiment::assay(out$se_NC)<-m
+            }
+            out
+           }
+          }
+          records<-list()
+          for(kind in c("control","membership","factor-codes","sample-order","perturbation")) {
+           e<-new.env(parent=globalenv()); e$Mapping<-if(kind=="control") original else make_mutant(kind)
+           out<-test_file(target,env=e,reporter="silent",stop_on_failure=FALSE,stop_on_warning=FALSE)
+           d<-as.data.frame(out)
+           totals<-colSums(d[c("passed","failed","error","warning","skipped")])
+           print(c(kind=kind,totals))
+           records[[kind]]<-data.frame(mutant=kind,t(totals),check.names=FALSE)
+           write.table(d[c("file","test","passed","failed","error","warning","skipped")],paste0("evidence/mutant-",kind,".tsv"),sep="\t",row.names=FALSE)
+           if(kind=="control") stopifnot(!any(d$failed|d$error|d$warning)) else stopifnot(any(d$failed|d$error))
+          }
+          write.table(do.call(rbind,records),"evidence/mutation-summary.tsv",sep="\t",row.names=FALSE)
+
+          sink(type="message"); sink(); close(log)
+        shell: "Rscript {0}"
+      - name: "Require expected baseline diagnostic outcome"
+        run: |
+          test "$BASELINE_OUTCOME" = success
+        env:
+          BASELINE_OUTCOME: "${{ steps.baseline_tests.outcome }}"
+      - name: "Verify both package sources remained pristine"
+        run: |
+          for source in baseline candidate; do
+            git -C "$source" status --porcelain --untracked-files=all | tee "$EVIDENCE_DIR/$source/checkout-status.txt"
+            test ! -s "$EVIDENCE_DIR/$source/checkout-status.txt"
+            git -C "$source" rev-parse HEAD 'HEAD^{tree}' > "$EVIDENCE_DIR/$source/source-after.txt"
+            cmp "$EVIDENCE_DIR/$source/source.txt" "$EVIDENCE_DIR/$source/source-after.txt"
+          done
+        if: "always()"
+      - name: "Checksum diagnostic payloads"
+        run: |
+          python3 - <<'PY'
+          import os, pathlib, hashlib
+          root = pathlib.Path(os.environ["EVIDENCE_DIR"])
+          files = sorted(p for p in root.rglob("*") if p.is_file())
+          (root/"SHA256SUMS.txt").write_text("".join(
+              hashlib.sha256(p.read_bytes()).hexdigest()+"  "+p.relative_to(root).as_posix()+"\n"
+              for p in files), encoding="utf-8")
+          PY
+        if: "always()"
+      - name: "Upload focused diagnostic evidence"
+        if: "always()"
+        uses: "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+        with:
+          name: "mapping-oracle-native-arm64-attempt-${{ github.run_attempt }}"
+          path: "${{ runner.temp }}/mapping-oracle-evidence"
+          retention-days: 14
+          if-no-files-found: "error"
