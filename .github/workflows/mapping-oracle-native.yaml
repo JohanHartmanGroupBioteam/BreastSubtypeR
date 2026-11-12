@@ -40,6 +40,7 @@ jobs:
         with:
           path: "candidate"
           ref: "381f3a04c7d028ecb9a345fa162784eeddfecf38"
+          fetch-depth: 2
           persist-credentials: false
       - name: "Verify native runner and source identities"
         run: |
@@ -53,6 +54,9 @@ jobs:
             uname -a
             sw_vers
           } | tee "$EVIDENCE_DIR/environment/runner.txt"
+          for source in baseline candidate; do
+            git -C "$source" rev-parse HEAD 'HEAD^{tree}' > "$EVIDENCE_DIR/$source/source.txt"
+          done
           test "$(git -C harness rev-parse HEAD)" = "$GITHUB_SHA"
           test "$(git -C baseline rev-parse HEAD)" = 392f62d3c5788003fdfb8f5ac7304b80c217fdc8
           test "$(git -C baseline rev-parse 'HEAD^{tree}')" = 08ecc7d3345d166514e8c104ecd76e51105c8703
@@ -63,7 +67,6 @@ jobs:
           test "$(git -C candidate rev-parse HEAD:tests/testthat/test-mapping-factor-probes.R)" = 93476301f5afe2ce07d3027b09d35e52584d4114
           for source in baseline candidate; do
             test -z "$(git -C "$source" status --porcelain --untracked-files=all)"
-            git -C "$source" rev-parse HEAD 'HEAD^{tree}' > "$EVIDENCE_DIR/$source/source.txt"
             git -C "$source" ls-tree -r HEAD tests/testthat > "$EVIDENCE_DIR/$source/test-tree.txt"
             shasum -a 256 "$source"/tests/testthat/test-mapping-*.R > "$EVIDENCE_DIR/$source/test-sha256.txt"
           done
@@ -256,12 +259,20 @@ jobs:
           BASELINE_OUTCOME: "${{ steps.baseline_tests.outcome }}"
       - name: "Verify both package sources remained pristine"
         run: |
+          source_check_failed=0
           for source in baseline candidate; do
-            git -C "$source" status --porcelain --untracked-files=all | tee "$EVIDENCE_DIR/$source/checkout-status.txt"
-            test ! -s "$EVIDENCE_DIR/$source/checkout-status.txt"
-            git -C "$source" rev-parse HEAD 'HEAD^{tree}' > "$EVIDENCE_DIR/$source/source-after.txt"
-            cmp "$EVIDENCE_DIR/$source/source.txt" "$EVIDENCE_DIR/$source/source-after.txt"
+            git -C "$source" status --porcelain --untracked-files=all | tee "$EVIDENCE_DIR/$source/checkout-status.txt" || source_check_failed=1
+            test ! -s "$EVIDENCE_DIR/$source/checkout-status.txt" || source_check_failed=1
+            if ! git -C "$source" rev-parse HEAD 'HEAD^{tree}' > "$EVIDENCE_DIR/$source/source-after.txt"; then
+              source_check_failed=1
+            elif test ! -s "$EVIDENCE_DIR/$source/source.txt"; then
+              echo "::error::Initial $source identity unavailable; source verification incomplete"
+              source_check_failed=1
+            elif ! cmp "$EVIDENCE_DIR/$source/source.txt" "$EVIDENCE_DIR/$source/source-after.txt"; then
+              source_check_failed=1
+            fi
           done
+          test "$source_check_failed" -eq 0
         if: "always()"
       - name: "Checksum diagnostic payloads"
         run: |
