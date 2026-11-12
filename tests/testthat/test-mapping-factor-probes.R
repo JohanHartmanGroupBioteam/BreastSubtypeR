@@ -31,7 +31,7 @@ test_that("Mapping resolves factor probe labels in annotation order for all meth
         duplicates <- values[labels[entrez[labels] == 596L], , drop = FALSE]
         first_tied <- rownames(duplicates)[rownames(duplicates) %in% c("z", "b")][1L]
         for (method in c("max", "mean", "median", "stdev", "iqr")) {
-            bcl2 <- switch(method, mean = colMeans(duplicates),
+            bcl2 <- switch(method, mean = apply(duplicates, 2L, mean, na.rm = TRUE),
                 median = apply(duplicates, 2L, stats::median), values[first_tied, ])
             nc <- rbind(BCL2 = bcl2, BIRC5 = values["q", ])
             ssp <- 2^nc[c("BIRC5", "BCL2"), , drop = FALSE]
