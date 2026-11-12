@@ -209,7 +209,19 @@ test_that("BS_Multi() changes only cIHC.itr and reproduces 1.5.5 with 'larger'",
     keep <- c("res_subtypes", "res_subtypes.Subtype")
 
     full <- quiet(BS_Multi(din, methods = methods_all, Subtype = TRUE))
-    expect_identical(full[keep], ref$multi$full_manual)
+    entropy <- full$res_subtypes$entropy
+    expected_entropy <- ref$multi$full_manual$res_subtypes$entropy
+    finite <- is.finite(expected_entropy)
+    expect_identical(typeof(entropy), typeof(expected_entropy))
+    expect_identical(attributes(entropy), attributes(expected_entropy))
+    expect_identical(is.finite(entropy), finite)
+    expect_identical(entropy[!finite], expected_entropy[!finite])
+    # Retained macOS results differ by one ULP at 1.57 bits (2^-52).
+    expect_true(all(abs(entropy[finite] - expected_entropy[finite]) <=
+        .Machine$double.eps))
+    full_manual <- full[keep]
+    full_manual$res_subtypes$entropy <- expected_entropy
+    expect_identical(full_manual, ref$multi$full_manual)
     auto <- quiet(BS_Multi(din, methods = "AUTO", Subtype = TRUE))
     expect_identical(auto[keep], ref$multi$full_auto)
 
