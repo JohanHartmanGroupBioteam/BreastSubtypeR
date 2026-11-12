@@ -382,6 +382,33 @@ res_auto <- BS_Multi(
 Vis_Multi(res_auto$res_subtypes)
 ```
 
+
+For standalone `BS_ssBC()`, `PatientID` is a unique sample lookup key,
+not a repeated biological-patient identifier. All four strategies (`ER`,
+`ER.v2`, `TN`, `TN.v2`) require exactly one original key and one exact
+converted `PatientID` column. Both character-label interpretations must be
+complete, nonempty, unique and identical to the assay names in order.
+A partial name match or a different key created by metadata flattening is
+refused. Supported storage must satisfy both boundaries; the empty four-class
+restrictions below remain in force.
+
+PatientID and the strategy-specific receptors are required even with clinical
+outputs disabled; TSIZE/NODE are clinical-path requirements. The guard also
+covers excluded and wholly empty inputs. It raises
+`bsr_patientid_mismatch_error` before subgroup calculations, after existing
+TSIZE metadata preparation in `.nc_pheno()`. Only those metadata preparation
+errors have the stated priority: this is not a universal ordering guarantee for
+missing clinical columns, invalid `s`, NODE errors or missing receptors.
+
+Manual ssBC/ssBC.v2 selections propagate the guard refusal when dispatch reaches
+the wrapper; an earlier missing-PatientID/precondition error may remain
+unclassed. AUTO routing and its early order check are unchanged, but selected
+ssBC/ssBC.v2 wrappers can newly refuse duplicate original key columns or
+ambiguous converted keys that pass that precheck. Other standalone NC wrappers
+are unchanged. No identifiers are automatically realigned or overwritten.
+Reconcile identities from source records. Matching keys cannot detect an
+upstream sample/annotation mix-up with consistently wrong labels.
+
 For `ssBC` and `ssBC.v2` in AUTO, all existing sample-indexed components now
 cover the input assay's IDs and order: `BS.all` and `score.ROR` rows, named
 prediction vectors (including four-class predictions when requested),
@@ -413,7 +440,8 @@ and calibrated `testData` without gene rows. Four-class calls return the same
 result with the four-class fields added. They need at least one represented
 PAM50 gene, unique plain-vector receptor columns and a single character or
 factor `PatientID` column whose labels are identical to the assay column names
-in assay order; other inputs keep their previous error (see `?BS_ssBC`).
+in assay order. Inputs outside this schema still fail; identity checks are
+described above (see `?BS_ssBC`).
 Receptor labels are matched literally, so other codings should be converted
 first, for example with `Mapping()`. TN.v2 keeps its existing representation.
 

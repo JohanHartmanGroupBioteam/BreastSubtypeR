@@ -2,6 +2,27 @@
 
 ## API compatibility
 
+* `BS_ssBC()` uses `PatientID` as a unique sample lookup key, not a
+  repeated biological-patient identifier. For `ER`, `ER.v2`, `TN` and
+  `TN.v2`, exactly one original column and one exact converted PatientID
+  column must provide the same complete, nonempty, unique labels as the
+  assay names in order. This intentionally tightens compatibility even for
+  excluded/empty rows and contradictions whose numerical results agree.
+  The converted-key check prevents metadata flattening or partial matching
+  from changing the key actually used. Supported storage must satisfy both
+  boundaries; the existing empty four-class restrictions still apply.
+  Guard refusals use `bsr_patientid_mismatch_error`. Manual `BS_Multi()`
+  propagates that error when dispatch reaches ssBC; earlier preconditions
+  such as a missing PatientID column can still give an unclassed error.
+  AUTO routing and its early order check are unchanged, but selected
+  ssBC/ssBC.v2 wrappers can newly refuse duplicate original columns or
+  ambiguous converted keys that pass that precheck.
+  Existing TSIZE metadata preparation errors in `.nc_pheno()` occur first;
+  this is not a priority promise for missing clinical columns, invalid `s`,
+  NODE errors or missing receptors. No identifiers are realigned or
+  overwritten. Reconcile source records; internally consistent keys cannot
+  detect an upstream sample mix-up. Other standalone NC wrappers are unchanged.
+
 * Four-class (`Subtype = TRUE`) ssBC with `s = "ER"`, `"ER.v2"` or `"TN"` no
   longer stops with "undefined columns selected" when no sample belongs to any
   selected receptor subgroup and the input is otherwise well formed. Standalone
@@ -10,8 +31,8 @@
   missing `BS.Subtype`, `Call.Subtype` and `predictions.FourSubtype`. This needs
   at least one represented PAM50 gene, unique plain-vector receptor columns and
   a single character or factor `PatientID` column whose labels are identical to
-  the assay column names in assay order; other inputs keep their previous
-  error. Receptor labels are matched literally and are not normalized;
+  the assay column names in assay order. Other inputs remain errors, with
+  identity diagnostics as described above. Receptor labels are matched literally and are not normalized;
   alias-coded AUTO inputs still fail, now with the same error as the
   corresponding five-class call. TN.v2, all
   five-class results and the other methods' results, summaries and entropy are
@@ -49,7 +70,8 @@
   Unsupported numeric classes mask the same six fields and warn even when
   the storage contains 0/1. Other S4 classes and unsupported Rle storage
   raise an input error. Metadata matching requires one clinical record per
-  predicted ID and permits an empty ID on an excluded ssBC row.
+  predicted ID. BS_ssBC additionally checks every input PatientID, including
+  excluded rows, as described above.
 * Shiny recognizes a whole `TRUE/FALSE` or `T/F` column as logical in CSV and TSV
   uploads, including quoted fields. In mixed text, only exact numeric binary
   labels are usable. Blank, NA and NaN upload markers retain the cohort-wide
