@@ -127,7 +127,7 @@ test_that("unknown storage is masked during cIHC, iterative cIHC and both PCAPAM
     }
 })
 
-test_that("an empty ID on an excluded receptor row preserves ssBC and multi results", {
+test_that("ssBC refuses excluded-row empty IDs while RORgroup keeps its alignment policy", {
     withr::local_seed(834)
     d <- container_input()
     n <- ncol(d$se_NC)
@@ -140,7 +140,13 @@ test_that("an empty ID on an excluded receptor row preserves ssBC and multi resu
     altered <- d
     altered$se_NC$PatientID[5L] <- ""
     for (route in c("ER", "ER.v2", "multi")) for (four in c(FALSE, TRUE)) {
-        expect_identical(container_run(altered, route, four), container_run(d, route, four))
+        before <- serialize(d, NULL); rng <- .Random.seed
+        expected <- container_baseline_run(d, route, four)
+        actual <- container_run(d, route, four)
+        expect_identical(actual, expected)
+        expect_identical(serialize(d, NULL), before)
+        expect_identical(.Random.seed, rng)
+        expect_error(container_run(altered, route, four), class = "bsr_patientid_mismatch_error")
     }
 
     out <- suppressWarnings(BS_parker(d$se_NC, hasClinical = FALSE))$outList

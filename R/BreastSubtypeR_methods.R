@@ -1368,12 +1368,20 @@ BS_PCAPAM50 <- function(
 #' @param se_obj A `SummarizedExperiment` object containing:
 #'   - **Assay data**: A log2-transformed, normalized expression matrix with
 #'     genes (Gene Symbols) as rows and samples as columns.
-#'   - **Column metadata** (`colData`): If `hasClinical = TRUE`, must include:
-#'     - `"PatientID"`: Unique patient/sample identifier.
-#'     - Depending on the chosen `s` parameter:
-#'       - `"ER"`: Estrogen receptor status (`"ER+"` or `"ER-"`) if `s = "ER"`.
-#'       - `"HER2"`: HER2 status (`"HER2+"` or `"HER2-"`) if `s = "ER.v2"`.
-#'       - `"TN"`: Triple-negative status (`"TN"` or `"nonTN"`) if `s = "TN"` or `"TN.v2"`.
+#'   - **Column metadata** (`colData`): Always requires:
+#'     - `"PatientID"`: A unique sample lookup key, not an independent or
+#'       repeated biological-patient identifier. Exactly one original column must have
+#'       this name. Its character labels must be complete, nonempty, unique
+#'       and identical to the assay sample names in the same order. The exact
+#'       `PatientID` column after metadata conversion must supply those same
+#'       labels; a partial name match or a different flattened key is refused.
+#'       Factor labels, not their integer codes, are used. Previously supported
+#'       storage forms remain valid only when both representations agree.
+#'       The additional empty four-class restrictions below still apply.
+#'     - Depending on `s`, `"ER"` (`"ER+"` or `"ER-"`) for `"ER"`;
+#'       both `"ER"` and `"HER2"` (`"HER2+"` or `"HER2-"`) for `"ER.v2"`;
+#'       or `"TN"` (`"TN"` or `"nonTN"`) for `"TN"` and `"TN.v2"`.
+#'   These keys and receptors are required even when `hasClinical = FALSE`.
 #'
 #' @param s Character. Specifies which subgroup-specific quantiles to use:
 #'   - `"ER"`, `"TN"`: Original subgroup-specific quantiles (*Breast Cancer Research*, 2015).
@@ -1423,6 +1431,26 @@ BS_PCAPAM50 <- function(
 #'     does not change per-sample calls, scores, calibration or missingness.
 #'
 #' @details
+#' Contradictory sample keys raise `bsr_patientid_mismatch_error` before
+#' subgroup calculations, including on excluded rows and wholly empty paths,
+#' even when the contradiction would leave numerical outputs unchanged.
+#' This applies to all four strategies: `ER`, `ER.v2`, `TN` and `TN.v2`.
+#' Existing TSIZE metadata preparation errors in `.nc_pheno()` occur first.
+#' This is not a general priority guarantee for missing clinical columns,
+#' invalid `s`, NODE errors or missing receptor annotations.
+#' Manual `BS_Multi()` propagates the guard error when dispatch reaches
+#' `BS_ssBC()`; earlier preconditions, such as a missing PatientID column,
+#' can raise an unclassed error. AUTO routing and its early order check are
+#' unchanged, but selected ssBC/ssBC.v2 wrappers can additionally refuse
+#' duplicate original columns or ambiguous converted keys that pass that
+#' precheck. Thus such AUTO inputs can have a newly refused outcome.
+#' No identifiers are realigned, sorted or overwritten.
+#' Reconcile expression and annotation identities from
+#' source records rather than copying assay names into `PatientID`.
+#' Agreement of the keys cannot detect an upstream sample/annotation mix-up
+#' whose labels are internally consistent. This rule is local to `BS_ssBC()`;
+#' it does not change the contracts of other nearest-centroid wrappers.
+#'
 #' Zhao et al. (2015) introduced subgroup-specific gene centering.
 #' Fernandez-Martinez et al. (2020) described its HER2/ER-specific application.
 #'
@@ -1467,8 +1495,8 @@ BS_PCAPAM50 <- function(
 #' receptor columns that are plain vectors, and a single character or factor
 #' `PatientID` column whose labels are identical to the assay column names in
 #' assay order.
-#' Inputs that do not meet these conditions keep their previous error. The
-#' gene condition is structural, for returning no estimate; it is not a
+#' Inputs outside this empty-result schema still fail. Identity failures use
+#' the wrapper checks described above. The gene condition is structural, for returning no estimate; it is not a
 #' minimum gene coverage for classification. In AUTO, a mixed cohort with no
 #' recognized ER/HER2 pair returns this result for `ssBC.v2` in both class
 #' settings, with the other methods unchanged.
@@ -1529,10 +1557,50 @@ BS_ssBC <- function(
 
     # Extract clinical metadata if hasClinical is TRUE
     pheno <- .nc_pheno(se_obj, hasClinical)
-    if (!"PatientID" %in% colnames(pheno)) {
-        stop("The 'colData' of 'se_obj' must include a 'PatientID' column.")
+    # Validate original keys after TSIZE preparation, before replacing row names.
+    identity_error <- function(reason) {
+        stop(structure(list(
+            message = paste0(
+                "colData(se_obj)$PatientID must contain the assay sample names ",
+                "(colnames(se_obj)): complete, unique and in the same order. ",
+                reason, " Reconcile expression and annotation identities from ",
+                "source records; do not overwrite PatientID merely to pass this check."
+            ),
+            call = NULL
+        ), class = c("bsr_patientid_mismatch_error", "error", "condition")))
     }
-    rownames(pheno) <- pheno$PatientID
+    original_cd <- colData(se_obj)
+    key_count <- length(which(names(original_cd) == "PatientID"))
+    if (key_count != 1L) {
+        identity_error(if (key_count == 0L) "The original PatientID column is missing."
+            else "Multiple original PatientID columns are present.")
+    }
+    labels <- tryCatch(as.character(original_cd[["PatientID"]]),
+        error = function(e) identity_error("PatientID labels cannot be read as character."))
+    assay_ids <- colnames(se_obj)
+    if (is.null(assay_ids) || length(assay_ids) != ncol(se_obj) ||
+        anyNA(assay_ids) || any(!nzchar(assay_ids)) || anyDuplicated(assay_ids)) {
+        identity_error("The assay sample names must be complete, nonempty and unique.")
+    }
+    if (length(labels) != length(assay_ids) || anyNA(labels) ||
+        any(!nzchar(labels)) || anyDuplicated(labels)) {
+        identity_error("PatientID must supply one complete, nonempty, unique label per assay column.")
+    }
+    if (!identical(labels, assay_ids)) {
+        position <- which(labels != assay_ids)[1L]
+        identity_error(paste0("PatientID and assay names differ at position ", position, "."))
+    }
+    # Validate the exact converted key used by the predictor as well.
+    if (length(which(names(pheno) == "PatientID")) != 1L) {
+        identity_error("Metadata conversion must produce exactly one column named PatientID.")
+    }
+    converted_key <- pheno[["PatientID"]]
+    converted_labels <- tryCatch(as.character(converted_key),
+        error = function(e) identity_error("PatientID labels cannot be read after metadata conversion."))
+    if (!identical(converted_labels, labels) || !identical(converted_labels, assay_ids)) {
+        identity_error("PatientID labels after metadata conversion differ from the original key or assay names.")
+    }
+    rownames(pheno) <- converted_key
 
     if (hasClinical) {
         req <- c("TSIZE", "NODE")
@@ -1913,6 +1981,27 @@ BS_sspbc <- function(se_obj, ssp.name = "ssp.pam50") {
 #' where only `BS.all` was expanded beyond the evaluated subcohort.
 #'
 #' Restoration happens after calculation, using each component's own IDs.
+#' `BS_ssBC()` uses `PatientID` as a unique sample lookup key, not a
+#' repeated biological-patient identifier. For all four native strategies
+#' (`ER`, `ER.v2`, `TN`, `TN.v2`), exactly one original key and one
+#' exact converted `PatientID` column must supply the same complete,
+#' nonempty, unique labels as the assay names in order, including excluded
+#' and empty rows. Supported storage must satisfy both boundaries; the empty
+#' four-class restrictions below remain in force.
+#' Manual selections containing ssBC/ssBC.v2 propagate
+#' `bsr_patientid_mismatch_error` when dispatch reaches that wrapper.
+#' The whole call stops without a partial result. Earlier preconditions,
+#' such as a missing PatientID column, can still raise an unclassed error.
+#' AUTO routing and its early order check are unchanged, but selected
+#' ssBC/ssBC.v2 wrappers can newly refuse duplicate original columns or
+#' ambiguous converted keys that pass the precheck.
+#' Existing TSIZE metadata preparation errors in `.nc_pheno()` occur
+#' before this guard; this does not guarantee priority for missing clinical
+#' columns, invalid `s`, NODE errors or missing receptor annotations.
+#' No identifiers are realigned or overwritten. Reconcile source records:
+#' internally consistent labels cannot detect an upstream sample mix-up.
+#' This does not add an ordered-key check to other standalone NC wrappers.
+#'
 #' Input assay IDs must be complete and unique and agree with `PatientID`
 #' labels, including factors with unused levels. Ambiguous or unexpected output
 #' IDs are rejected. Newly added rows/columns have typed `NA` payloads and actual

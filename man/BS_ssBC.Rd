@@ -11,15 +11,21 @@ BS_ssBC(se_obj, s, Subtype = FALSE, hasClinical = FALSE)
 \itemize{
 \item \strong{Assay data}: A log2-transformed, normalized expression matrix with
 genes (Gene Symbols) as rows and samples as columns.
-\item \strong{Column metadata} (\code{colData}): If \code{hasClinical = TRUE}, must include:
+\item \strong{Column metadata} (\code{colData}): Always requires:
 \itemize{
-\item \code{"PatientID"}: Unique patient/sample identifier.
-\item Depending on the chosen \code{s} parameter:
-\itemize{
-\item \code{"ER"}: Estrogen receptor status (\code{"ER+"} or \code{"ER-"}) if \code{s = "ER"}.
-\item \code{"HER2"}: HER2 status (\code{"HER2+"} or \code{"HER2-"}) if \code{s = "ER.v2"}.
-\item \code{"TN"}: Triple-negative status (\code{"TN"} or \code{"nonTN"}) if \code{s = "TN"} or \code{"TN.v2"}.
-}
+\item \code{"PatientID"}: A unique sample lookup key, not an independent or
+repeated biological-patient identifier. Exactly one original column must have
+this name. Its character labels must be complete, nonempty, unique
+and identical to the assay sample names in the same order. The exact
+\code{PatientID} column after metadata conversion must supply those same
+labels; a partial name match or a different flattened key is refused.
+Factor labels, not their integer codes, are used. Previously supported
+storage forms remain valid only when both representations agree.
+The additional empty four-class restrictions below still apply.
+\item Depending on \code{s}, \code{"ER"} (\code{"ER+"} or \code{"ER-"}) for \code{"ER"};
+both \code{"ER"} and \code{"HER2"} (\code{"HER2+"} or \code{"HER2-"}) for \code{"ER.v2"};
+or \code{"TN"} (\code{"TN"} or \code{"nonTN"}) for \code{"TN"} and \code{"TN.v2"}.
+These keys and receptors are required even when \code{hasClinical = FALSE}.
 }
 }}
 
@@ -85,6 +91,26 @@ classification when the study cohort is skewed relative to the original
 training cohort (e.g., ER-selected, HER2-enriched, or triple-negative cohorts).
 }
 \details{
+Contradictory sample keys raise \code{bsr_patientid_mismatch_error} before
+subgroup calculations, including on excluded rows and wholly empty paths,
+even when the contradiction would leave numerical outputs unchanged.
+This applies to all four strategies: \code{ER}, \code{ER.v2}, \code{TN} and \code{TN.v2}.
+Existing TSIZE metadata preparation errors in \code{.nc_pheno()} occur first.
+This is not a general priority guarantee for missing clinical columns,
+invalid \code{s}, NODE errors or missing receptor annotations.
+Manual \code{BS_Multi()} propagates the guard error when dispatch reaches
+\code{BS_ssBC()}; earlier preconditions, such as a missing PatientID column,
+can raise an unclassed error. AUTO routing and its early order check are
+unchanged, but selected ssBC/ssBC.v2 wrappers can additionally refuse
+duplicate original columns or ambiguous converted keys that pass that
+precheck. Thus such AUTO inputs can have a newly refused outcome.
+No identifiers are realigned, sorted or overwritten.
+Reconcile expression and annotation identities from
+source records rather than copying assay names into \code{PatientID}.
+Agreement of the keys cannot detect an upstream sample/annotation mix-up
+whose labels are internally consistent. This rule is local to \code{BS_ssBC()};
+it does not change the contracts of other nearest-centroid wrappers.
+
 Zhao et al. (2015) introduced subgroup-specific gene centering.
 Fernandez-Martinez et al. (2020) described its HER2/ER-specific application.
 
@@ -132,8 +158,8 @@ The four-class result requires at least one represented PAM50 gene, unique
 receptor columns that are plain vectors, and a single character or factor
 \code{PatientID} column whose labels are identical to the assay column names in
 assay order.
-Inputs that do not meet these conditions keep their previous error. The
-gene condition is structural, for returning no estimate; it is not a
+Inputs outside this empty-result schema still fail. Identity failures use
+the wrapper checks described above. The gene condition is structural, for returning no estimate; it is not a
 minimum gene coverage for classification. In AUTO, a mixed cohort with no
 recognized ER/HER2 pair returns this result for \code{ssBC.v2} in both class
 settings, with the other methods unchanged.

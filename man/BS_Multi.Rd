@@ -109,6 +109,27 @@ only when present. This is an API dimension change from earlier AUTO results,
 where only \code{BS.all} was expanded beyond the evaluated subcohort.
 
 Restoration happens after calculation, using each component's own IDs.
+\code{BS_ssBC()} uses \code{PatientID} as a unique sample lookup key, not a
+repeated biological-patient identifier. For all four native strategies
+(\code{ER}, \code{ER.v2}, \code{TN}, \code{TN.v2}), exactly one original key and one
+exact converted \code{PatientID} column must supply the same complete,
+nonempty, unique labels as the assay names in order, including excluded
+and empty rows. Supported storage must satisfy both boundaries; the empty
+four-class restrictions below remain in force.
+Manual selections containing ssBC/ssBC.v2 propagate
+\code{bsr_patientid_mismatch_error} when dispatch reaches that wrapper.
+The whole call stops without a partial result. Earlier preconditions,
+such as a missing PatientID column, can still raise an unclassed error.
+AUTO routing and its early order check are unchanged, but selected
+ssBC/ssBC.v2 wrappers can newly refuse duplicate original columns or
+ambiguous converted keys that pass the precheck.
+Existing TSIZE metadata preparation errors in \code{.nc_pheno()} occur
+before this guard; this does not guarantee priority for missing clinical
+columns, invalid \code{s}, NODE errors or missing receptor annotations.
+No identifiers are realigned or overwritten. Reconcile source records:
+internally consistent labels cannot detect an upstream sample mix-up.
+This does not add an ordered-key check to other standalone NC wrappers.
+
 Input assay IDs must be complete and unique and agree with \code{PatientID}
 labels, including factors with unused levels. Ambiguous or unexpected output
 IDs are rejected. Newly added rows/columns have typed \code{NA} payloads and actual
@@ -173,8 +194,8 @@ The four-class result requires at least one represented PAM50 gene, unique
 receptor columns that are plain vectors, and a single character or factor
 \code{PatientID} column whose labels are identical to the assay column names in
 assay order.
-Inputs that do not meet these conditions keep their previous error. The
-gene condition is structural, for returning no estimate; it is not a
+Inputs outside this empty-result schema still fail. Identity failures use
+the wrapper checks described above. The gene condition is structural, for returning no estimate; it is not a
 minimum gene coverage for classification. In AUTO, a mixed cohort with no
 recognized ER/HER2 pair returns this result for \code{ssBC.v2} in both class
 settings, with the other methods unchanged.
