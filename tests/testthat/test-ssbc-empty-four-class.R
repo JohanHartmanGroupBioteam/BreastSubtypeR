@@ -105,13 +105,13 @@ test_that("inputs outside the empty four-class preconditions do not become succe
     for (labels in list(rev(ids), paste0("X", ids), c("", ids[-1]))) {
         z <- empty
         z$PatientID <- labels
-        expect_error(four(z), "undefined columns selected", fixed = TRUE)
+        expect_error(four(z), class = "bsr_patientid_mismatch_error")
     }
     z <- empty
     z$PatientID <- c(NA, ids[-1])
-    expect_error(four(z), "missing values in 'row.names'", fixed = TRUE)
+    expect_error(four(z), class = "bsr_patientid_mismatch_error")
     z$PatientID <- c(ids[2], ids[-1])
-    expect_warning(expect_error(four(z), "duplicate 'row.names'", fixed = TRUE), "non-unique value")
+    expect_error(four(z), class = "bsr_patientid_mismatch_error")
     # A consistently permuted assay with its own metadata remains valid.
     perm <- empty[, rev(seq_len(ncol(empty)))]
     expect_identical(ncp02_no_warning(four(perm)), ncp02_explicit_empty(rev(ids), FALSE))
@@ -142,7 +142,7 @@ test_that("inputs outside the empty four-class preconditions do not become succe
     second <- empty
     SummarizedExperiment::colData(second) <- cbind(SummarizedExperiment::colData(second),
         S4Vectors::DataFrame(PatientID = paste0("X", ids), check.names = FALSE))
-    expect_error(four(second), "undefined columns selected", fixed = TRUE)
+    expect_error(four(second), class = "bsr_patientid_mismatch_error")
     # TN.v2 and five-class returns are not routed through the new branch.
     tn <- x
     tn$TN <- rep(NA_character_, ncol(x))
