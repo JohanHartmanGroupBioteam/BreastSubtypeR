@@ -1,0 +1,217 @@
+"name": "Shiny B1 native ARM64 validation"
+"on":
+  "push":
+    "branches":
+      -
+        "codex/validation-shiny-b1-e1968da"
+"permissions":
+  "contents": "read"
+"jobs":
+  "focused":
+    "name": "Exact B1 candidate / macOS ARM64 / R 4.6.2"
+    "runs-on": "macos-15"
+    "timeout-minutes": 90
+    "defaults":
+      "run":
+        "shell": "bash"
+    "env":
+      "R_BIOC_VERSION": "3.24"
+      "R_KEEP_PKG_SOURCE": "yes"
+      "_R_CHECK_FORCE_SUGGESTS_": "true"
+    "steps":
+      -
+        "name": "Initialize evidence"
+        "run": |
+          EVIDENCE_DIR="$RUNNER_TEMP/shiny-b1-evidence"
+          echo "EVIDENCE_DIR=$EVIDENCE_DIR" >> "$GITHUB_ENV"
+          echo "PACKAGE_LIB=$RUNNER_TEMP/shiny-b1-library" >> "$GITHUB_ENV"
+          mkdir -p "$EVIDENCE_DIR"/{environment,source,installed,tests}
+      -
+        "name": "Checkout validation infrastructure"
+        "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+        "with":
+          "path": "harness"
+          "persist-credentials": false
+      -
+        "name": "Checkout exact B1 candidate"
+        "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+        "with":
+          "path": "candidate"
+          "ref": "b0e0a05fd7245925fe8f569e0027e0aa6c5262b9"
+          "fetch-depth": 2
+          "persist-credentials": false
+      -
+        "name": "Capture and verify native runner and exact source"
+        "run": |
+          {
+            echo "workflow_commit=$GITHUB_SHA"
+            echo "runner_arch=$RUNNER_ARCH"
+            echo "image_version=${ImageVersion:-unknown}"
+            uname -a
+            sw_vers
+          } | tee "$EVIDENCE_DIR/environment/runner.txt"
+          git -C candidate rev-parse HEAD 'HEAD^{tree}' > "$EVIDENCE_DIR/source/identity.txt"
+          git -C candidate show -s --format=%P > "$EVIDENCE_DIR/source/parent.txt"
+          git -C candidate ls-tree -r HEAD > "$EVIDENCE_DIR/source/git-tree.txt"
+          test "$(uname -s)" = Darwin
+          test "$(uname -m)" = arm64
+          test "$RUNNER_ARCH" = ARM64
+          test "$(git -C harness rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C candidate rev-parse HEAD)" = b0e0a05fd7245925fe8f569e0027e0aa6c5262b9
+          test "$(git -C candidate rev-parse 'HEAD^{tree}')" = e1968da47f12c73a8de6f034d9d827c012249265
+          test "$(git -C candidate show -s --format=%P)" = 8bd1983780bf6a4db022d449c2a3a8bfebcbb25c
+          test "$(git -C candidate rev-parse HEAD:tests/testthat/test-shiny-example-parity.R)" = 7762365186d68eee350df5931179908259233260
+          test "$(git -C candidate diff-tree --no-commit-id --name-only -r HEAD)" = tests/testthat/test-shiny-example-parity.R
+          test -z "$(git -C candidate status --porcelain --untracked-files=all)"
+          shasum -a 256 candidate/tests/testthat/test-shiny-example-parity.R | tee "$EVIDENCE_DIR/source/target-sha256.txt"
+          test "$(shasum -a 256 candidate/tests/testthat/test-shiny-example-parity.R | cut -d ' ' -f 1)" = 722fc7f3aa394042e834104e88c993523c31ad0832c26d7725f85b8bf787bbae
+          test "$(shasum -a 256 harness/.github/validation/shiny-b1/native-validation.R | cut -d ' ' -f 1)" = 0491e75e51c10c7d3c22b77f29b55699f8057377ab6497968e5ac619aad707de
+          cp harness/.github/validation/shiny-b1/native-validation.R "$EVIDENCE_DIR/native-validation.R"
+          cp harness/.github/workflows/shiny-b1-native.yaml "$EVIDENCE_DIR/workflow.yaml"
+          python3 - <<'PY'
+          import pathlib, subprocess, hashlib, json, os
+          root = pathlib.Path("candidate")
+          names = subprocess.check_output(["git","ls-files","-z"], cwd=root).decode().split("\0")
+          items = {n: hashlib.sha256((root/n).read_bytes()).hexdigest() for n in names if n}
+          out = pathlib.Path(os.environ["EVIDENCE_DIR"])/"source"/"tracked-before.json"
+          out.write_text(json.dumps(items,sort_keys=True,indent=2)+"\n")
+          PY
+      -
+        "name": "Set up pandoc"
+        "uses": "r-lib/actions/setup-pandoc@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05"
+      -
+        "name": "Set up native R 4.6.2"
+        "uses": "r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05"
+        "with":
+          "r-version": "4.6.2"
+          "use-public-rspm": false
+          "Ncpus": 2
+      -
+        "name": "Verify exact native R"
+        "run": |
+          capture.output(R.version, Sys.info(), .Machine, capabilities(),
+            file=file.path(Sys.getenv("EVIDENCE_DIR"),"environment","native-R.txt"))
+          stopifnot(as.character(getRversion()) == "4.6.2",
+            Sys.info()[["sysname"]] == "Darwin",
+            R.version$arch %in% c("aarch64","arm64"),
+            grepl("apple-darwin",R.version$platform,fixed=TRUE))
+        "shell": "Rscript {0}"
+      -
+        "name": "Resolve dependencies"
+        "uses": "r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05"
+        "with":
+          "working-directory": "candidate"
+          "cache": false
+          "dependencies": "\"all\""
+          "extra-packages": |
+            any::BiocManager
+            bioc::BiocVersion
+          "needs": "check"
+      -
+        "name": "Preserve dependency lockfile outside package source"
+        "run": |
+          if test -f candidate/.github/pkg.lock; then
+            mv candidate/.github/pkg.lock "$EVIDENCE_DIR/environment/pkg.lock"
+          fi
+        "if": "always()"
+      -
+        "name": "Verify Bioconductor and record dependencies"
+        "run": |
+          stopifnot(as.character(BiocManager::version()) == "3.24",
+            as.character(packageVersion("BiocVersion")) == "3.24.0",
+            !length(find.package("BreastSubtypeR",quiet=TRUE)))
+          out <- file.path(Sys.getenv("EVIDENCE_DIR"),"environment")
+          write.csv(installed.packages(),file.path(out,"installed-packages.csv"))
+          capture.output(sessionInfo(),.libPaths(),pak::repo_get(),BiocManager::repositories(),
+            file=file.path(out,"session-and-repositories.txt"))
+        "shell": "Rscript {0}"
+      -
+        "name": "Install exact candidate in a fresh isolated library"
+        "run": |
+          test ! -e "$PACKAGE_LIB"
+          mkdir -p "$PACKAGE_LIB"
+          R CMD INSTALL --install-tests --with-keep.source --library="$PACKAGE_LIB" \
+            "$GITHUB_WORKSPACE/candidate" 2>&1 | tee "$EVIDENCE_DIR/installed/install.log"
+          for file in candidate/tests/testthat/*.R; do
+            cmp "$file" "$PACKAGE_LIB/BreastSubtypeR/tests/testthat/$(basename "$file")"
+          done
+          shasum -a 256 "$PACKAGE_LIB"/BreastSubtypeR/tests/testthat/*.R > "$EVIDENCE_DIR/installed/test-sha256.txt"
+          python3 - <<'PY'
+          import pathlib, hashlib, json, os
+          root = pathlib.Path(os.environ["PACKAGE_LIB"])/"BreastSubtypeR"
+          items = {p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest()
+                   for p in sorted(root.rglob("*")) if p.is_file()}
+          out = pathlib.Path(os.environ["EVIDENCE_DIR"])/"installed"/"files-before.json"
+          out.write_text(json.dumps(items,sort_keys=True,indent=2)+"\n")
+          PY
+      -
+        "name": "Execute retained unmocked native validation"
+        "run": |
+          export R_LIBS="$PACKAGE_LIB"
+          cd "$EVIDENCE_DIR/tests"
+          Rscript --vanilla "$GITHUB_WORKSPACE/harness/.github/validation/shiny-b1/native-validation.R" \
+            2>&1 | tee native-validation.log
+        "id": "native_tests"
+      -
+        "name": "Verify source and installed files remained unchanged"
+        "run": |
+          failed=0
+          git -C candidate status --porcelain --untracked-files=all > "$EVIDENCE_DIR/source/status-after.txt" || failed=1
+          test ! -s "$EVIDENCE_DIR/source/status-after.txt" || failed=1
+          if ! git -C candidate rev-parse HEAD 'HEAD^{tree}' > "$EVIDENCE_DIR/source/identity-after.txt"; then
+            failed=1
+          elif test ! -s "$EVIDENCE_DIR/source/identity.txt"; then
+            echo "::error::Initial source identity unavailable; verification incomplete"
+            failed=1
+          elif ! cmp "$EVIDENCE_DIR/source/identity.txt" "$EVIDENCE_DIR/source/identity-after.txt"; then
+            failed=1
+          fi
+          python3 - <<'PY'
+          import pathlib, subprocess, hashlib, json, os
+          e = pathlib.Path(os.environ["EVIDENCE_DIR"])
+          results = {}
+          try:
+              root = pathlib.Path("candidate")
+              names = subprocess.check_output(["git","ls-files","-z"],cwd=root).decode().split("\0")
+              after = {n:hashlib.sha256((root/n).read_bytes()).hexdigest() for n in names if n}
+              (e/"source"/"tracked-after.json").write_text(json.dumps(after,sort_keys=True,indent=2)+"\n")
+              results["tracked_source_unchanged"] = after == json.loads((e/"source"/"tracked-before.json").read_text())
+          except Exception as exc:
+              results["source_error"] = str(exc)
+          try:
+              root = pathlib.Path(os.environ["PACKAGE_LIB"])/"BreastSubtypeR"
+              assert root.is_dir(), "Isolated installation unavailable"
+              after = {p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest()
+                       for p in sorted(root.rglob("*")) if p.is_file()}
+              (e/"installed"/"files-after.json").write_text(json.dumps(after,sort_keys=True,indent=2)+"\n")
+              results["installed_files_unchanged"] = after == json.loads((e/"installed"/"files-before.json").read_text())
+          except Exception as exc:
+              results["installation_error"] = str(exc)
+          (e/"preservation.json").write_text(json.dumps(results,indent=2)+"\n")
+          print(json.dumps(results,indent=2))
+          assert results.get("tracked_source_unchanged") is True
+          assert results.get("installed_files_unchanged") is True
+          PY
+          test "$failed" -eq 0
+        "if": "always()"
+      -
+        "name": "Checksum retained evidence"
+        "run": |
+          python3 - <<'PY'
+          import pathlib, hashlib, os
+          root = pathlib.Path(os.environ["EVIDENCE_DIR"])
+          files = sorted(p for p in root.rglob("*") if p.is_file() and p.name != "SHA256SUMS.txt")
+          (root/"SHA256SUMS.txt").write_text("".join(
+              hashlib.sha256(p.read_bytes()).hexdigest()+"  "+p.relative_to(root).as_posix()+"\n"
+              for p in files),encoding="utf-8")
+          PY
+        "if": "always()"
+      -
+        "name": "Upload native validation evidence"
+        "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+        "if": "always()"
+        "with":
+          "name": "shiny-b1-native-arm64-attempt-${{ github.run_attempt }}"
+          "path": "${{ runner.temp }}/shiny-b1-evidence"
+          "retention-days": 30
+          "if-no-files-found": "error"
