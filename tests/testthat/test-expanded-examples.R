@@ -45,8 +45,13 @@ test_that("the 19 portability paths enforce elementwise bounds and exact decisio
         posterior <- grepl("/all.probs/", rule$path, fixed = TRUE)
         expected <- if (posterior) matrix(c(.4, .3, .2, .09, .01), nrow = 1L) else
             matrix(1, nrow = 1L)
-        compare <- function(actual) issue199_portable_compare(actual, expected,
-            rule$dataset, rule$scope, rule$path)
+        compare <- function(actual) {
+            leaf <- rule$dataset == "TCGABRCAobj" && rule$path %in% paste0(
+                "/res/results/", c("genefu.robust", "ssBC", "ssBC.v2"),
+                "/score.ROR/ROR-P (Subtype + Prolif)")
+            f <- if (leaf) issue199_ror_policy_leaf_unit else issue199_portable_compare
+            f(actual, expected, rule$dataset, rule$scope, rule$path)
+        }
         actual <- expected
         bound <- rule$atol + rule$rtol * abs(expected[1L])
         actual[1L] <- expected[1L] + bound / 2
@@ -64,7 +69,7 @@ test_that("the 19 portability paths enforce elementwise bounds and exact decisio
     expect_error(issue199_portable_compare(actual, expected, "OSLO2EMIT0obj",
         path = p), "posterior ranks/ties/argmax")
     cut <- 100 * (-.25 + .35) / .85
-    expect_error(issue199_portable_compare(cut + 2^-49, cut, "TCGABRCAobj",
+    expect_error(issue199_ror_policy_leaf_unit(cut + 2^-49, cut, "TCGABRCAobj",
         path = "/res/results/ssBC/score.ROR/ROR-P (Subtype + Prolif)"),
         "ROR cutoff sides")
 })
