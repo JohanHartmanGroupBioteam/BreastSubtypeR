@@ -30,6 +30,55 @@ issue199_portability_policy <- function() {
         stringsAsFactors = FALSE)
 }
 
+# Exact within-object selection; masked rows are handled before first argmax.
+issue199_posterior_link <- function(o, where) {
+    fail <- function(reason) stop(paste(where, reason), call. = FALSE)
+    fields <- c("prob", "cl", "all.probs", "rules.matrix")
+    if (!is.list(o) || anyDuplicated(names(o)) || !all(fields %in% names(o)))
+        fail("posterior fields missing or duplicated")
+    ks <- names(o$all.probs)
+    if (!is.list(o$all.probs) || !length(ks) ||
+        length(ks) != length(o$all.probs) || anyNA(ks) ||
+        any(ks == "") || anyDuplicated(ks) ||
+        !is.matrix(o$prob) || !is.double(o$prob) ||
+        !is.matrix(o$cl) || !is.character(o$cl) ||
+        !identical(dim(o$prob), dim(o$cl)) ||
+        !identical(dimnames(o$prob), dimnames(o$cl)) ||
+        !identical(colnames(o$prob), ks))
+        fail("prob/cl/all.probs names or structure")
+    samples <- rownames(o$prob)
+    if (!is.matrix(o$rules.matrix) || ncol(o$rules.matrix) != nrow(o$prob) ||
+        (!is.null(colnames(o$rules.matrix)) &&
+            !identical(colnames(o$rules.matrix), samples)))
+        fail("rules.matrix sample axis")
+    for (k in ks) {
+        p <- o$all.probs[[k]]
+        classes <- colnames(p)
+        if (!is.matrix(p) || !is.double(p) || nrow(p) != nrow(o$prob) ||
+            !length(classes) || anyNA(classes) || any(classes == "") ||
+            anyDuplicated(classes) ||
+            (!is.null(rownames(p)) && !identical(rownames(p), samples)))
+            fail("all.probs class/sample axes or structure")
+        n_na <- rowSums(is.na(p))
+        masked <- n_na == ncol(p)
+        if (any(is.nan(p)) || any(n_na != 0L & !masked) ||
+            !all(is.finite(p[!masked, , drop = FALSE])))
+            fail("posterior rows must be finite or entirely NA_real_")
+        if (any(p < 0 | p > 1, na.rm = TRUE)) fail("posterior outside [0,1]")
+        probability <- rep(NA_real_, nrow(p))
+        call <- rep(NA_character_, nrow(p))
+        if (any(!masked)) {
+            j <- max.col(p[!masked, , drop = FALSE], ties.method = "first")
+            probability[!masked] <- p[cbind(which(!masked), j)]
+            call[!masked] <- classes[j]
+        }
+        if (!identical(unname(o$prob[, k]), probability, num.eq = FALSE) ||
+            !identical(unname(o$cl[, k]), call))
+            fail("selected probability/class link")
+    }
+    invisible(TRUE)
+}
+
 issue199_portable_compare <- function(actual, expected, dataset,
     scope = "C_vs_approved_C", path = "") {
     policy <- issue199_portability_policy()
@@ -41,6 +90,8 @@ issue199_portable_compare <- function(actual, expected, dataset,
     policy <- policy[policy$path == path | startsWith(policy$path, paste0(path, "/")),
         , drop = FALSE]
     visited <- character()
+    derived <- c("/res/results/AIMS/prob", "/res/results/sspbc/prob")
+    linked <- character()
     fail <- function(p, reason) stop(paste(p, reason), call. = FALSE)
     ranks <- function(m) t(apply(m, 1L, function(v)
         rank(-v, ties.method = "min", na.last = "keep")))
@@ -108,8 +159,19 @@ issue199_portable_compare <- function(actual, expected, dataset,
                     fail(p, "ROR cutoff sides")
             }
         } else if (is.list(a)) {
+            # Existing generic fixtures omit all three selection/rule fields.
+            # Any present field requires a complete parent in both objects.
+            if (p %in% dirname(derived) && any(c("prob", "cl", "rules.matrix") %in%
+                c(names(a), names(b)))) {
+                issue199_posterior_link(a, paste(p, "actual"))
+                issue199_posterior_link(b, paste(p, "reference"))
+                linked <<- c(linked, p)
+            }
             for (j in seq_along(a)) walk(a[[j]], b[[j]], paste0(p, "/",
                 if (length(names(a))) names(a)[j] else j))
+        } else if (p %in% derived) {
+            if (!dirname(p) %in% linked || !identical(is.na(a), is.na(b)))
+                fail(p, "derived posterior without verified link or with changed mask")
         } else if (!identical(a, b, num.eq = FALSE)) fail(p, "unlisted value must be exact")
         invisible(NULL)
     }
@@ -131,10 +193,18 @@ issue199_expect_decisions <- function(actual, expected) {
     for (method in names(actual$results)) {
         a <- actual$results[[method]]; b <- expected$results[[method]]
         if (method %in% c("AIMS", "sspbc")) {
+            testthat::expect_true(issue199_posterior_link(a, paste(method, "actual")))
+            testthat::expect_true(issue199_posterior_link(b, paste(method, "reference")))
             testthat::expect_identical(a$cl, b$cl)
-            testthat::expect_identical(a$rules.matrix, b$rules.matrix)
-            testthat::expect_identical(a$prob, b$prob)
-            for (k in names(a$all.probs)) compare_ranks(a$all.probs[[k]], b$all.probs[[k]])
+            testthat::expect_true(identical(a$rules.matrix, b$rules.matrix, num.eq = FALSE))
+            testthat::expect_true(identical(attributes(a$prob), attributes(b$prob), num.eq = FALSE))
+            testthat::expect_identical(is.na(a$prob), is.na(b$prob))
+            testthat::expect_true(identical(attributes(a$all.probs), attributes(b$all.probs), num.eq = FALSE))
+            for (k in names(a$all.probs)) {
+                testthat::expect_true(identical(attributes(a$all.probs[[k]]),
+                    attributes(b$all.probs[[k]]), num.eq = FALSE))
+                compare_ranks(a$all.probs[[k]], b$all.probs[[k]])
+            }
         } else {
             for (n in c("distances", "dist.RORSubtype"))
                 compare_ranks(a$outList[[n]], b$outList[[n]])
