@@ -1,0 +1,9 @@
+"file"	"test"	"nb"	"passed"	"failed"	"error"	"warning"	"skipped"
+"test-issue199-ror-bounds.R"	"ROR fixture provenance and all ten routes retain exactly 998 comparisons"	18	18	0	FALSE	0	FALSE
+"test-issue199-ror-bounds.R"	"ROR formula identity applies to fresh current-runtime results without changing RNG"	154	154	0	FALSE	0	FALSE
+"test-issue199-ror-bounds.R"	"ROR formula regression detects published-coefficient and oracle mutants"	80	80	0	FALSE	0	FALSE
+"test-issue199-ror-bounds.R"	"ROR ceiling and independent parent rules have effective controls"	6	6	0	FALSE	0	FALSE
+"test-issue199-ror-bounds.R"	"ROR structural gates precede numerical and missing-score decisions"	14	14	0	FALSE	0	FALSE
+"test-issue199-ror-bounds.R"	"ROR numerical guards accept their interior and refuse the exterior"	16	16	0	FALSE	0	FALSE
+"test-issue199-ror-bounds.R"	"ROR payload patterns and bare-leaf refusal cannot bypass the contract"	20	20	0	FALSE	0	FALSE
+"test-issue199-ror-bounds.R"	"ROR provenance, exclusions, entropy and route visits remain mandatory"	27	27	0	FALSE	0	FALSE

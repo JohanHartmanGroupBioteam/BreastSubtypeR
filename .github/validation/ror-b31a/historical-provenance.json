@@ -1,0 +1,18 @@
+{
+  "historical_source_commits": [
+    "f6dbdbb874785008d8511155b1ba8b72f7c0f22d",
+    "3755d3d2f130f7ebe974109c8a82c4d5d83d441d"
+  ],
+  "archive_sha256": "36175769fbf966f2e085055ceb53e03e76eefca887d441afbd1b0f1f6c7fe81a",
+  "oslo_RDS_sha256": "6cd799ff449b988ba1e25181c7299ee23258d86c2407f41c81b9327e6e20b45f",
+  "tcga_RDS_sha256": "3b47464106b9c5979207b96017f90599f17e0fde55a46ea68d513f9180629ef1",
+  "numerical_decision_matrix_sha256": "766fd23a69ac17168064f9fc3822ee51b03bb5cad36367d5029946771c5e2f6c",
+  "historical_leaves_sha256": "7e7b8465bcfee6997a8e9f6d189131713aab7e2c83303efd9056390622583ecd",
+  "independently_cross_referenced_known_failure_leaves": 30,
+  "fingerprint": "SHA-256 of little-endian binary64 payload in R storage order; no serialization or tolerance",
+  "interpretation": "Historical evidence summaries only. Newly computed native failures require exact actual/reference fingerprints and matching counts/policy to receive B3 attribution. These summaries do not change package test acceptance.",
+  "raw_expression_matrices_excluded": true,
+  "comparison_source": "verified previous B2 native run 43439351237",
+  "comparison_artifact_sha256": "028e4084845570f22f480c97f9108cd326c4ea660fc5d72177460859d1588212",
+  "comparison_artifact_payloads_verified": 62
+}

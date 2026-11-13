@@ -1,0 +1,97 @@
+"file"	"test"	"nb"	"passed"	"failed"	"error"	"warning"	"skipped"
+"test-aims-single-sample.R"	"AIMS accepts one mapped sample with complete result dimensions"	25	25	0	FALSE	0	FALSE
+"test-aims-single-sample.R"	"AIMS preserves an arbitrary single-sample identifier exactly"	3	3	0	FALSE	0	FALSE
+"test-aims-single-sample.R"	"AIMS preserves frozen two sample predictions"	5	5	0	FALSE	0	FALSE
+"test-aims-single-sample.R"	"AIMS preserves frozen multiple sample predictions"	5	5	0	FALSE	0	FALSE
+"test-aims-single-sample.R"	"AIMS preserves frozen full sample predictions"	5	5	0	FALSE	0	FALSE
+"test-aims-single-sample.R"	"AIMS retains missing and invalid input checks"	5	5	0	FALSE	0	FALSE
+"test-aims-single-sample.R"	"SSPBC predictions are unchanged for single and multiple samples"	8	8	0	FALSE	0	FALSE
+"test-expanded-examples.R"	"the 19 portability paths enforce elementwise bounds and exact decisions"	46	46	0	FALSE	0	FALSE
+"test-expanded-examples.R"	"portability never relaxes structure, metadata, masks or unlisted values"	20	20	0	FALSE	0	FALSE
+"test-expanded-examples.R"	"compact historical files retain pinned payloads and original provenance"	12	12	0	FALSE	0	FALSE
+"test-expanded-examples.R"	"expanded public examples retain original observations and metadata"	40	40	0	FALSE	0	FALSE
+"test-expanded-examples.R"	"default Mapping reconstructs current examples without changing RNG"	18	18	0	FALSE	0	FALSE
+"test-expanded-examples.R"	"expanded current AUTO results reproduce the accepted complete objects"	316	316	0	FALSE	0	FALSE
+"test-expanded-examples.R"	"OSLO expansion changes neither mapped values nor current method outputs"	5	5	0	FALSE	0	FALSE
+"test-expanded-examples.R"	"TCGA expanded counts reproduce the 64 documented dataset-induced calls"	9	9	0	FALSE	0	FALSE
+"test-expanded-examples.R"	"expanded TCGA has complete proliferation panels with independent ROR arithmetic"	8	8	0	FALSE	0	FALSE
+"test-issue199-posterior-links.R"	"complete posterior links accept approved and bounded coherent results"	28	28	0	FALSE	0	FALSE
+"test-issue199-posterior-links.R"	"posterior links support first ties, whole masks, singletons and empty comparisons"	22	22	0	FALSE	0	FALSE
+"test-issue199-posterior-links.R"	"selected posterior values and calls must match each parent bit exactly"	58	58	0	FALSE	0	FALSE
+"test-issue199-posterior-links.R"	"posterior ties, ranks and first argmax remain exact across objects"	26	26	0	FALSE	0	FALSE
+"test-issue199-posterior-links.R"	"partial missing rows, NaN and infinite posteriors are refused"	28	28	0	FALSE	0	FALSE
+"test-issue199-posterior-links.R"	"posterior models, types, sample and class axes are structural contracts"	116	116	0	FALSE	0	FALSE
+"test-issue199-posterior-links.R"	"every posterior model is linked and original numeric safeguards remain active"	27	27	0	FALSE	0	FALSE
+"test-issue199-posterior-links.R"	"intentionally partial generic objects retain their existing comparison contract"	3	3	0	FALSE	0	FALSE
+"test-issue199-posterior-links.R"	"posterior helper comparisons leave seed and RNG kind unchanged"	12	12	0	FALSE	0	FALSE
+"test-ror-boundaries.R"	"all 24 fixtures reach exact raw cutoffs and immediate IEEE neighbours"	13	13	0	FALSE	0	FALSE
+"test-ror-boundaries.R"	"original ROR equality is med with clinical data on or off"	88	88	0	FALSE	0	FALSE
+"test-ror-boundaries.R"	"original ROR boundary changes preserve missing and nonfinite results"	204	204	0	FALSE	0	FALSE
+"test-ror-groups.R"	"ROR-C group follows the ROR-C score, not the ROR-PC score"	3	3	0	FALSE	0	FALSE
+"test-ror-groups.R"	"ROR-C and ROR-PC groups are unchanged without clinical data"	2	2	0	FALSE	0	FALSE
+"test-ror-groups.R"	"NODE changes only the subtype-specific ROR-PC risk group"	17	17	0	FALSE	0	FALSE
+"test-ror-groups.R"	"missing TSIZE removes clinical ROR results regardless of NODE"	15	15	0	FALSE	0	FALSE
+"test-ror-groups.R"	"subtype-specific ROR-PC endpoints include the upper cutoff"	3	3	0	FALSE	0	FALSE
+"test-ror-groups.R"	"undefined additional ROR-PC scores have missing categories"	89	89	0	FALSE	0	FALSE
+"test-ror-groups.R"	"NODE boundary labels leave scores and other outputs unchanged"	21	21	0	FALSE	0	FALSE
+"test-ror-groups.R"	"boundary correction preserves missing clinical output"	18	18	0	FALSE	0	FALSE
+"test-ror-groups.R"	"valid NODE counts are accepted as integers and integer-valued doubles"	49	49	0	FALSE	0	FALSE
+"test-ror-groups.R"	"missing NODE gives a silent missing character group"	18	18	0	FALSE	0	FALSE
+"test-ror-groups.R"	"invalid NODE values give one warning and missing groups"	77	77	0	FALSE	0	FALSE
+"test-ror-groups.R"	"mixed valid and invalid NODE values are handled per sample"	28	28	0	FALSE	0	FALSE
+"test-ror-groups.R"	"invalid NODE groups stay missing after text round-trip"	2	2	0	FALSE	0	FALSE
+"test-ror-groups.R"	"shuffled clinical rows keep NODE validity aligned by PatientID"	4	4	0	FALSE	0	FALSE
+"test-ror-groups.R"	"missing TSIZE overrides valid and invalid NODE alike"	5	5	0	FALSE	0	FALSE
+"test-ror-groups.R"	"valid NODE >= 4 keeps high risk with an undefined additional score"	4	4	0	FALSE	0	FALSE
+"test-ror-groups.R"	"invalid NODE is irrelevant when hasClinical = FALSE"	3	3	0	FALSE	0	FALSE
+"test-ror-groups.R"	"all-invalid and all-missing batches return a character group column"	24	24	0	FALSE	0	FALSE
+"test-ror-proliferation-coverage.R"	"represented panels reproduce standardized original and raw additional arithmetic"	30	30	0	FALSE	0	FALSE
+"test-ror-proliferation-coverage.R"	"one represented gene in either panel no longer drops dimensions"	59	59	0	FALSE	0	FALSE
+"test-ror-proliferation-coverage.R"	"partial panels average the represented genes without a threshold"	7	7	0	FALSE	0	FALSE
+"test-ror-proliferation-coverage.R"	"zero represented 11-gene panel genes give missing scores and groups"	30	30	0	FALSE	0	FALSE
+"test-ror-proliferation-coverage.R"	"zero represented 18-gene panel genes keep the NODE >= 4 override"	10	10	0	FALSE	0	FALSE
+"test-ror-proliferation-coverage.R"	"per-sample NA, NaN, Inf and -Inf panel values give missing outputs for that sample only"	428	428	0	FALSE	0	FALSE
+"test-ror-proliferation-coverage.R"	"nonfinite numerical ROR scores never receive a risk category"	21	21	0	FALSE	0	FALSE
+"test-ror-proliferation-coverage.R"	"missing proliferation scores leave sample order, calls and RNG untouched"	6	6	0	FALSE	0	FALSE
+"test-ror-proliferation-coverage.R"	"OSLO2EMIT0 retains historical outputs except corrected original ROR"	24	24	0	FALSE	0	FALSE
+"test-ror-proliferation-coverage.R"	"incomplete TCGABRCA panels run as a documented compatibility limitation"	15	15	0	FALSE	0	FALSE
+"test-ror-proliferation-coverage.R"	"every exported ROR score is finite or NA and nonfinite results have NA groups"	114	114	0	FALSE	0	FALSE
+"test-ror-proliferation-coverage.R"	"finite exact-equality scores keep the approved #172 medium label after the finiteness check"	4	4	0	FALSE	0	FALSE
+"test-ror-proliferation-coverage.R"	"missing additional scores are NA rather than NaN with the NODE >= 4 override kept"	4	4	0	FALSE	0	FALSE
+"test-ror-standardization.R"	"complete PAM50 ROR-P and original ROR-PC match the Parker reference"	19	19	0	FALSE	0	FALSE
+"test-ror-standardization.R"	"the ROR standardization is within each sample and never mutates its input"	8	8	0	FALSE	0	FALSE
+"test-ror-standardization.R"	"all NC methods use the final PAM50 matrix for original ROR only"	800	800	0	FALSE	0	FALSE
+"test-ror-standardization.R"	"all Parker calibration variants standardize after calibration"	168	168	0	FALSE	0	FALSE
+"test-ror-standardization.R"	"zero, one, partial and complete coverage retain dimensions and finite-or-NA outputs"	320	320	0	FALSE	0	FALSE
+"test-ror-standardization.R"	"undefined sample standardization never supplies a fallback proliferation score"	59	59	0	FALSE	0	FALSE
+"test-shiny-example-parity.R"	"the six Shiny tables retain provenance, schemas, IDs and associations"	44	44	0	FALSE	0	FALSE
+"test-shiny-example-parity.R"	"OSLO text is bitwise identical to its frozen binary on the exact profile"	1	1	0	FALSE	0	FALSE
+"test-shiny-example-parity.R"	"installed Shiny examples map, calculate AUTO and download candidate calls"	105	105	0	FALSE	0	FALSE
+"test-shiny-expression-import.R"	"gene-ID layouts preserve exact measurements, identifiers and orientation"	13	13	0	FALSE	0	FALSE
+"test-shiny-expression-import.R"	"singletons, quoting and numeric-looking IDs keep their dimensions and spelling"	6	6	0	FALSE	0	FALSE
+"test-shiny-expression-import.R"	"missingness is mode-specific and explicit infinities retain their signs"	9	9	0	FALSE	0	FALSE
+"test-shiny-expression-import.R"	"malformed measurements identify the original cell and stop the import"	17	17	0	FALSE	0	FALSE
+"test-shiny-expression-import.R"	"record widths are checked before header association"	5	5	0	FALSE	0	FALSE
+"test-shiny-expression-import.R"	"a missing final newline is valid and a NUL cannot truncate a measurement"	2	2	0	FALSE	0	FALSE
+"test-shiny-expression-import.R"	"short records stop at the physical line and explicit missing fields retain their position"	4	4	0	FALSE	0	FALSE
+"test-shiny-expression-import.R"	"only uniformly empty terminal fields can be export padding"	11	11	0	FALSE	0	FALSE
+"test-shiny-expression-import.R"	"text metadata cannot hide an unknown sample column"	6	6	0	FALSE	0	FALSE
+"test-shiny-expression-import.R"	"an omitted corner requires uniformly wider data records"	8	8	0	FALSE	0	FALSE
+"test-shiny-expression-import.R"	"numeric annotation overlap cannot consume an unmatched sample"	5	5	0	FALSE	0	FALSE
+"test-sspbc-ror.R"	"both packaged model collections contain the fitted SSP-ROR model"	12	12	0	FALSE	0	FALSE
+"test-sspbc-ror.R"	"subtype-only inputs preserve native incomplete-rule results"	8	8	0	FALSE	0	FALSE
+"test-sspbc-ror.R"	"SSP-ROR retains native types and shapes for one or more samples"	72	72	0	FALSE	0	FALSE
+"test-sspbc-ror.R"	"SSP-ROR sample order agrees between individual and batch calls"	18	18	0	FALSE	0	FALSE
+"test-sspbc-ror.R"	"SSPBC rejects unknown and partial model names"	4	4	0	FALSE	0	FALSE
+"test-sspbc-ror.R"	"existing SSPBC subtype models retain current native output"	11	11	0	FALSE	0	FALSE
+"test-sspbc-ror.R"	"expanded public datasets supply complete native SSP-ROR outputs"	208	208	0	FALSE	0	FALSE
+"test-zero-evaluable-rules.R"	"AIMS masks only zero-evidence samples, including singly"	116	116	0	FALSE	0	FALSE
+"test-zero-evaluable-rules.R"	"AIMS handles absent genes without losing matrix dimensions"	117	117	0	FALSE	0	FALSE
+"test-zero-evaluable-rules.R"	"ssp.pam50 masks only zero-evidence samples, including singly"	116	116	0	FALSE	0	FALSE
+"test-zero-evaluable-rules.R"	"ssp.pam50 handles absent genes without losing matrix dimensions"	117	117	0	FALSE	0	FALSE
+"test-zero-evaluable-rules.R"	"ssp.subtype masks only zero-evidence samples, including singly"	116	116	0	FALSE	0	FALSE
+"test-zero-evaluable-rules.R"	"ssp.subtype handles absent genes without losing matrix dimensions"	117	117	0	FALSE	0	FALSE
+"test-zero-evaluable-rules.R"	"other SSPBC models retain their native zero-evidence behavior"	27	27	0	FALSE	0	FALSE
+"test-zero-evaluable-rules.R"	"SSPBC fullname selection uses the resolved subtype model"	22	22	0	FALSE	0	FALSE
+"test-zero-evaluable-rules.R"	"rule matching rejects missing and ambiguous predictors before prediction"	33	33	0	FALSE	0	FALSE
+"test-zero-evaluable-rules.R"	"BS_Multi propagates per-model missing calls and native details"	69	69	0	FALSE	0	FALSE
