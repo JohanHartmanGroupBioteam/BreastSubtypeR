@@ -272,17 +272,210 @@ issue199_posterior_link <- function(o, where) {
     invisible(TRUE)
 }
 
+issue199_posterior_models <- function() {
+    hashes <- c(AIMSmodel = "6c541625fe22667540ef7c11d9005290",
+                sspbc.models = "1c2ba126cc1ea8ecc15dd6dc4656285d")
+    models <- new.env(parent = emptyenv())
+    for (name in names(hashes)) {
+        file <- system.file("data", paste0(name, ".RData"), package = "BreastSubtypeR")
+        if (!nzchar(file) || !identical(unname(tools::md5sum(file)), hashes[[name]]))
+            stop(paste(name, "posterior model provenance"), call. = FALSE)
+        load(file, envir = models)
+    }
+    list(AIMS = models$AIMSmodel, sspbc = models$sspbc.models$ssp.pam50)
+}
+
+# Fixture proof assumes binary64 round-to-nearest, accumulator precision >= 53
+# bits, the reviewed e1071 operation order, normal exp/log relative error <=
+# 8u (u = 2^-53), gradual underflow with exp absolute error <= 4*2^-1074,
+# exact exp(0)/log(1), and ordinary positive overflow. These probes establish
+# observable prerequisites; runtime metadata cannot certify the libm bound.
+issue199_posterior_arithmetic <- function() {
+    eta <- 2^-1074
+    if (!isTRUE(.Machine$double.base == 2L && .Machine$double.digits == 53L &&
+        .Machine$double.rounding == 5L && .Machine$double.min.exp == -1022L &&
+        .Machine$double.max.exp == 1024L && .Machine$sizeof.pointer == 8L &&
+        (is.null(.Machine$longdouble.digits) || .Machine$longdouble.digits >= 53L) &&
+        eta > 0 && .Machine$double.xmin / 2^52 == eta && eta/2 == 0 &&
+        exp(0) == 1 && log(1) == 0 && exp(1000) == Inf && exp(-1000) == 0 &&
+        abs(exp(-744) - 2*eta) <= 4*eta))
+        stop("posterior arithmetic model", call. = FALSE)
+}
+
+issue199_posterior_x <- function(x) {
+    if (!all(is.finite(x) & (x <= 32 | x >= 64)))
+        stop("posterior domain guard G-X", call. = FALSE)
+}
+
+# Build both possible density columns once per predictor. Use the stored
+# predictor order even when the supplied rule matrix has a different order.
+issue199_posterior_terms <- function(nb, rules) {
+    predictors <- names(nb$tables)
+    rule_names <- make.names(rownames(rules))
+    index <- match(predictors, rule_names)
+    if (!length(index) || anyNA(index) || anyDuplicated(predictors) ||
+        anyDuplicated(rule_names) || !all(is.na(rules) | rules == 0 | rules == 1))
+        stop("posterior rules: predictor mapping or values", call. = FALSE)
+    rules <- rules[index, , drop = FALSE]
+    classes <- length(nb$apriori)
+    log_density <- lapply(c(0, 1), function(value) {
+        vapply(nb$tables, function(tab) {
+            sd <- tab[, 2L]
+            sd[sd <= 0] <- 0.001
+            x <- abs((value - tab[, 1L])/sd)
+            issue199_posterior_x(x)
+            density <- dnorm(value, tab[, 1L], sd)
+            if (!all(is.finite(density)) || any(density[x <= 32] < .Machine$double.xmin) ||
+                any(density[x >= 64] != 0))
+                stop("posterior domain guard G-X density/floor", call. = FALSE)
+            density[density <= 0] <- 0.001
+            log(density)
+        }, numeric(classes))
+    })
+    prior <- log(nb$apriori)
+    likelihood <- magnitude <- matrix(0, ncol(rules), classes,
+        dimnames = list(NULL, names(prior)))
+    for (i in seq_len(ncol(rules))) {
+        column <- rules[, i]
+        ones <- which(column == 1)
+        terms <- log_density[[1L]]
+        terms[, ones] <- log_density[[2L]][, ones, drop = FALSE]
+        terms[, is.na(column)] <- 0 # missing predictor contributes density one
+        likelihood[i, ] <- prior + apply(terms, 1L, sum)
+        magnitude[i, ] <- abs(prior) + apply(abs(terms), 1L, sum)
+    }
+    list(L = likelihood, magnitude = magnitude, masked = colSums(!is.na(rules)) == 0L)
+}
+
+# Exact same-runtime oracle. Keep the reciprocal form, including overflow.
+issue199_posterior_oracle <- function(nb, rules) {
+    terms <- issue199_posterior_terms(nb, rules)
+    result <- terms$L
+    for (i in seq_len(nrow(result))) {
+        L <- terms$L[i, ]
+        result[i, ] <- if (terms$masked[i]) NA_real_ else
+            vapply(L, function(lp) 1/sum(exp(L-lp)), numeric(1L))
+    }
+    result
+}
+
+issue199_posterior_domain <- function(terms, reference, method) {
+    sum_cap <- switch(method, AIMS = 520, sspbc = 1520, stop("Unknown posterior method"))
+    span_cap <- if (method == "AIMS") 500 else 1520
+    L <- terms$L
+    if (!all(is.finite(terms$magnitude) & terms$magnitude <= sum_cap))
+        stop("posterior domain guard G-S1", call. = FALSE)
+    spans <- apply(L, 1L, function(v) max(v) - min(v))
+    if (!all(is.finite(spans) & spans <= span_cap))
+        stop("posterior domain guard G-S2", call. = FALSE)
+    # Subtract the row maximum before exp. The five-term sum is in [1, 5].
+    log_sum <- t(vapply(seq_len(nrow(L)), function(i) {
+        v <- L[i, ]
+        peak <- max(v)
+        (peak - v) + log(sum(exp(v - peak)))
+    }, numeric(ncol(L))))
+    zero <- reference == 0
+    tiny <- reference > 0 & reference < .Machine$double.xmin
+    normal <- reference >= .Machine$double.xmin
+    overflow <- log(.Machine$double.xmax)
+    boundary <- 1022*log(2)
+    margin <- 2^-4
+    if (!isTRUE(all(log_sum[zero] >= overflow + margin,
+        log_sum[!zero] <= overflow - margin, log_sum[tiny] >= boundary + margin,
+        log_sum[normal] <= boundary - margin)))
+        stop("posterior domain guard G-O", call. = FALSE)
+    gaps <- apply(reference, 1L, function(v) {
+        positive <- sort(v[v > 0])
+        if (length(positive) < 2L) return(Inf)
+        min(diff(positive)/positive[-1L])
+    })
+    if (!all(gaps >= 2^-20)) stop("posterior domain guard G-R", call. = FALSE)
+    invisible(list(max_sum = max(terms$magnitude), max_span = max(spans),
+        min_gap = min(gaps), zero = sum(zero), subnormal = sum(tiny),
+        overflow_margin = if (any(zero)) min(log_sum[zero] - overflow) else NA_real_,
+        nonzero_margin = min(overflow - log_sum[!zero]),
+        subnormal_margin = if (any(tiny)) min(log_sum[tiny] - boundary) else NA_real_,
+        normal_margin = min(boundary - log_sum[normal])))
+}
+
+issue199_posterior_method <- function(parent, ref, model, method, dataset) {
+    k <- switch(method, AIMS = 20L, sspbc = 24L, stop("Unknown posterior method"))
+    key <- as.character(k)
+    classes <- c("Basal", "Her2", "LumA", "LumB", "Normal")
+    nb <- model$one.vs.all.tsp[[k]]
+    if (!isTRUE(model$k == k) || length(nb$tables) != 5L*k ||
+        !identical(names(nb$apriori), classes) ||
+        !identical(names(nb$tables), make.names(model$all.pairs)) ||
+        anyDuplicated(names(nb$tables)) ||
+        !all(vapply(nb$tables, function(tab) identical(dim(tab), c(5L, 2L)) &&
+            identical(rownames(tab), classes) && all(is.finite(tab)), logical(1L))))
+        stop(paste(method, "posterior model provenance/structure"), call. = FALSE)
+    samples <- switch(dataset, OSLO2EMIT0obj = 102L, TCGABRCAobj = 100L,
+        stop("Unknown posterior dataset"))
+    p <- parent$all.probs[[key]]
+    q <- ref$all.probs[[key]]
+    if (!identical(names(parent$all.probs), key) || !identical(dim(p), c(samples, 5L)) ||
+        !identical(attributes(p), attributes(q)) || !identical(colnames(p), classes) ||
+        !identical(dimnames(parent$prob), dimnames(ref$prob)) ||
+        !identical(dimnames(parent$cl), dimnames(ref$cl)))
+        stop(paste(method, "posterior structure/axes"), call. = FALSE)
+    rules <- parent$rules.matrix
+    if (!identical(rules, ref$rules.matrix, num.eq = FALSE, single.NA = FALSE) ||
+        !identical(rownames(rules), model$all.pairs) ||
+        !identical(dim(rules), c(5L*k, samples)) || !all(rules %in% c(0, 1)))
+        stop(paste(method, "posterior rules"), call. = FALSE)
+    issue199_posterior_link(parent, paste(method, "actual"))
+    issue199_posterior_link(ref, paste(method, "reference"))
+    issue199_numeric_patterns(p, q, method)
+    ranks <- function(x) apply(x, 1L, rank, ties.method = "min", na.last = "keep")
+    if (!identical(ranks(p), ranks(q)) ||
+        !identical(max.col(p, ties.method = "first"), max.col(q, ties.method = "first")))
+        stop(paste(method, "posterior ranks/ties/argmax"), call. = FALSE)
+    terms <- issue199_posterior_terms(nb, rules)
+    domain <- issue199_posterior_domain(terms, q, method)
+    normal <- is.finite(p) & p >= .Machine$double.xmin
+    ceiling <- if (method == "AIMS") 2^-35 else 2^-33
+    if (!all(abs(p[normal] - q[normal]) <= ceiling*pmax(p[normal], q[normal])))
+        stop(paste(method, "posterior bound exceeded"), call. = FALSE)
+    invisible(domain)
+}
+
 issue199_portable_compare <- function(actual, expected, dataset,
     scope = "C_vs_approved_C", path = "") {
+    keys <- c(AIMS = "20", sspbc = "24")
+    posterior_paths <- paste0("/res/results/", names(keys), "/all.probs/", keys)
+    if (path %in% posterior_paths)
+        stop("Posterior scientific comparison requires full parent context", call. = FALSE)
+    ror_paths <- checked_posteriors <- character()
+    if (scope == "C_vs_approved_C" && path %in% c("", "/res")) {
+        fixture <- issue199_ror_approved(dataset)
+        reference <- if (path == "") fixture else fixture$res
+        if (!identical(expected, reference, num.eq = FALSE, single.NA = FALSE))
+            stop(paste(dataset, "approved posterior reference provenance"), call. = FALSE)
+        res <- if (path == "") actual[["res", exact = TRUE]] else actual
+        if (!is.list(res) || !all(names(keys) %in% names(res$results)))
+            stop("Missing scientific posterior methods or parent", call. = FALSE)
+        ror_paths <- issue199_ror_context(res, fixture$res, dataset)
+        issue199_posterior_arithmetic()
+        models <- issue199_posterior_models()
+        for (method in names(keys))
+            issue199_posterior_method(res$results[[method]], fixture$res$results[[method]],
+                models[[method]], method, dataset)
+        checked_posteriors <- posterior_paths
+    }
+    issue199_compare_walk(actual, expected, dataset, scope, path, ror_paths, checked_posteriors)
+}
+
+# Explicit entry for synthetic tests of the original 19-row policy and B2 links.
+issue199_portability_unit <- function(actual, expected, dataset,
+    scope = "C_vs_approved_C", path = "") {
+    issue199_compare_walk(actual, expected, dataset, scope, path, character(), character())
+}
+
+issue199_compare_walk <- function(actual, expected, dataset, scope, path, ror_paths, checked_posteriors) {
     ror_leaf <- paste0("/res/results/", c("genefu.robust", "ssBC", "ssBC.v2", "cIHC", "PCAPAM50"),
         "/score.ROR/ROR-P (Subtype + Prolif)")
     if (path %in% ror_leaf) stop("ROR scientific comparison requires full parent context", call. = FALSE)
-    ror_paths <- character()
-    if (scope == "C_vs_approved_C" && path %in% c("", "/res")) {
-        ar <- if (path == "") actual$res else actual
-        br <- if (path == "") expected$res else expected
-        if (!is.null(ar) && !is.null(br)) ror_paths <- issue199_ror_context(ar, br, dataset)
-    }
     ror_visited <- character()
     policy <- issue199_portability_policy()
     policy <- policy[policy$dataset == dataset & policy$scope == scope, , drop = FALSE]
@@ -329,6 +522,9 @@ issue199_portable_compare <- function(actual, expected, dataset,
         if (p %in% ror_paths) {
             ror_visited <<- c(ror_visited, p)
             if (nrow(rule)) visited <<- c(visited, p)
+        } else if (p %in% checked_posteriors) {
+            if (nrow(rule) != 1L) fail(p, "missing posterior policy row")
+            visited <<- c(visited, p)
         } else if (nrow(rule)) {
             visited <<- c(visited, p)
             if (is.data.frame(a)) {
@@ -368,6 +564,8 @@ issue199_portable_compare <- function(actual, expected, dataset,
         invisible(NULL)
     }
     walk(actual, expected, path)
+    if (!identical(sort(visited[visited %in% checked_posteriors]), sort(checked_posteriors)))
+        fail(path, "unused or multiply visited posterior route")
     issue199_ror_visits(ror_visited, ror_paths)
     if (!identical(sort(unique(visited)), sort(policy$path)) || anyDuplicated(visited))
         fail(path, "unused or multiply visited portability policy path")
