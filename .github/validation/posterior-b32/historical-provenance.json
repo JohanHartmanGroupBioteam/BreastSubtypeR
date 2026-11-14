@@ -1,0 +1,8 @@
+{
+  "artifact": 14075841088,
+  "run": 43502624877,
+  "sha256": "97bb2f23f708092f6c1fc300e22815ce395b0681a67c80f242604af59894dd90",
+  "leaf_source": "auto/numerical-failure-inventory.tsv",
+  "leaf_sha256": "1124786f3d13c39268fd39faf474e1b6accaef72bcd2d8533c4b267888936971",
+  "normalized_tsv_sha256": "1b444e1a8efc400d40fb049cc1d61ae255fa22a567c008e9a4f096edf23072c7"
+}

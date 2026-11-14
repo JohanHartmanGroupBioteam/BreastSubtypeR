@@ -1,0 +1,23 @@
+control	installed block
+P1	both approved datasets route only normal posterior values to the model ceilings
+P2	both approved datasets route only normal posterior values to the model ceilings
+P3	model perturbations separate provenance, arithmetic and cross-runtime sensitivity
+P4	model perturbations separate provenance, arithmetic and cross-runtime sensitivity
+P5	model perturbations separate provenance, arithmetic and cross-runtime sensitivity
+P6	model perturbations separate provenance, arithmetic and cross-runtime sensitivity
+P7	rules, axes, selected probabilities and rank changes reach distinct safeguards
+P8	rules, axes, selected probabilities and rank changes reach distinct safeguards
+P9	rules, axes, selected probabilities and rank changes reach distinct safeguards
+P10	rules, axes, selected probabilities and rank changes reach distinct safeguards
+P11	scientific posterior masks, signed zeros and subnormal values remain exact
+P12	scientific posterior masks, signed zeros and subnormal values remain exact
+P13	scientific posterior masks, signed zeros and subnormal values remain exact
+P14	rules, axes, selected probabilities and rank changes reach distinct safeguards
+P15	rules, axes, selected probabilities and rank changes reach distinct safeguards
+P16	both approved datasets route only normal posterior values to the model ceilings
+P17	each numerical guard refuses an isolated violation
+P18	rules, axes, selected probabilities and rank changes reach distinct safeguards
+P19	changed installed fixture and model bytes fail their provenance checks
+P20	fresh public classifiers match the independent reciprocal oracle exactly
+P21	missing evidence and the density floor follow the original primitive order
+P22	All nine installed B2 link blocks through explicit synthetic dispatch

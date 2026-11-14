@@ -1,0 +1,225 @@
+"name": "B3-2 posterior validation on native macOS ARM64"
+"on":
+  "push":
+    "branches":
+      -
+        "codex/validation-posterior-b32-957e2fa"
+"permissions":
+  "contents": "read"
+"jobs":
+  "focused":
+    "name": "Reviewed B3-2 posterior candidate / macOS ARM64 / R 4.6.2"
+    "runs-on": "macos-15"
+    "timeout-minutes": 90
+    "defaults":
+      "run":
+        "shell": "bash"
+    "env":
+      "R_BIOC_VERSION": "3.24"
+      "R_KEEP_PKG_SOURCE": "yes"
+      "_R_CHECK_FORCE_SUGGESTS_": "true"
+    "steps":
+      -
+        "name": "Initialize evidence"
+        "run": |
+          EVIDENCE_DIR="$RUNNER_TEMP/posterior-b32-evidence"
+          echo "EVIDENCE_DIR=$EVIDENCE_DIR" >> "$GITHUB_ENV"
+          echo "PACKAGE_LIB=$RUNNER_TEMP/posterior-b32-library" >> "$GITHUB_ENV"
+          mkdir -p "$EVIDENCE_DIR"/{environment,source,installed,tests,auto,b1,mutations/evidence}
+      -
+        "name": "Checkout validation infrastructure"
+        "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+        "with":
+          "path": "harness"
+          "persist-credentials": false
+      -
+        "name": "Checkout pinned B3-2 PR commit"
+        "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+        "with":
+          "path": "candidate"
+          "ref": "94762a40c55cf6dc4acd3d53e1882e1747721b7d"
+          "fetch-depth": 2
+          "persist-credentials": false
+      -
+        "name": "Capture and verify native runner and exact source"
+        "run": |
+          {
+            echo "workflow_commit=$GITHUB_SHA"
+            echo "runner_arch=$RUNNER_ARCH"
+            echo "image_version=${ImageVersion:-unknown}"
+            uname -a
+            sw_vers
+          } | tee "$EVIDENCE_DIR/environment/runner.txt"
+          cp -R harness/.github/validation/posterior-b32 "$EVIDENCE_DIR/harness"
+          cp harness/.github/workflows/posterior-b32-native.yaml "$EVIDENCE_DIR/workflow.yaml"
+          git -C candidate rev-parse HEAD 'HEAD^{tree}' > "$EVIDENCE_DIR/source/identity.txt"
+          python3 harness/.github/validation/posterior-b32/verify-source.py before
+          test "$(uname -s)" = Darwin
+          test "$(uname -m)" = arm64
+          test "$RUNNER_ARCH" = ARM64
+          test "$(git -C harness rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(shasum -a 256 harness/.github/validation/posterior-b32/b1-native.R | cut -d ' ' -f 1)" = 0491e75e51c10c7d3c22b77f29b55699f8057377ab6497968e5ac619aad707de
+      -
+        "name": "Set up pandoc"
+        "uses": "r-lib/actions/setup-pandoc@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05"
+      -
+        "name": "Set up native R 4.6.2"
+        "uses": "r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05"
+        "with":
+          "r-version": "4.6.2"
+          "use-public-rspm": false
+          "Ncpus": 2
+      -
+        "name": "Verify exact native R"
+        "run": |
+          capture.output(R.version, Sys.info(), .Machine, capabilities(),
+            file=file.path(Sys.getenv("EVIDENCE_DIR"),"environment","native-R.txt"))
+          stopifnot(as.character(getRversion()) == "4.6.2",
+            Sys.info()[["sysname"]] == "Darwin",
+            R.version$arch %in% c("aarch64","arm64"),
+            grepl("apple-darwin",R.version$platform,fixed=TRUE))
+          stopifnot(.Machine$sizeof.longdouble == 8L, !capabilities("long.double"))
+        "shell": "Rscript {0}"
+      -
+        "name": "Resolve dependencies"
+        "uses": "r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05"
+        "with":
+          "working-directory": "candidate"
+          "cache": false
+          "dependencies": "\"all\""
+          "extra-packages": |
+            any::BiocManager
+            bioc::BiocVersion
+          "needs": "check"
+      -
+        "name": "Preserve dependency lockfile outside package source"
+        "run": |
+          if test -f candidate/.github/pkg.lock; then
+            mv candidate/.github/pkg.lock "$EVIDENCE_DIR/environment/pkg.lock"
+          fi
+        "if": "always()"
+      -
+        "name": "Verify Bioconductor and record dependencies"
+        "run": |
+          stopifnot(as.character(BiocManager::version()) == "3.24",
+            as.character(packageVersion("BiocVersion")) == "3.24.0",
+            !length(find.package("BreastSubtypeR",quiet=TRUE)))
+          stopifnot(as.character(packageVersion("e1071")) == "1.7.17")
+          out <- file.path(Sys.getenv("EVIDENCE_DIR"),"environment")
+          write.csv(installed.packages(),file.path(out,"installed-packages.csv"))
+          capture.output(sessionInfo(),.libPaths(),pak::repo_get(),BiocManager::repositories(),
+            file=file.path(out,"session-and-repositories.txt"))
+        "shell": "Rscript {0}"
+      -
+        "name": "Install exact candidate in a fresh isolated library"
+        "run": |
+          test ! -e "$PACKAGE_LIB"
+          mkdir -p "$PACKAGE_LIB"
+          R CMD INSTALL --install-tests --with-keep.source --library="$PACKAGE_LIB" \
+            "$GITHUB_WORKSPACE/candidate" 2>&1 | tee "$EVIDENCE_DIR/installed/install.log"
+          python3 harness/.github/validation/posterior-b32/verify-source.py installed
+        "id": "install"
+      -
+        "name": "Primary four posterior routes, 2020 oracle identities and 998 ROR-P comparisons"
+        "id": "fresh"
+        "if": "${{ !cancelled() && steps.install.outcome == 'success' }}"
+        "run": |
+          export R_LIBS="$PACKAGE_LIB"
+          Rscript --vanilla harness/.github/validation/posterior-b32/fresh-auto.R \
+            2>&1 | tee "$EVIDENCE_DIR/auto/fresh-auto.log"
+      -
+        "id": "bounds"
+        "name": "All nine installed B3-2 test blocks"
+        "if": "${{ !cancelled() && steps.install.outcome == 'success' }}"
+        "run": |
+          export R_LIBS="$PACKAGE_LIB"
+          Rscript --vanilla harness/.github/validation/posterior-b32/suite.R bounds 2>&1 | tee "$EVIDENCE_DIR/tests/bounds.log"
+      -
+        "id": "observations"
+        "name": "Observe actual first safeguards in the installed controls"
+        "if": "${{ !cancelled() && steps.install.outcome == 'success' }}"
+        "run": |
+          export R_LIBS="$PACKAGE_LIB"
+          Rscript --vanilla harness/.github/validation/posterior-b32/control-observer.R 2>&1 | tee "$EVIDENCE_DIR/tests/observations.log"
+      -
+        "name": "Primary B2 gate: complete nine-block posterior-link file"
+        "id": "primary"
+        "if": "${{ !cancelled() && steps.install.outcome == 'success' }}"
+        "run": |
+          export R_LIBS="$PACKAGE_LIB"
+          Rscript --vanilla harness/.github/validation/posterior-b32/suite.R primary \
+            2>&1 | tee "$EVIDENCE_DIR/tests/primary.log"
+      -
+        "name": "Four disposable B2 mutation controls"
+        "id": "mutations"
+        "if": "${{ !cancelled() && steps.install.outcome == 'success' }}"
+        "run": |
+          export R_LIBS="$PACKAGE_LIB"
+          cd "$EVIDENCE_DIR/mutations"
+          Rscript --vanilla "$GITHUB_WORKSPACE/harness/.github/validation/posterior-b32/mutants.R" \
+            2>&1 | tee mutation-controls.log
+      -
+        "name": "Secondary B1 native parity and strict-reader gate"
+        "id": "b1"
+        "if": "${{ !cancelled() && steps.install.outcome == 'success' }}"
+        "run": |
+          export R_LIBS="$PACKAGE_LIB"
+          cd "$EVIDENCE_DIR/b1"
+          Rscript --vanilla "$GITHUB_WORKSPACE/harness/.github/validation/posterior-b32/b1-gate.R" \
+            2>&1 | tee b1-native.log
+      -
+        "name": "Unchanged eight-block ROR suite: retain all results"
+        "id": "ror"
+        "if": "${{ !cancelled() && steps.install.outcome == 'success' }}"
+        "run": |
+          export R_LIBS="$PACKAGE_LIB"
+          Rscript --vanilla harness/.github/validation/posterior-b32/suite.R ror 2>&1 | tee "$EVIDENCE_DIR/tests/ror.log"
+      -
+        "name": "Supplement all five distances and cutoff-side controls"
+        "id": "supplement"
+        "if": "${{ !cancelled() && steps.install.outcome == 'success' }}"
+        "run": |
+          export R_LIBS="$PACKAGE_LIB"
+          Rscript --vanilla harness/.github/validation/posterior-b32/supplement.R 2>&1 | tee "$EVIDENCE_DIR/tests/supplement.log"
+      -
+        "name": "Expanded examples and related suites: retain all diagnostic failures"
+        "id": "diagnostic"
+        "if": "${{ !cancelled() && steps.install.outcome == 'success' }}"
+        "run": |
+          export R_LIBS="$PACKAGE_LIB"
+          Rscript --vanilla harness/.github/validation/posterior-b32/suite.R diagnostic \
+            2>&1 | tee "$EVIDENCE_DIR/tests/diagnostic.log"
+      -
+        "name": "Reconcile gates and classify numerical failures by exact historical signatures"
+        "id": "acceptance"
+        "if": "${{ !cancelled() && steps.install.outcome == 'success' }}"
+        "run": |
+          python3 harness/.github/validation/posterior-b32/classify.py \
+            2>&1 | tee "$EVIDENCE_DIR/classification.log"
+      -
+        "name": "Verify source and installed files remained unchanged"
+        "if": "always()"
+        "run": |
+          python3 harness/.github/validation/posterior-b32/verify-source.py after \
+            2>&1 | tee "$EVIDENCE_DIR/preservation.log"
+      -
+        "name": "Checksum retained evidence"
+        "run": |
+          python3 - <<'PY'
+          import pathlib, hashlib, os
+          root = pathlib.Path(os.environ["EVIDENCE_DIR"])
+          files = sorted(p for p in root.rglob("*") if p.is_file() and p.name != "SHA256SUMS.txt")
+          (root/"SHA256SUMS.txt").write_text("".join(
+              hashlib.sha256(p.read_bytes()).hexdigest()+"  "+p.relative_to(root).as_posix()+"\n"
+              for p in files),encoding="utf-8")
+          PY
+        "if": "always()"
+      -
+        "name": "Upload native validation evidence"
+        "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+        "if": "always()"
+        "with":
+          "name": "posterior-b32-native-arm64-attempt-${{ github.run_attempt }}"
+          "path": "${{ runner.temp }}/posterior-b32-evidence"
+          "retention-days": 30
+          "if-no-files-found": "error"
