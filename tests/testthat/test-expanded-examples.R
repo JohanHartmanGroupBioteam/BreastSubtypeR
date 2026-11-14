@@ -49,7 +49,7 @@ test_that("the 19 portability paths enforce elementwise bounds and exact decisio
             leaf <- rule$dataset == "TCGABRCAobj" && rule$path %in% paste0(
                 "/res/results/", c("genefu.robust", "ssBC", "ssBC.v2"),
                 "/score.ROR/ROR-P (Subtype + Prolif)")
-            f <- if (leaf) issue199_ror_policy_leaf_unit else issue199_portable_compare
+            f <- if (leaf) issue199_ror_policy_leaf_unit else issue199_portability_unit
             f(actual, expected, rule$dataset, rule$scope, rule$path)
         }
         actual <- expected
@@ -63,10 +63,10 @@ test_that("the 19 portability paths enforce elementwise bounds and exact decisio
     expected <- matrix(c(.5, .5, 0, 0, 0), nrow = 1L)
     actual <- expected
     actual[1L, 1:2] <- c(.5 + 2^-53, .5 - 2^-53)
-    expect_error(issue199_portable_compare(actual, expected, "OSLO2EMIT0obj",
+    expect_error(issue199_portability_unit(actual, expected, "OSLO2EMIT0obj",
         path = p), "posterior ranks/ties/argmax")
     expected[1L, 1:2] <- rev(actual[1L, 1:2])
-    expect_error(issue199_portable_compare(actual, expected, "OSLO2EMIT0obj",
+    expect_error(issue199_portability_unit(actual, expected, "OSLO2EMIT0obj",
         path = p), "posterior ranks/ties/argmax")
     cut <- 100 * (-.25 + .35) / .85
     expect_error(issue199_ror_policy_leaf_unit(cut + 2^-49, cut, "TCGABRCAobj",
@@ -83,7 +83,7 @@ test_that("portability never relaxes structure, metadata, masks or unlisted valu
             AIMS = list(all.probs = list(`20` = posterior), data.used = matrix(1:2 + 0, 1L)),
             sspbc = list(all.probs = list(`24` = posterior), data.used = matrix(1, 1L))),
             untouched = 1, call = "LumA"))
-    compare <- function(actual, reference = expected) issue199_portable_compare(
+    compare <- function(actual, reference = expected) issue199_portability_unit(
         actual, reference, "OSLO2EMIT0obj")
     expect_true(compare(expected))
     actual <- expected; actual$res$untouched <- 1 + .Machine$double.eps

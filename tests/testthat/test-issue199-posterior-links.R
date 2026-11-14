@@ -51,7 +51,7 @@ posterior199_decisions <- function(actual, expected) {
         !any(result$failed | result$error | result$warning | result$skipped)
 }
 posterior199_compare <- function(actual, expected) {
-    issue199_portable_compare(actual, expected, "OSLO2EMIT0obj", path = "/res")
+    issue199_portability_unit(actual, expected, "OSLO2EMIT0obj", path = "/res")
 }
 posterior199_accept <- function(actual, expected = actual) {
     expect_true(posterior199_compare(actual, expected))
