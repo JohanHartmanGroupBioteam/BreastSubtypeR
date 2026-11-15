@@ -2,8 +2,8 @@
 # guards, not the admission/provenance of a full scientific comparison.
 ror31_fresh <- local({
     cache <- new.env(parent = emptyenv())
-    function(dataset) {
-        if (!exists(dataset, cache, inherits = FALSE)) {
+    function(dataset, paired = FALSE) {
+        if (paired || !exists(dataset, cache, inherits = FALSE)) {
             obj <- issue199_ror_approved(dataset)
             value <- withr::with_preserve_seed({
                 kind <- RNGkind()
@@ -14,10 +14,12 @@ ror31_fresh <- local({
                         RawCounts = dataset == "TCGABRCAobj", method = "max",
                         impute = TRUE, verbose = FALSE))
                     set.seed(20260831)
-                    suppressMessages(BS_Multi(mapped, methods = "AUTO", Subtype = FALSE,
-                        hasClinical = FALSE, er_subsample = "target"))
+                    calculate <- function(input) suppressMessages(BS_Multi(input, methods = "AUTO",
+                        Subtype = FALSE, hasClinical = FALSE, er_subsample = "target"))
+                    if (paired) issue199_itr_capture(mapped, dataset, calculate) else calculate(mapped)
                 }, finally = do.call(RNGkind, as.list(kind)))
             })
+            if (paired) return(value)
             assign(dataset, value, cache)
         }
         get(dataset, cache, inherits = FALSE)
@@ -84,10 +86,10 @@ test_that("ROR formula identity applies to fresh current-runtime results without
     total <- 0L
     for (dataset in c("OSLO2EMIT0obj", "TCGABRCAobj")) {
         approved <- issue199_ror_approved(dataset)$res
-        full <- ror31_fresh(dataset)
+        producer <- ror31_fresh(dataset, paired = TRUE)
         expect_identical(.Random.seed, rng)
-        fresh <- auto_ssbc_historical_view(full, approved)
-        expect_true(issue199_portable_compare(fresh, approved, dataset, path = "/res"))
+        fresh <- auto_ssbc_historical_view(producer$res, approved)
+        expect_true(issue199_portable_compare(fresh, approved, dataset, path = "/res", producer = producer))
         expect_identical(fresh$res_subtypes, approved$res_subtypes)
         for (method in issue199_ror_routes()$method[seq_len(5L)]) {
             expect_true(ror31_formula_check(fresh$results[[method]]), info = paste(dataset, method))
@@ -252,8 +254,8 @@ test_that("ROR provenance, exclusions, entropy and route visits remain mandatory
     expect_true(issue199_ror_visits(routes, routes))
     expect_error(issue199_ror_visits(routes[-1L], routes), "unused or multiply visited")
     expect_error(issue199_ror_visits(c(routes, routes[1L]), routes), "unused or multiply visited")
-    for (case in list(c("cIHC.itr", "ROR-P (Subtype + Prolif)"),
-                      c("ssBC", "ROR-S (Subtype Only)"))) {
+    for (case in list(c("cIHC.itr", "ER", "^OSLO2EMIT0obj cIHC[.]itr structure/identities$"),
+                      c("ssBC", "ROR-S (Subtype Only)", "unlisted value must be exact"))) {
         method <- case[1L]; field <- case[2L]
         frozen <- ref$results[[method]]$score.ROR
         a <- ref
@@ -276,6 +278,6 @@ test_that("ROR provenance, exclusions, entropy and route visits remain mandatory
         attributes(restored$results[[method]]$score.ROR) <- attributes(frozen)
         expect_true(identical(restored, ref, num.eq = FALSE, single.NA = FALSE))
         expect_error(issue199_portable_compare(a, ref, dataset, path = "/res"),
-            "unlisted value must be exact")
+            case[3L])
     }
 })

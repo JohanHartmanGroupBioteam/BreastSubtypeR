@@ -13,17 +13,21 @@ issue199_rng <- function(seed, code) {
 
 issue199_fresh <- local({
     cache <- new.env(parent = emptyenv())
-    function(name, historical = FALSE) {
+    function(name, historical = FALSE, paired = FALSE) {
         key <- paste(name, historical)
-        if (!exists(key, cache, inherits = FALSE)) {
+        if (paired || !exists(key, cache, inherits = FALSE)) {
             obj <- if (historical) historical_example(name) else current_example(name)
             mapped <- issue199_rng(1992026, suppressMessages(Mapping(
                 obj$se_obj, RawCounts = name == "TCGABRCAobj",
                 method = "max", impute = TRUE, verbose = FALSE)))
-            result <- issue199_rng(20260831, suppressMessages(BS_Multi(
-                data_input = mapped, methods = "AUTO", Subtype = FALSE,
-                hasClinical = FALSE, er_subsample = "target")))
-            assign(key, list(data_input = mapped, res = result), cache)
+            calculate <- function(input) suppressMessages(BS_Multi(
+                data_input = input, methods = "AUTO", Subtype = FALSE,
+                hasClinical = FALSE, er_subsample = "target"))
+            value <- issue199_rng(20260831, if (!paired)
+                list(data_input = mapped, res = calculate(mapped))
+            else issue199_itr_capture(mapped, name, calculate))
+            if (paired) return(value)
+            assign(key, value, cache)
         }
         get(key, cache, inherits = FALSE)
     }
@@ -231,7 +235,7 @@ test_that("expanded current AUTO results reproduce the accepted complete objects
     for (nm in names(reference)) {
         obj <- current_example(nm)
         rng <- .Random.seed
-        fresh <- issue199_fresh(nm)
+        fresh <- issue199_fresh(nm, paired = TRUE)
         expect_identical(.Random.seed, rng, info = nm)
         expect_true(issue199_portable_compare(fresh$data_input, obj$data_input,
             nm, path = "/data_input"), info = nm)
@@ -241,7 +245,7 @@ test_that("expanded current AUTO results reproduce the accepted complete objects
         # then compare every retained payload against the unchanged fixture.
         compatible <- auto_ssbc_historical_view(fresh$res, obj$res)
         expect_true(issue199_portable_compare(compatible, obj$res, nm,
-            path = "/res"), info = nm)
+            path = "/res", producer = fresh), info = nm)
         issue199_expect_decisions(compatible, obj$res)
         methods <- setdiff(names(obj$res$res_subtypes), "entropy")
         expect_identical(obj$res$res_subtypes[, methods],
