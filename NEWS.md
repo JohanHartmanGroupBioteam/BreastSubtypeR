@@ -1,4 +1,4 @@
-# BreastSubtypeR (development)
+# BreastSubtypeR 1.5.13
 
 ## API compatibility
 
@@ -182,8 +182,8 @@
   SSP-ROR input; normalization research remains #208.
 * The scoped author and public-source/field-level redistribution review was
   completed, and PR #228 merged the #199 integration. Source attribution and
-  reuse conditions continue to apply. Integration is not a release; the package
-  remains at version 1.5.12, with release/version decisions handled separately.
+  reuse conditions continue to apply. The package was at version 1.5.12 when
+  the examples were integrated.
 
 * Validate #199 against merged #131 at `f878f58c`: default mapped inputs and
   complete results retain the approved Stage 3A values. Optional SSP-ROR
@@ -197,6 +197,16 @@
 
 ## Bug fixes
 
+* Shiny expression uploads preserve probe and sample labels and parse sample
+  measurements as numeric values. Malformed measurements are reported with
+  their input line, probe and sample before mapping (#246).
+* In mixed cohorts with no recognized ER/HER2 pair, five-class
+  `BS_Multi(methods = "AUTO", Subtype = FALSE)` retains the empty `ssBC.v2`
+  result. Patients remain in input order with missing `ssBC.v2` calls, and
+  the other selected methods still contribute to the summary (#247).
+* `Mapping()` uses the labels of factor-valued probe annotations to select
+  assay rows. This corrects mapping when the factor's integer codes point
+  to different rows (#250).
 * Resolve the original research ROR-S, ROR-P, ROR-C and ROR-PC exact-boundary
   defect (#172) with the author-approved `(med, med)` package convention:
   low below the lower cutoff, medium at or between both cutoffs, and high
