@@ -1,16 +1,5 @@
 # Expanded public examples have their own current-code oracle. The older tests
 # retain immutable historical inputs and every original expectation.
-issue199_rng <- function(seed, code) {
-    withr::with_preserve_seed({
-        kind <- RNGkind()
-        tryCatch({
-            RNGkind("Mersenne-Twister", "Inversion", "Rejection")
-            set.seed(seed)
-            force(code)
-        }, finally = do.call(RNGkind, as.list(kind)))
-    })
-}
-
 issue199_fresh <- local({
     cache <- new.env(parent = emptyenv())
     function(name, historical = FALSE, paired = FALSE) {

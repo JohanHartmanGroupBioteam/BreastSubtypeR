@@ -172,6 +172,11 @@ for (profile in c("C", "en_US.UTF-8")) {
         kind <- RNGkind()
         withr::defer(do.call(RNGkind, as.list(kind)))
         do.call(RNGkind, as.list(fixture$rng_kind))
+        # The fixture specifies only its historical components. Both sampling
+        # stages use uniform sample(), and prcomp() uses deterministic SVD;
+        # binom.kind is neither pinned nor changed. Preserve the full runtime.
+        expected_kind <- RNGkind()
+        expect_identical(expected_kind[seq_along(fixture$rng_kind)], fixture$rng_kind)
         captures <- pcap232_capture()
         withr::with_locale(c(LC_COLLATE = locale$requested), {
             pcap232_sentinel(fixture, profile, locale)
@@ -188,7 +193,7 @@ for (profile in c("C", "en_US.UTF-8")) {
                     result <- expect_experimental_ror_pc(BS_PCAPAM50(se,
                         Subtype = TRUE, hasClinical = TRUE, seed = fixture$seed))
                     expect_identical(.Random.seed, before_seed)
-                    expect_identical(RNGkind(), fixture$rng_kind)
+                    expect_identical(RNGkind(), expected_kind)
                     expect_identical(Sys.getlocale("LC_COLLATE"), locale$effective)
                     expect_identical(se, saved)
                     expect_setequal(ls(captures), c("first", "second"))
@@ -216,8 +221,12 @@ for (profile in c("C", "en_US.UTF-8")) {
         withr::defer(do.call(RNGkind, as.list(kind)))
         # Only Mersenne-Twister is pinned by the reference fixture. The second
         # kind checks the caller-state contract, not unverified reference calls.
-        for (generator in c("Mersenne-Twister", "L'Ecuyer-CMRG")) {
-            RNGkind(generator, "Inversion", "Rejection")
+        binomial <- if ("binom.kind" %in% names(formals(RNGkind)))
+            list("BTPE", "Buggy BTPE") else list(NULL)
+        for (binom in binomial) for (generator in c("Mersenne-Twister", "L'Ecuyer-CMRG")) {
+            args <- list(generator, "Inversion", "Rejection")
+            if (!is.null(binom)) args$binom.kind <- binom
+            do.call(RNGkind, args)
             expected_kind <- RNGkind()
             for (present in c(FALSE, TRUE)) {
                 if (present) set.seed(232) else if (exists(".Random.seed", .GlobalEnv, inherits = FALSE))
