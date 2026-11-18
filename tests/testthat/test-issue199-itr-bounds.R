@@ -3,8 +3,7 @@
 itr33_pair <- function(fixture, dataset) {
     calculate <- function(input) suppressMessages(BS_Multi(input, methods = "AUTO",
         Subtype = FALSE, hasClinical = FALSE, er_subsample = "target"))
-    withr::with_seed(20260831, issue199_itr_capture(fixture$data_input, dataset, calculate),
-        .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion", .rng_sample_kind = "Rejection")
+    issue199_rng(20260831, issue199_itr_capture(fixture$data_input, dataset, calculate))
 }
 
 itr33_score <- function(result, field, delta) {
@@ -157,25 +156,34 @@ test_that("iteration capture and replay preserve caller RNG and restore observer
     withr::local_preserve_seed()
     kind <- RNGkind()
     withr::defer(do.call(RNGkind, as.list(kind)))
-    RNGkind("L'Ecuyer-CMRG", "Box-Muller", "Rejection")
-    set.seed(104)
-    seed <- .Random.seed; kinds <- RNGkind()
-    p <- itr33_pair(f, ds)
-    expect_identical(.Random.seed, seed)
-    expect_identical(RNGkind(), kinds)
-    expect_identical(BreastSubtypeR:::docalibration, binding)
-    expect_identical(issue199_itr_context(p$res$results$cIHC.itr, f, ds, p), issue199_itr_paths())
-    expect_identical(.Random.seed, seed)
-    expect_identical(RNGkind(), kinds)
-    rm(".Random.seed", envir = .GlobalEnv)
-    issue199_itr_selections(f$data_input$se_NC, ds)
-    expect_false(exists(".Random.seed", .GlobalEnv, inherits = FALSE))
-    fail <- function(input) stop("producer probe")
-    expect_error(withr::with_seed(20260831, issue199_itr_capture(f$data_input, ds, fail),
-        .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion",
-        .rng_sample_kind = "Rejection"), "^producer probe$")
-    expect_false(exists(".Random.seed", .GlobalEnv, inherits = FALSE))
-    expect_identical(BreastSubtypeR:::docalibration, binding)
+    binomial <- if ("binom.kind" %in% names(formals(RNGkind)))
+        list("BTPE", "Buggy BTPE") else list(NULL)
+    for (binom in binomial) for (present in c(FALSE, TRUE)) {
+        args <- list("L'Ecuyer-CMRG", "Box-Muller", "Rejection")
+        if (!is.null(binom)) args$binom.kind <- binom
+        do.call(RNGkind, args)
+        if (present) set.seed(104) else if (exists(".Random.seed", .GlobalEnv, inherits = FALSE))
+            rm(".Random.seed", envir = .GlobalEnv)
+        seed <- get0(".Random.seed", .GlobalEnv, inherits = FALSE); kinds <- RNGkind()
+        state <- function() {
+            expect_identical(exists(".Random.seed", .GlobalEnv, inherits = FALSE), present)
+            expect_identical(get0(".Random.seed", .GlobalEnv, inherits = FALSE), seed)
+            expect_identical(RNGkind(), kinds)
+            expect_identical(BreastSubtypeR:::docalibration, binding)
+        }
+        # Metadata and stored seed preservation do not assert preservation of
+        # Box-Muller's cached normal variate, which .Random.seed does not hold.
+        p <- itr33_pair(f, ds)
+        state()
+        expect_identical(issue199_itr_context(p$res$results$cIHC.itr, f, ds, p), issue199_itr_paths())
+        state()
+        issue199_itr_selections(f$data_input$se_NC, ds)
+        state()
+        fail <- function(input) stop("producer probe")
+        expect_error(issue199_rng(20260831,
+            issue199_itr_capture(f$data_input, ds, fail)), "^producer probe$")
+        state()
+    }
 })
 
 

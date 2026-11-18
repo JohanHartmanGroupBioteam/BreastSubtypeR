@@ -1,3 +1,16 @@
+# Shared fixture RNG scope. Restore the full caller configuration even when the
+# caller had no seed (withr 3.0.3 only removes the seed in that case).
+issue199_rng <- function(seed, code) {
+    withr::with_preserve_seed({
+        kind <- RNGkind()
+        tryCatch({
+            RNGkind("Mersenne-Twister", "Inversion", "Rejection")
+            set.seed(seed)
+            force(code)
+        }, finally = do.call(RNGkind, as.list(kind)))
+    })
+}
+
 # Measured PR #228 Linux allowances; every other value and all structure stay exact.
 # Historical TCGA B uses the independently verified Windows-B == frozen-A mapping
 # reference bridge. OSLO historical A/B is deliberately outside this policy.
@@ -453,7 +466,11 @@ issue199_itr_protocol <- function(dataset) {
 
 issue199_itr_capture <- function(mapped, dataset, calculate) {
     protocol <- issue199_itr_protocol(dataset)
-    if (!identical(RNGkind(), protocol$kind)) stop("cIHC.itr producer RNG kinds", call. = FALSE)
+    # The historical protocol specifies these components only. The audited
+    # producer/replay paths use uniform sample() without replacement, not
+    # rbinom() or rmultinom(); leave the runtime's binom.kind unchanged.
+    if (!identical(RNGkind()[seq_along(protocol$kind)], protocol$kind))
+        stop("cIHC.itr producer RNG kinds", call. = FALSE)
     original <- BreastSubtypeR:::docalibration
     draws <- medians <- list()
     observed <- NULL
@@ -605,10 +622,8 @@ issue199_itr_selections <- function(se, dataset) {
     if (anyNA(c(pos, neg)) || !identical(c(length(pos), length(neg)), counts))
         stop("cIHC.itr ER membership/order", call. = FALSE)
     size <- if (oslo) 16L else 22L
-    draws <- withr::with_seed(118, lapply(seq_len(100L), function(i)
-        c(pos[sample(length(pos), size)], neg)),
-        .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion",
-        .rng_sample_kind = "Rejection")
+    draws <- issue199_rng(118, lapply(seq_len(100L), function(i)
+        c(pos[sample(length(pos), size)], neg)))
     setNames(draws, paste0("itr.", seq_len(100L)))
 }
 
