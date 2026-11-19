@@ -1,3 +1,12 @@
+# BreastSubtypeR 1.5.14
+
+## Performance
+
+* `sspPredict()` avoids repeated ranking by computing Spearman correlations
+  in one matrix call per eligible panel. Panels with non-finite values,
+  constant columns or unsupported classes retain the existing scalar
+  calculation and its warning and error behavior.
+
 # BreastSubtypeR 1.5.13
 
 ## API compatibility
@@ -105,13 +114,6 @@
   unavailable calibrated columns and align annotations by ID. No imputation or
   new partial-missingness policy is introduced. Manual/standalone ssBC behavior
   remains unchanged; standalone ordering/singleton issue #234 remains separate.
-
-## Performance
-
-* `sspPredict()` avoids repeated ranking by computing Spearman correlations
-  in one matrix call per eligible panel. Panels with non-finite values,
-  constant columns or unsupported classes retain the existing scalar
-  calculation and its warning and error behavior.
 
 ## Documentation and regression coverage
 
