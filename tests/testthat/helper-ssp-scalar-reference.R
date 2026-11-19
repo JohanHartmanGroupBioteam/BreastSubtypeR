@@ -33,9 +33,16 @@ ssp_capture <- function(fn, serialized_inputs, std, distm, Subtype, state, info)
     inputs <- unserialize(serialized_inputs)
     trace <- list()
     record <- function(type, condition) {
+        call <- conditionCall(condition)
+        # The nested-column error reports the entire assignment. Its anonymous
+        # function carries different source locations in the package and fixture.
+        if (type == "error" && is.call(call) && identical(call[[1L]], quote(`<-`)) &&
+            identical(call[[2L]], quote(distances[, j]))) {
+            call <- utils::removeSource(call)
+        }
         trace[[length(trace) + 1L]] <<- list(
             type = type, classes = class(condition),
-            message = conditionMessage(condition), call = conditionCall(condition))
+            message = conditionMessage(condition), call = call)
     }
     ssp_restore_rng(state)
     value <- tryCatch(withCallingHandlers(
