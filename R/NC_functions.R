@@ -224,6 +224,36 @@ getsuffix <- function(
 }
 
 
+# On complete, nonconstant numeric columns, pairwise Spearman ranks the same
+# vectors as all.obs. Keep the scalar calls for their missing-data and warning
+# semantics on every other input.
+.can_batch_spearman <- function(centres, samples) {
+    plain_numeric <- function(x) {
+        !is.object(x) && !isS4(x) && typeof(x) %in% c("double", "integer")
+    }
+    if (!plain_numeric(samples) || !is.matrix(samples) ||
+        nrow(samples) < 2L || ncol(samples) == 0L) return(FALSE)
+
+    usable_column <- function(x) {
+        all(is.finite(x)) && any(x != x[1L])
+    }
+    if (identical(class(centres), "data.frame") && !isS4(centres) &&
+        typeof(centres) == "list") {
+        if (nrow(centres) != nrow(samples) || length(centres) == 0L) return(FALSE)
+        usable_centroid <- function(x) {
+            # as.matrix.data.frame also interprets levels on unclassed columns.
+            plain_numeric(x) && all(names(attributes(x)) %in% "names") &&
+                length(x) == nrow(samples) && usable_column(x)
+        }
+        if (!all(vapply(centres, usable_centroid, logical(1)))) return(FALSE)
+    } else {
+        if (!plain_numeric(centres) || !is.matrix(centres) ||
+            nrow(centres) != nrow(samples) || ncol(centres) == 0L) return(FALSE)
+        if (!all(apply(centres, 2L, usable_column))) return(FALSE)
+    }
+    all(apply(samples, 2L, usable_column))
+}
+
 #' Function for predicting PAM50 subtypes
 #' @param x median train file
 #' @param y gene expression matrix
@@ -273,16 +303,21 @@ sspPredict <- function(x, y, std = FALSE, distm = "spearman", Subtype = TRUE) {
         dimnames = list(colnames(tdataMatrix), colnames(dataMatrix))
     )
 
-    for (j in seq_len(nClasses)) {
-        if (distm == "euclidean") {
-            combined <- cbind(dataMatrix[, j], tdataMatrix)
-            dv <- dist(t(combined))
-            distances[, j] <- dv[seq_len(ncol(tdataMatrix))]
-        } else {
-            mth <- if (distm == "spearman") "spearman" else "pearson"
-            distances[, j] <- apply(tdataMatrix, 2, function(xx) {
-                -cor(dataMatrix[, j], xx, method = mth, use = "pairwise.complete.obs")
-            })
+    if (distm == "spearman" && .can_batch_spearman(dataMatrix, tdataMatrix)) {
+        distances[] <- -t(stats::cor(as.matrix(dataMatrix), tdataMatrix,
+                                     method = "spearman", use = "all.obs"))
+    } else {
+        for (j in seq_len(nClasses)) {
+            if (distm == "euclidean") {
+                combined <- cbind(dataMatrix[, j], tdataMatrix)
+                dv <- dist(t(combined))
+                distances[, j] <- dv[seq_len(ncol(tdataMatrix))]
+            } else {
+                mth <- if (distm == "spearman") "spearman" else "pearson"
+                distances[, j] <- apply(tdataMatrix, 2, function(xx) {
+                    -cor(dataMatrix[, j], xx, method = mth, use = "pairwise.complete.obs")
+                })
+            }
         }
     }
 
@@ -301,16 +336,29 @@ sspPredict <- function(x, y, std = FALSE, distm = "spearman", Subtype = TRUE) {
             ncol = nClasses4, nrow = ncol(tdataMatrix),
             dimnames = list(colnames(tdataMatrix), classLevels4)
         )
-        for (j in seq_len(nClasses4)) {
-            if (distm == "euclidean") {
-                combined <- cbind(dataMatrix[, j], tdataMatrix)
-                dv <- dist(t(combined))
-                dist4[, j] <- dv[seq_len(ncol(tdataMatrix))]
-            } else {
-                mth <- if (distm == "spearman") "spearman" else "pearson"
-                dist4[, j] <- apply(tdataMatrix, 2, function(xx) {
-                    -cor(dataMatrix[, j], xx, method = mth, use = "pairwise.complete.obs")
-                })
+        # Only subset ordinary centroids here. Custom extraction methods
+        # must see exactly the column accesses in the original scalar loop.
+        batch_four <- FALSE
+        if (distm == "spearman" && !isS4(dataMatrix) &&
+            (!is.object(dataMatrix) || identical(class(dataMatrix), "data.frame"))) {
+            centres4 <- dataMatrix[, seq_len(nClasses4), drop = FALSE]
+            batch_four <- .can_batch_spearman(centres4, tdataMatrix)
+        }
+        if (batch_four) {
+            dist4[] <- -t(stats::cor(as.matrix(centres4), tdataMatrix,
+                                     method = "spearman", use = "all.obs"))
+        } else {
+            for (j in seq_len(nClasses4)) {
+                if (distm == "euclidean") {
+                    combined <- cbind(dataMatrix[, j], tdataMatrix)
+                    dv <- dist(t(combined))
+                    dist4[, j] <- dv[seq_len(ncol(tdataMatrix))]
+                } else {
+                    mth <- if (distm == "spearman") "spearman" else "pearson"
+                    dist4[, j] <- apply(tdataMatrix, 2, function(xx) {
+                        -cor(dataMatrix[, j], xx, method = mth, use = "pairwise.complete.obs")
+                    })
+                }
             }
         }
         prediction.Subtype <- rep(NA_character_, nrow(dist4))
@@ -332,7 +380,10 @@ sspPredict <- function(x, y, std = FALSE, distm = "spearman", Subtype = TRUE) {
         ncol = ncol(cent4), nrow = ncol(dat4),
         dimnames = list(colnames(dat4), colnames(cent4))
     )
-    if (ncol(dat4) > 0L) {
+    if (.can_batch_spearman(cent4, dat4)) {
+        dist.RORSubtype[] <- -t(stats::cor(as.matrix(cent4), dat4,
+                                           method = "spearman", use = "all.obs"))
+    } else if (ncol(dat4) > 0L) {
         for (j in seq_len(ncol(cent4))) {
             dist.RORSubtype[, j] <- apply(dat4, 2, function(xx) {
                 -cor(cent4[, j], xx, method = "spearman", use = "pairwise.complete.obs")
