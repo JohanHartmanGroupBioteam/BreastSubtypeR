@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "description": "CI lanes for .github/workflows/package-validation.yaml. 'branches' maps the target branch (PR base, or the pushed/dispatched branch) to a lane; a branch that is not listed fails the job. Each lane gives the R series ('X.Y' or 'devel'), the Bioconductor version, and a dependency-cache namespace that must contain 'bioc-<bioc_version>' and be unique across lanes. Change a lane here, never the job name.",
+  "branches": {
+    "main": "r-4.6-bioc-3.24"
+  },
+  "lanes": {
+    "r-4.6-bioc-3.24": {
+      "r_version": "4.6",
+      "bioc_version": "3.24",
+      "cache_namespace": "package-validation-bioc-3.24-r-4.6-v1"
+    }
+  }
+}
