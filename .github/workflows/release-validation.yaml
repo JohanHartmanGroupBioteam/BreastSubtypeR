@@ -1,9 +1,36 @@
-# Manual-only full check of the 1.5.12 source, including its PDF manual.
-# Reuses the existing CI pins and strict R CMD check assessment helper.
+# Manual-only full release check of the dispatched source, including its PDF
+# manual: R CMD build with manuals enabled, R CMD check --as-cran, PDF manual
+# generation with R CMD Rd2pdf and qpdf validation, all from one tarball.
+#
+# The maintainer supplies the expected package version. It must be X.Y.Z and
+# equal the Version field of DESCRIPTION at the dispatched commit; otherwise
+# the job fails before any dependency is installed. Tarball and manual names
+# are derived from the verified DESCRIPTION Package and Version fields.
+#
+# R and Bioconductor versions come from .github/ci/lanes.json for the
+# lane-branch input (default main); an unlisted branch fails. The environment
+# gate, failure-gate self-test and strict R CMD check assessment are those of
+# .github/scripts/package-validation-ci.R, and dependencies are installed with
+# the same inputs and cache namespace as the Package validation job.
+#
+# Errors, warnings, an incomplete check, a failed PDF check or a modified
+# checkout fail the job; notes are kept in the summary and the evidence.
+# Third-party actions are pinned to full commit SHAs; the comment after each
+# SHA gives the release tag.
 name: Release validation (PDF manual)
 
 on:
   workflow_dispatch:
+    inputs:
+      expected-version:
+        description: "Expected package version (X.Y.Z); must equal DESCRIPTION Version at the dispatched commit"
+        required: true
+        type: string
+      lane-branch:
+        description: "Branch whose CI lane (R / Bioconductor) to use, from .github/ci/lanes.json"
+        required: true
+        type: string
+        default: main
 
 permissions:
   contents: read
@@ -14,14 +41,13 @@ concurrency:
 
 jobs:
   release-validation:
-    name: Ubuntu (R 4.6, Bioc 3.24, TinyTeX)
+    name: Release validation (PDF manual)
     runs-on: ubuntu-latest
     timeout-minutes: 120
     defaults:
       run:
         shell: bash
     env:
-      R_BIOC_VERSION: "3.24"
       R_KEEP_PKG_SOURCE: "yes"
       _R_CHECK_FORCE_SUGGESTS_: "true"
 
@@ -29,46 +55,96 @@ jobs:
       - name: Create evidence directories
         run: |
           evidence="$RUNNER_TEMP/release-validation"
-          mkdir -p "$evidence"/{environment,build,check,manual}
+          mkdir -p "$evidence"/{lane,environment,selftest,build,check,manual}
           echo "EVIDENCE_DIR=$evidence" >> "$GITHUB_ENV"
+          echo "PV_CI=$GITHUB_WORKSPACE/.github/scripts/package-validation-ci.R" >> "$GITHUB_ENV"
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Record the exact source identity
+      - name: Verify the expected version against the exact source
         id: identity
+        env:
+          EXPECTED_VERSION: ${{ inputs.expected-version }}
+          LANE_BRANCH: ${{ inputs.lane-branch }}
         run: |
+          fail() {
+            echo "::error title=Release identity::$*"
+            exit 2
+          }
           sha="$(git rev-parse HEAD)"
+          tree="$(git rev-parse 'HEAD^{tree}')"
+          pkg="$(sed -n 's/^Package:[[:space:]]*//p' DESCRIPTION)"
           version="$(sed -n 's/^Version:[[:space:]]*//p' DESCRIPTION)"
           {
             echo "commit=$sha"
-            echo "tree=$(git rev-parse HEAD^{tree})"
+            echo "tree=$tree"
             echo "ref=$GITHUB_REF"
-            echo "package=BreastSubtypeR"
+            echo "lane_branch=$LANE_BRANCH"
+            echo "package=$pkg"
             echo "version=$version"
+            echo "expected_version=$EXPECTED_VERSION"
             echo "run=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           } | tee "$EVIDENCE_DIR/source.txt"
-          test "$sha" = "$GITHUB_SHA"
-          test "$version" = "1.5.12"
-          test -z "$(git status --porcelain --untracked-files=all)"
+          [ "$GITHUB_REF_TYPE" = "branch" ] || fail "release validation runs only on a branch; got $GITHUB_REF_TYPE $GITHUB_REF"
+          [ "$sha" = "$GITHUB_SHA" ] || fail "checkout HEAD $sha is not GITHUB_SHA $GITHUB_SHA"
+          [ -z "$(git status --porcelain --untracked-files=all)" ] || fail "the checkout is not pristine"
+          [ "$(grep -c '^Package:' DESCRIPTION)" -eq 1 ] || fail "DESCRIPTION must contain exactly one Package field"
+          [ "$(grep -c '^Version:' DESCRIPTION)" -eq 1 ] || fail "DESCRIPTION must contain exactly one Version field"
+          [[ "$pkg" =~ ^[A-Za-z][A-Za-z0-9.]*[A-Za-z0-9]$ ]] || fail "invalid DESCRIPTION Package field: '$pkg'"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "DESCRIPTION Version '$version' is not X.Y.Z"
+          [[ "$EXPECTED_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "expected-version '$EXPECTED_VERSION' is not X.Y.Z"
+          [ "$version" = "$EXPECTED_VERSION" ] ||
+            fail "DESCRIPTION Version $version does not equal expected-version $EXPECTED_VERSION"
+          {
+            echo "package=$pkg"
+            echo "version=$version"
+            echo "tarball=${pkg}_${version}.tar.gz"
+            echo "manual=${pkg}_${version}.pdf"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Resolve the CI lane
+        id: lane
+        env:
+          LANE_BRANCH: ${{ inputs.lane-branch }}
+        run: |
+          cp "$GITHUB_WORKSPACE/.github/ci/lanes.json" "$EVIDENCE_DIR/lane/lanes.json"
+          bash "$GITHUB_WORKSPACE/.github/scripts/resolve-ci-lane.sh" \
+            "$EVIDENCE_DIR/lane/lanes.json" "$LANE_BRANCH" | tee "$EVIDENCE_DIR/lane/lane.txt"
+          cat "$EVIDENCE_DIR/lane/lane.txt" >> "$GITHUB_OUTPUT"
+          get() { sed -n "s/^$1=//p" "$EVIDENCE_DIR/lane/lane.txt"; }
+          {
+            echo "CI_LANE=$(get lane)"
+            echo "CI_TARGET_BRANCH=$(get target_branch)"
+            echo "CI_R_VERSION=$(get r_version)"
+            echo "CI_BIOC_VERSION=$(get bioc_version)"
+            echo "CI_CACHE_NAMESPACE=$(get cache_namespace)"
+            echo "CI_LANES_SHA256=$(get lanes_sha256)"
+            echo "R_BIOC_VERSION=$(get bioc_version)"
+          } >> "$GITHUB_ENV"
 
       - uses: r-lib/actions/setup-pandoc@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
 
       - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
         with:
-          r-version: "4.6"
+          r-version: ${{ steps.lane.outputs.r_version }}
           use-public-rspm: true
 
+      # Same inputs and cache namespace as the Package validation job, so the
+      # release check uses the dependency set that job verifies, and the
+      # helper's environment gate (which requires BiocCheck and gert) applies.
       - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
         with:
           dependencies: '"all"'
           extra-packages: |
-            any::BiocManager
             any::rcmdcheck
             any::jsonlite
+            any::gert
             bioc::BiocVersion
+            bioc::BiocCheck
           needs: check
+          cache-version: ${{ steps.lane.outputs.cache_namespace }}
 
       - uses: r-lib/actions/setup-tinytex@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
         env:
@@ -83,24 +159,44 @@ jobs:
             2>&1 | tee "$EVIDENCE_DIR/environment/tlmgr-install.log"
           pdflatex --version | tee "$EVIDENCE_DIR/environment/pdflatex.txt"
           pandoc --version | tee "$EVIDENCE_DIR/environment/pandoc.txt"
+          qpdf --version | tee "$EVIDENCE_DIR/environment/qpdf.txt"
           tlmgr list --only-installed > "$EVIDENCE_DIR/environment/tex-packages.txt"
 
-      - name: Verify R and Bioconductor and record dependencies
-        shell: Rscript {0}
+      - name: Record and verify R, Bioconductor, dependency provenance and source revision
+        id: environment
+        working-directory: ${{ runner.temp }}
+        run: >-
+          Rscript "$PV_CI" environment "$GITHUB_WORKSPACE" "$EVIDENCE_DIR/environment"
+          2>&1 | tee "$EVIDENCE_DIR/environment/console.log"
+
+      - name: Self-test the failure gate with synthetic results
+        id: selftest
+        working-directory: ${{ runner.temp }}
         run: |
-          out <- file.path(Sys.getenv("EVIDENCE_DIR"), "environment")
-          capture.output(sessionInfo(), file = file.path(out, "session-info.txt"))
-          write.csv(installed.packages()[, c("Package", "Version", "LibPath")],
-                    file.path(out, "installed-packages.csv"), row.names = FALSE)
-          r <- getRversion()
-          bioc <- packageVersion("BiocVersion")
-          stopifnot(r >= "4.6.0", r < "4.7.0",
-                    bioc >= "3.24", bioc < "3.25",
-                    as.character(BiocManager::version()) == "3.24")
+          printf '%s\n' "$SHELLOPTS" | tee "$EVIDENCE_DIR/selftest/shellopts.txt"
+          case ":$SHELLOPTS:" in
+            *:pipefail:*) ;;
+            *) echo "::error::pipefail is not enabled in the job shell"; exit 2 ;;
+          esac
+          d="$EVIDENCE_DIR/selftest/step-pipeline"
+          mkdir -p "$d/notes" "$d/clean-then-fail"
+          Rscript "$PV_CI" fixture notes "$d/notes" 2>&1 | tee "$d/notes/console.log"
+          if Rscript "$PV_CI" fixture clean-then-fail "$d/clean-then-fail" \
+            2>&1 | tee "$d/clean-then-fail/console.log"; then
+            echo "::error::A failing command piped through tee was reported as success"
+            exit 2
+          fi
+          grep -q '"completed": true' "$d/clean-then-fail/fixture-result.json"
+          Rscript "$PV_CI" selftest "$EVIDENCE_DIR/selftest" \
+            2>&1 | tee "$EVIDENCE_DIR/selftest/console.log"
 
       - name: Build one source tarball with manuals enabled
         id: build
         working-directory: ${{ runner.temp }}/release-validation/build
+        env:
+          PKG: ${{ steps.identity.outputs.package }}
+          VERSION: ${{ steps.identity.outputs.version }}
+          TARBALL_NAME: ${{ steps.identity.outputs.tarball }}
         run: |
           R CMD build "$GITHUB_WORKSPACE" 2>&1 | tee build.log
           if grep -E '^(WARNING[: ]|Warning( messages?)?:|Warning in )' build.log; then
@@ -109,11 +205,23 @@ jobs:
           fi
           shopt -s nullglob
           tarballs=(*.tar.gz)
-          test "${#tarballs[@]}" -eq 1
-          test "${tarballs[0]}" = "BreastSubtypeR_1.5.12.tar.gz"
-          tar -tzf "${tarballs[0]}" > tarball-contents.txt
-          sha256sum "${tarballs[0]}" | tee tarball.sha256
-          echo "tarball=$PWD/${tarballs[0]}" >> "$GITHUB_OUTPUT"
+          if [ "${#tarballs[@]}" -ne 1 ] || [ "${tarballs[0]}" != "$TARBALL_NAME" ]; then
+            echo "::error::Expected exactly one tarball $TARBALL_NAME; found: ${tarballs[*]}"
+            exit 2
+          fi
+          tar -tzf "$TARBALL_NAME" > tarball-contents.txt
+          if grep -E "^${PKG}/\.github(/|$)" tarball-contents.txt; then
+            echo "::error::The built tarball contains .github files"
+            exit 2
+          fi
+          tar -xzOf "$TARBALL_NAME" "$PKG/DESCRIPTION" > tarball-DESCRIPTION
+          if [ "$(sed -n 's/^Package:[[:space:]]*//p' tarball-DESCRIPTION)" != "$PKG" ] ||
+            [ "$(sed -n 's/^Version:[[:space:]]*//p' tarball-DESCRIPTION)" != "$VERSION" ]; then
+            echo "::error::The tarball DESCRIPTION does not match $PKG $VERSION"
+            exit 2
+          fi
+          sha256sum "$TARBALL_NAME" | tee tarball.sha256
+          echo "tarball=$PWD/$TARBALL_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Full R CMD check --as-cran
         id: check
@@ -128,13 +236,14 @@ jobs:
         id: assess
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         env:
+          PKG: ${{ steps.identity.outputs.package }}
           RCMDCHECK_RUN_OUTCOME: ${{ steps.check.outcome }}
         run: |
-          Rscript "$GITHUB_WORKSPACE/.github/scripts/bioccheck-ci.R" rcmdcheck \
-            "$EVIDENCE_DIR/check/BreastSubtypeR.Rcheck" "$EVIDENCE_DIR/check" \
+          Rscript "$PV_CI" rcmdcheck \
+            "$EVIDENCE_DIR/check/$PKG.Rcheck" "$EVIDENCE_DIR/check" \
             2>&1 | tee "$EVIDENCE_DIR/check/assessment.log"
           grep -E '^\* checking PDF version of manual \.\.\. (\[[^]]+\] )?OK$' \
-            "$EVIDENCE_DIR/check/BreastSubtypeR.Rcheck/00check.log"
+            "$EVIDENCE_DIR/check/$PKG.Rcheck/00check.log"
 
       - name: Generate and verify the PDF manual from the same tarball
         id: manual
@@ -142,16 +251,18 @@ jobs:
         working-directory: ${{ runner.temp }}/release-validation/manual
         env:
           TARBALL: ${{ steps.build.outputs.tarball }}
+          PKG: ${{ steps.identity.outputs.package }}
+          MANUAL_NAME: ${{ steps.identity.outputs.manual }}
         run: |
           (cd "$EVIDENCE_DIR/build" && sha256sum --check tarball.sha256)
           mkdir source tex
           tar -xzf "$TARBALL" -C source
           R CMD Rd2pdf --no-preview --no-clean --build-dir="$PWD/tex" \
-            --output="$PWD/BreastSubtypeR_1.5.12.pdf" "$PWD/source/BreastSubtypeR" \
+            --output="$PWD/$MANUAL_NAME" "$PWD/source/$PKG" \
             2>&1 | tee manual.log
-          test -s BreastSubtypeR_1.5.12.pdf
-          qpdf --check BreastSubtypeR_1.5.12.pdf 2>&1 | tee pdf-check.log
-          sha256sum BreastSubtypeR_1.5.12.pdf > manual.sha256
+          test -s "$MANUAL_NAME"
+          qpdf --check "$MANUAL_NAME" 2>&1 | tee pdf-check.log
+          sha256sum "$MANUAL_NAME" > manual.sha256
 
       - name: Verify checkout integrity
         id: pristine
@@ -164,6 +275,11 @@ jobs:
       - name: Report outcomes and all check notes
         if: always()
         env:
+          PKG: ${{ steps.identity.outputs.package }}
+          IDENTITY_OUTCOME: ${{ steps.identity.outcome }}
+          LANE_OUTCOME: ${{ steps.lane.outcome }}
+          ENVIRONMENT_OUTCOME: ${{ steps.environment.outcome }}
+          SELFTEST_OUTCOME: ${{ steps.selftest.outcome }}
           BUILD_OUTCOME: ${{ steps.build.outcome }}
           CHECK_OUTCOME: ${{ steps.check.outcome }}
           ASSESS_OUTCOME: ${{ steps.assess.outcome }}
@@ -171,13 +287,16 @@ jobs:
           PRISTINE_OUTCOME: ${{ steps.pristine.outcome }}
         run: |
           {
-            echo '## BreastSubtypeR release validation'
+            echo '## Release validation (PDF manual)'
             echo
             echo '```text'
             if test -f "$EVIDENCE_DIR/source.txt"; then cat "$EVIDENCE_DIR/source.txt"; else echo 'Source identity not recorded; validation incomplete.'; fi
+            if test -f "$EVIDENCE_DIR/lane/lane.txt"; then cat "$EVIDENCE_DIR/lane/lane.txt"; else echo 'CI lane not resolved.'; fi
             echo '```'
             echo
             printf '| Stage | Outcome |\n|---|---|\n'
+            printf '| Expected version and source identity | %s |\n| CI lane | %s |\n| Environment and dependency provenance | %s |\n| Failure-gate self-test | %s |\n' \
+              "$IDENTITY_OUTCOME" "$LANE_OUTCOME" "$ENVIRONMENT_OUTCOME" "$SELFTEST_OUTCOME"
             printf '| Build | %s |\n| Full check | %s |\n| Strict assessment and PDF check | %s |\n| PDF generation and verification | %s |\n| Checkout integrity | %s |\n' \
               "$BUILD_OUTCOME" "$CHECK_OUTCOME" "$ASSESS_OUTCOME" "$MANUAL_OUTCOME" "$PRISTINE_OUTCOME"
             echo
@@ -185,8 +304,8 @@ jobs:
             echo '<details><summary>Complete check log, including every NOTE</summary>'
             echo
             echo '```text'
-            if test -f "$EVIDENCE_DIR/check/BreastSubtypeR.Rcheck/00check.log"; then
-              cat "$EVIDENCE_DIR/check/BreastSubtypeR.Rcheck/00check.log"
+            if test -n "${PKG:-}" && test -f "$EVIDENCE_DIR/check/$PKG.Rcheck/00check.log"; then
+              cat "$EVIDENCE_DIR/check/$PKG.Rcheck/00check.log"
             else
               echo 'No check log: validation did not reach a completed R CMD check.'
             fi
@@ -198,7 +317,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: release-validation-${{ github.sha }}-attempt-${{ github.run_attempt }}
+          name: release-validation-${{ steps.identity.outputs.version || 'unverified' }}-${{ github.sha }}-attempt-${{ github.run_attempt }}
           path: ${{ runner.temp }}/release-validation
           retention-days: 14
           if-no-files-found: error
