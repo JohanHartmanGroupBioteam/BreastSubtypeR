@@ -1,0 +1,261 @@
+# Consolidated package validation: one job, one runner, one source tarball.
+#
+# Order (from BiocCheck.yaml): resolve the CI lane; environment verification;
+# failure-gate self-tests; BiocCheckGitClone on the untouched checkout; one
+# R CMD build; one complete R CMD check --no-manual of that tarball; BiocCheck
+# (existing-package mode) of the same tarball, reusing the installation made by
+# R CMD check; source-integrity check; summary; evidence upload, also on failure.
+#
+# Gate: any ERROR or WARNING from BiocCheckGitClone, R CMD check or BiocCheck,
+# an incomplete stage, missing or inconsistent evidence, a source/tarball/
+# installation identity mismatch or a modified checkout fails the job. NOTEs
+# are listed in the job summary and do not fail it. Unlike the advisory
+# BiocCheck.yaml, BiocCheck findings are part of this job's gate.
+#
+# The check name "Package validation" does not contain R or Bioconductor
+# versions. The versions come from .github/ci/lanes.json for the target branch
+# (the PR base, or the pushed/dispatched branch); an unlisted branch fails.
+# Each lane uses its own dependency-cache namespace. Whether this check is
+# required is set by the Protect main ruleset, not here.
+#
+# Only this CI invocation sets the documented BiocCheck option
+# no-check-bioc-help = TRUE: mailing-list subscription, Support Site
+# registration and watched-tag registration are NOT CHECKED and are listed as
+# such in the summary. No secrets are used. Third-party actions are pinned to
+# full commit SHAs; the comment after each SHA gives the release tag.
+
+name: Package validation
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  package-validation:
+    name: Package validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    # Explicit bash runs steps with -eo pipefail, so a failing command piped
+    # through tee fails its step. GitHub's unspecified shell is only bash -e.
+    defaults:
+      run:
+        shell: bash
+    env:
+      R_KEEP_PKG_SOURCE: "yes"
+      _R_CHECK_FORCE_SUGGESTS_: "true"
+      PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Create the evidence directory
+        run: |
+          evidence="$RUNNER_TEMP/package-validation-evidence"
+          for d in lane environment selftest gitclone build check bioccheck; do
+            mkdir -p "$evidence/$d"
+          done
+          echo "EVIDENCE_DIR=$evidence" >> "$GITHUB_ENV"
+          echo "PV_CI=$GITHUB_WORKSPACE/.github/scripts/package-validation-ci.R" >> "$GITHUB_ENV"
+
+      - name: Resolve the CI lane for the target branch
+        id: lane
+        env:
+          TARGET_BRANCH: ${{ github.base_ref || github.ref_name }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != "pull_request" ] && [ "$GITHUB_REF_TYPE" != "branch" ]; then
+            echo "::error::Package validation runs only for branches; got $GITHUB_REF_TYPE $GITHUB_REF"
+            exit 2
+          fi
+          cp "$GITHUB_WORKSPACE/.github/ci/lanes.json" "$EVIDENCE_DIR/lane/lanes.json"
+          bash "$GITHUB_WORKSPACE/.github/scripts/resolve-ci-lane.sh" \
+            "$EVIDENCE_DIR/lane/lanes.json" "$TARGET_BRANCH" | tee "$EVIDENCE_DIR/lane/lane.txt"
+          cat "$EVIDENCE_DIR/lane/lane.txt" >> "$GITHUB_OUTPUT"
+          get() { sed -n "s/^$1=//p" "$EVIDENCE_DIR/lane/lane.txt"; }
+          {
+            echo "CI_LANE=$(get lane)"
+            echo "CI_TARGET_BRANCH=$(get target_branch)"
+            echo "CI_R_VERSION=$(get r_version)"
+            echo "CI_BIOC_VERSION=$(get bioc_version)"
+            echo "CI_CACHE_NAMESPACE=$(get cache_namespace)"
+            echo "CI_LANES_SHA256=$(get lanes_sha256)"
+            echo "R_BIOC_VERSION=$(get bioc_version)"
+          } >> "$GITHUB_ENV"
+
+      - uses: r-lib/actions/setup-pandoc@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
+
+      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
+        with:
+          r-version: ${{ steps.lane.outputs.r_version }}
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
+        with:
+          dependencies: '"all"'
+          extra-packages: |
+            any::rcmdcheck
+            any::jsonlite
+            any::gert
+            bioc::BiocVersion
+            bioc::BiocCheck
+          needs: check
+          cache-version: ${{ steps.lane.outputs.cache_namespace }}
+
+      - name: Record and verify R, Bioconductor, dependency provenance and source revision
+        id: environment
+        working-directory: ${{ runner.temp }}
+        run: >-
+          Rscript "$PV_CI" environment "$GITHUB_WORKSPACE" "$EVIDENCE_DIR/environment"
+          2>&1 | tee "$EVIDENCE_DIR/environment/console.log"
+
+      - name: Self-test the failure gate with synthetic results
+        id: selftest
+        working-directory: ${{ runner.temp }}
+        run: |
+          # This step uses the same job default shell as every check step.
+          printf '%s\n' "$SHELLOPTS" | tee "$EVIDENCE_DIR/selftest/shellopts.txt"
+          case ":$SHELLOPTS:" in
+            *:pipefail:*) ;;
+            *) echo "::error::pipefail is not enabled in the job shell"; exit 2 ;;
+          esac
+          d="$EVIDENCE_DIR/selftest/step-pipeline"
+          mkdir -p "$d/notes" "$d/clean-then-fail"
+          Rscript "$PV_CI" fixture notes "$d/notes" 2>&1 | tee "$d/notes/console.log"
+          if Rscript "$PV_CI" fixture clean-then-fail "$d/clean-then-fail" \
+            2>&1 | tee "$d/clean-then-fail/console.log"; then
+            echo "::error::A failing command piped through tee was reported as success"
+            exit 2
+          fi
+          grep -q '"completed": true' "$d/clean-then-fail/fixture-result.json"
+          Rscript "$PV_CI" selftest "$EVIDENCE_DIR/selftest" \
+            2>&1 | tee "$EVIDENCE_DIR/selftest/console.log"
+
+      - name: BiocCheckGitClone on the untouched checkout
+        id: gitclone
+        working-directory: ${{ runner.temp }}
+        run: |
+          git -C "$GITHUB_WORKSPACE" status --porcelain --untracked-files=all --ignored \
+            > "$EVIDENCE_DIR/gitclone/checkout-status-before.txt"
+          if [ -s "$EVIDENCE_DIR/gitclone/checkout-status-before.txt" ]; then
+            echo "::error::The checkout is not pristine before BiocCheckGitClone"
+            cat "$EVIDENCE_DIR/gitclone/checkout-status-before.txt"
+            exit 2
+          fi
+          Rscript "$PV_CI" gitclone "$GITHUB_WORKSPACE" "$EVIDENCE_DIR/gitclone" \
+            2>&1 | tee "$EVIDENCE_DIR/gitclone/gitclone-console.log"
+
+      - name: Build one source tarball
+        id: build
+        if: ${{ !cancelled() && steps.environment.outcome == 'success' && steps.selftest.outcome == 'success' }}
+        working-directory: ${{ runner.temp }}/package-validation-evidence/build
+        run: |
+          pkg="$(sed -n 's/^Package:[[:space:]]*//p' "$GITHUB_WORKSPACE/DESCRIPTION")"
+          version="$(sed -n 's/^Version:[[:space:]]*//p' "$GITHUB_WORKSPACE/DESCRIPTION")"
+          echo "(cd $PWD) R CMD build --no-manual $GITHUB_WORKSPACE" >> "$EVIDENCE_DIR/commands.txt"
+          R CMD build --no-manual "$GITHUB_WORKSPACE" 2>&1 | tee build-output.txt
+          shopt -s nullglob
+          tarballs=(*.tar.gz)
+          if [ "${#tarballs[@]}" -ne 1 ] || [ "${tarballs[0]}" != "${pkg}_${version}.tar.gz" ]; then
+            echo "::error::Expected exactly one tarball ${pkg}_${version}.tar.gz; found: ${tarballs[*]}"
+            exit 2
+          fi
+          tar -tzf "${tarballs[0]}" > tarball-contents.txt
+          if grep -E "^${pkg}/\.github(/|$)" tarball-contents.txt; then
+            echo "::error::The built tarball contains .github files"
+            exit 2
+          fi
+          sha256sum "${tarballs[0]}" | tee tarball.sha256
+          {
+            echo "tarball=$PWD/${tarballs[0]}"
+            echo "rcheck=$EVIDENCE_DIR/check/${pkg}.Rcheck"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: R CMD check --no-manual of the tarball
+        id: rcmdcheck_run
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        working-directory: ${{ runner.temp }}/package-validation-evidence/check
+        env:
+          TARBALL: ${{ steps.build.outputs.tarball }}
+        run: |
+          echo "(cd $PWD) R CMD check --no-manual $TARBALL" >> "$EVIDENCE_DIR/commands.txt"
+          R CMD check --no-manual "$TARBALL" 2>&1 | tee rcmdcheck-console.log
+
+      - name: Require no R CMD check ERROR or WARNING
+        id: rcmdcheck
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        working-directory: ${{ runner.temp }}
+        env:
+          RCHECK: ${{ steps.build.outputs.rcheck }}
+          RCMDCHECK_RUN_OUTCOME: ${{ steps.rcmdcheck_run.outcome }}
+        run: >-
+          Rscript "$PV_CI" rcmdcheck "$RCHECK" "$EVIDENCE_DIR/check"
+          2>&1 | tee "$EVIDENCE_DIR/check/assess-console.log"
+
+      - name: BiocCheck of the same tarball (account checks excluded)
+        id: bioccheck
+        if: ${{ !cancelled() && steps.rcmdcheck_run.outcome == 'success' && steps.rcmdcheck.outcome == 'success' }}
+        working-directory: ${{ runner.temp }}
+        env:
+          TARBALL: ${{ steps.build.outputs.tarball }}
+          RCHECK: ${{ steps.build.outputs.rcheck }}
+        run: |
+          (cd "$EVIDENCE_DIR/build" && sha256sum --check tarball.sha256)
+          Rscript "$PV_CI" bioccheck "$TARBALL" "$RCHECK" \
+            "$EVIDENCE_DIR/build/build-output.txt" "$EVIDENCE_DIR/bioccheck" \
+            2>&1 | tee "$EVIDENCE_DIR/bioccheck/bioccheck-console.log"
+
+      - name: Verify the checkout was not modified
+        id: pristine
+        if: ${{ always() }}
+        run: |
+          status="$(git -C "$GITHUB_WORKSPACE" status --porcelain --untracked-files=all --ignored)"
+          if [ -n "$status" ]; then
+            echo "::error::The checkout was modified during the job"
+            printf '%s\n' "$status"
+            exit 1
+          fi
+
+      - name: Job summary
+        if: ${{ always() }}
+        working-directory: ${{ runner.temp }}
+        env:
+          OUTCOME_ENVIRONMENT: ${{ steps.environment.outcome }}
+          OUTCOME_SELFTEST: ${{ steps.selftest.outcome }}
+          OUTCOME_GITCLONE: ${{ steps.gitclone.outcome }}
+          OUTCOME_BUILD: ${{ steps.build.outcome }}
+          OUTCOME_RCMDCHECK: ${{ steps.rcmdcheck.outcome }}
+          OUTCOME_BIOCCHECK: ${{ steps.bioccheck.outcome }}
+          OUTCOME_PRISTINE: ${{ steps.pristine.outcome }}
+        run: |
+          if [ -z "${EVIDENCE_DIR:-}" ] || ! command -v Rscript > /dev/null; then
+            {
+              echo "## Package validation"
+              echo "Setup did not complete (no R or no evidence directory); no check ran."
+              echo "Bioconductor mailing-list subscription: NOT checked."
+              echo "Support Site registration: NOT checked."
+              echo "BreastSubtypeR watched-tag registration: NOT checked."
+              echo "These account requirements must be verified separately."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          Rscript "$PV_CI" summary "$EVIDENCE_DIR"
+
+      - name: Upload evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: package-validation-evidence-${{ steps.lane.outputs.lane || 'unresolved-lane' }}-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/package-validation-evidence
+          retention-days: 14
+          if-no-files-found: warn
