@@ -43,7 +43,7 @@ ssp_small_upload <- function(se) {
          anno = table_file(as.data.frame(SummarizedExperiment::rowData(se))))
 }
 
-test_that("both SSP exports match the public API on the normalized example and raw uploads", {
+test_that("both SSP exports match the public API on each packaged example and on raw uploads", {
     env <- shiny_app_env()
     map <- BreastSubtypeR::Mapping
     predict <- BreastSubtypeR::BS_sspbc
@@ -58,7 +58,8 @@ test_that("both SSP exports match the public API on the normalized example and r
         predict(se_obj, ssp.name)
     }, .package = "BreastSubtypeR")
 
-    for (raw in c(FALSE, TRUE)) {
+    for (source_id in c("oslo", "tcga", "upload")) {
+        raw <- source_id != "oslo"
         se <- current_example(if (raw) "TCGABRCAobj" else "OSLO2EMIT0obj")$se_obj
         expect_identical(dim(se), if (raw) c(5350L, 100L) else c(569L, 102L))
         expr <- shiny_upload(if (raw) "TCGABRCAsub_GEX_RawCounts.txt" else "OSLO2EMIT0_GEX_log2.FPKM.txt")
@@ -74,11 +75,11 @@ test_that("both SSP exports match the public API on the normalized example and r
         mappings <- list()
         shiny::testServer(env$server, {
             session$setInputs(BSmethod = "sspbc", k_subtypes = "5",
-                              is_raw_counts = if (raw) "raw" else "norm")
-            if (raw) {
+                              is_raw_counts = if (source_id == "tcga") "norm" else "raw")
+            if (source_id == "upload") {
                 session$setInputs(GEX = expr, clinic = shiny_upload("TCGABRCAsub_clinical.txt"),
                                   anno = shiny_upload("TCGABRCAsub_anno.txt"))
-            } else session$setInputs(load_example_step1 = 1)
+            } else session$setInputs(example_choice = source_id, confirm_example = 1)
             session$setInputs(map = 1)
             ordinary <- list(dim = dim(x), probes = rownames(x), samples = colnames(x),
                              RawCounts = raw, impute = FALSE, include_ssp_ror = FALSE)
@@ -146,10 +147,10 @@ test_that("partial and zero evidence preserve native cells, sample IDs, and sing
         subtype <- BS_sspbc(mapped$se_SSP, "ssp.subtype")
         expected <- ssp_reference_export(subtype, ror, TRUE)
         # Serialize once through the upload table as well as through the TSV.
-        uploads <- ssp_small_upload(input_se)
+        upload_files <- ssp_small_upload(input_se)
         shiny::testServer(env$server, {
             session$setInputs(BSmethod = "sspbc", k_subtypes = "4", is_raw_counts = "norm")
-            do.call(session$setInputs, uploads)
+            do.call(session$setInputs, upload_files)
             session$setInputs(map = 1)
             session$setInputs(run = 1)
             expect_identical(ssp_read_export(output$download), ssp_reference_tsv(expected[, 1:2]))
@@ -282,11 +283,11 @@ test_that("optional mapping, prediction and alignment errors are cached and leav
 test_that("both callbacks revoke SSP exports across input and prediction changes", {
     env <- shiny_app_env()
     se <- current_example("OSLO2EMIT0obj")$se_obj[, 1:2]
-    uploads <- ssp_small_upload(se)
+    upload_files <- ssp_small_upload(se)
     for (change in c("GEX", "clinic", "anno", "example", "raw", "map", "classes", "method", "rerun")) {
         shiny::testServer(env$server, {
             session$setInputs(BSmethod = "sspbc", k_subtypes = "5", is_raw_counts = "norm")
-            do.call(session$setInputs, uploads)
+            do.call(session$setInputs, upload_files)
             session$setInputs(map = 1)
             session$setInputs(run = 1)
             old <- current_prediction()
@@ -295,12 +296,12 @@ test_that("both callbacks revoke SSP exports across input and prediction changes
             path <- tempfile()
             write_download(path)
             expect_equal(ncol(ssp_read_export(path)), 32L)
-            if (change %in% names(uploads)) {
-                replacement <- uploads[change]
+            if (change %in% names(upload_files)) {
+                replacement <- upload_files[change]
                 replacement[[1]]$name <- "replacement.txt"
                 do.call(session$setInputs, replacement)
             } else switch(change,
-                example = session$setInputs(load_example_step1 = 1),
+                example = session$setInputs(example_choice = "tcga", confirm_example = 1),
                 raw = session$setInputs(is_raw_counts = "raw"),
                 map = session$setInputs(map = 2),
                 classes = session$setInputs(k_subtypes = "4"),
