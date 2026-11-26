@@ -146,8 +146,8 @@ bs_callout <- function(title, body, color = c("info","success","warning","danger
   list(calls = calls_tbl, full = full_tbl)
 }
 
-# Posterior rows and rule columns in the native result have positional sample
-# axes. Verify them against the actual model input before aligning to calls.
+# Check IDs on named axes and dimensions on unnamed axes. Native posterior
+# rows and rule columns follow input order when their sample axes are unnamed.
 .ssp_export_metrics <- function(result, model, input_ids, call_ids) {
   is_ror <- identical(model, "ssp.ror")
   k <- if (identical(model, "ssp.pam50")) "24" else "21"
@@ -190,7 +190,8 @@ bs_callout <- function(title, body, color = c("info","success","warning","danger
   zero <- sum(full$SSP_ROR_Rules_Evaluable == 0L)
   if (zero) {
     note <- paste(note, sprintf("Rows with SSP_ROR_Rules_Evaluable = 0 (%d) have zero evaluable rules.", zero),
-                  "Their native bins and posteriors have no expression support.",
+                  "Their posteriors reflect only the model's training-set category frequencies.",
+                  "Their assigned bins have no sample-specific expression support.",
                   "Check probe-to-Entrez annotation and missing expression for these samples.")
   }
   note
@@ -223,7 +224,8 @@ server <- function(input, output, session) {
     con <- file(path, open = "wt", encoding = "UTF-8")
     on.exit(close(con), add = TRUE)
     if (length(header_lines)) writeLines(paste0("# ", header_lines), con)
-    utils::write.table(df, con, sep = "\t", quote = if (quote_ids) 1L else FALSE,
+    if (quote_ids) writeLines(paste(names(df), collapse = "\t"), con)
+    utils::write.table(df, con, col.names = !quote_ids, sep = "\t", quote = if (quote_ids) 1L else FALSE,
                        qmethod = "double", row.names = FALSE)
   }
   
@@ -547,16 +549,17 @@ server <- function(input, output, session) {
   ssp_full <- reactive({
     p <- current_prediction()
     req(p$ssp)
-    tryCatch({
+    tryCatch(withProgress(message = "Preparing SSP.ROR full metrics...", value = 0.1, {
       subtype <- .ssp_export_metrics(p$ssp$native, p$ssp$model, p$ssp$input_ids, p$calls$PatientID)
       mapped <- BreastSubtypeR::Mapping(se_obj = aligned_input(), RawCounts = reactive_files$RawCounts,
                                         impute = FALSE, include_ssp_ror = TRUE, verbose = TRUE)
+      incProgress(0.6, detail = "Predicting categorical SSP.ROR bins...")
       ror_input <- mapped$se_SSP_ROR
       ror <- BreastSubtypeR::BS_sspbc(se_obj = ror_input, ssp.name = "ssp.ror")
       metrics <- .ssp_export_metrics(ror, "ssp.ror", colnames(ror_input), p$calls$PatientID)
       full <- cbind(p$calls, subtype, metrics)
       list(full = full, note = .ssp_ror_coverage_note(full))
-    }, error = function(e) list(error = paste("SSP.ROR full export unavailable.", conditionMessage(e))))
+    }), error = function(e) list(error = paste("SSP.ROR full export unavailable.", conditionMessage(e))))
   })
 
   selected_export <- reactive({
@@ -566,7 +569,7 @@ server <- function(input, output, session) {
       p$full <- result$full
       p$full_error <- result$error
       p$full_note <- result$note
-      p$header <- sprintf("Method: %s | Classes: %d | ROR: categorical ssp.ror | Probabilities: fitted class/bin membership",
+      p$header <- sprintf("Method: sspbc | Subtype model: %s | Classes: %d | ROR: categorical ssp.ror",
                           p$ssp$model, if (p$want_4) 4L else 5L)
     }
     p
@@ -601,6 +604,10 @@ server <- function(input, output, session) {
                            format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"), getRversion()))
     }
     if (identical(kind, "full")) {
+      if (!is.null(p$ssp)) {
+        hdr <- c(hdr, paste("SSP.ROR predicts categorical bins. Posteriors describe fitted bin membership.",
+                            "This model provides neither continuous clinical Prosigna ROR scores nor individual recurrence probabilities."))
+      }
       note <- .experimental_ror_pc_export_note(p[[kind]])
       if (length(note)) hdr[length(hdr)] <- paste(hdr[length(hdr)], note, sep = " | ")
     }
@@ -808,7 +815,8 @@ server <- function(input, output, session) {
     p <- selected_export()
     if (!is.null(p$full_error))
       return(bs_callout("SSP.ROR export needs attention",
-                        paste(p$full_error, "Choose Calls only to download the subtype results."), "danger"))
+                        paste(p$full_error, "Choose Calls only to download the subtype results.",
+                              "Run subtyping again to retry full metrics."), "danger"))
     if (length(p$full_note)) bs_callout("SSP.ROR rule coverage", p$full_note, "warning")
   })
   output$download_control <- renderUI({

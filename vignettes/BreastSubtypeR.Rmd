@@ -919,10 +919,14 @@ categorical model once for that prediction. Each row retains its original subtyp
 and includes the assigned subtype probability, all subtype posteriors, the native
 SSP.ROR bin, its assigned probability, all 18 bin posteriors and both models' rule counts.
 The bin posteriors describe fitted bin membership. Tumor size and nodal status do not enter
-this calculation. Incomplete rule coverage appears in the app and in the TSV comments.
+this calculation. Incomplete SSP.ROR rule coverage appears in the app and in the TSV comments.
 Rows with `SSP_ROR_Rules_Evaluable = 0` retain the native result and have no expression
-support for the bin. Check the expression measurements and probe-to-Entrez annotation.
+support for the bin. Their posteriors are the training-set category frequencies. Check the expression measurements and probe-to-Entrez annotation.
 If optional preparation fails, the subtype plots and **Calls only** download remain available.
+Run subtyping again to retry full metrics. Both SSPBC export modes keep the column
+header unquoted. If any ID contains a tab, line break, double quote or hash, the
+PatientID column is quoted and internal double quotes are doubled. For example,
+read the TSV with `read.delim(path, comment.char = "#", colClasses = c(PatientID = "character"), na.strings = character())`.
 
 When current **Full metrics** contain both experimental 18-gene ROR-PC
 columns, the selected export has a persistent experimental notice and the

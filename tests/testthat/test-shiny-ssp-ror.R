@@ -47,11 +47,12 @@ test_that("both SSP exports match the public API on the normalized example and r
     env <- shiny_app_env()
     map <- BreastSubtypeR::Mapping
     predict <- BreastSubtypeR::BS_sspbc
-    mapped_ror <- logical()
+    mappings <- list()
     models <- character()
-    local_mocked_bindings(Mapping = function(se_obj, ..., include_ssp_ror = FALSE) {
-        mapped_ror <<- c(mapped_ror, include_ssp_ror)
-        map(se_obj, ..., include_ssp_ror = include_ssp_ror)
+    local_mocked_bindings(Mapping = function(se_obj, ..., RawCounts = FALSE, impute = FALSE, include_ssp_ror = FALSE) {
+        mappings[[length(mappings) + 1L]] <<- list(dim = dim(se_obj), probes = rownames(se_obj),
+            samples = colnames(se_obj), RawCounts = RawCounts, impute = impute, include_ssp_ror = include_ssp_ror)
+        map(se_obj, ..., RawCounts = RawCounts, impute = impute, include_ssp_ror = include_ssp_ror)
     }, BS_sspbc = function(se_obj, ssp.name) {
         models <<- c(models, ssp.name)
         predict(se_obj, ssp.name)
@@ -70,7 +71,7 @@ test_that("both SSP exports match the public API on the normalized example and r
         expect_identical(nrow(reference$se_SSP_ROR), 296L)
         expect_true(all(colSums(!is.na(ror$rules.matrix)) == 361L))
         models <- character()
-        mapped_ror <- logical()
+        mappings <- list()
         shiny::testServer(env$server, {
             session$setInputs(BSmethod = "sspbc", k_subtypes = "5",
                               is_raw_counts = if (raw) "raw" else "norm")
@@ -79,7 +80,11 @@ test_that("both SSP exports match the public API on the normalized example and r
                                   anno = shiny_upload("TCGABRCAsub_anno.txt"))
             } else session$setInputs(load_example_step1 = 1)
             session$setInputs(map = 1)
-            expect_identical(mapped_ror, FALSE)
+            ordinary <- list(dim = dim(x), probes = rownames(x), samples = colnames(x),
+                             RawCounts = raw, impute = FALSE, include_ssp_ror = FALSE)
+            optional <- ordinary
+            optional$include_ssp_ror <- TRUE
+            expect_identical(mappings, list(ordinary))
             for (i in 1:2) {
                 four <- i == 2L
                 model <- if (four) "ssp.subtype" else "ssp.pam50"
@@ -90,27 +95,29 @@ test_that("both SSP exports match the public API on the normalized example and r
                 html <- output$export_selector$html
                 expect_match(html, 'value="calls" checked', fixed = TRUE)
                 expect_match(html, "Full metrics (incl. ROR)", fixed = TRUE)
-                expect_equal(sum(mapped_ror), i - 1L)
+                expect_equal(length(mappings), i)
                 expect_equal(sum(models == "ssp.ror"), i - 1L)
                 session$setInputs(export_kind = "calls")
                 expect_identical(ssp_read_export(output$download), expected_tsv[, 1:2])
                 session$setInputs(export_kind = p$ssp$full_choice)
+                expect_identical(mappings, c(list(ordinary), rep(list(optional), i)))
                 path <- output$download
                 expect_identical(ssp_read_export(path), expected_tsv)
                 expect_identical(ncol(expected_tsv), if (four) 31L else 32L)
-                header <- readLines(path, n = 3)
+                header <- readLines(path, n = 4)
                 expect_match(header[1], "10.1093/nargab/lqaf131", fixed = TRUE)
-                expect_match(header[2], model, fixed = TRUE)
+                expect_match(header[2], paste("Method: sspbc | Subtype model:", model), fixed = TRUE)
                 expect_match(header[2], "categorical ssp.ror", fixed = TRUE)
                 expect_false(grepl("ROR: OFF", header[2], fixed = TRUE))
                 expect_match(header[3], "Export: full", fixed = TRUE)
+                expect_match(header[4], "neither continuous clinical Prosigna ROR scores nor individual recurrence probabilities", fixed = TRUE)
                 expect_null(output$ssp_ror_notice)
                 session$setInputs(export_kind = "calls")
                 expect_identical(ssp_read_export(output$download), expected_tsv[, 1:2])
                 session$setInputs(export_kind = p$ssp$full_choice)
                 expect_identical(ssp_read_export(output$download), expected_tsv)
                 expect_identical(current_prediction(), p)
-                expect_equal(sum(mapped_ror), i)
+                expect_length(mappings, i + 1L)
                 expect_equal(sum(models == "ssp.ror"), i)
                 expect_equal(sum(models == model), 1L)
             }
@@ -130,8 +137,9 @@ test_that("partial and zero evidence preserve native cells, sample IDs, and sing
     x[genes %in% ror_ids, 1] <- NA_real_
     x[genes %in% head(ror_ids, 10), 2] <- NA_real_
     x[, 3] <- NA_real_
+    x[!genes %in% ror_ids, 4] <- NA_real_
     SummarizedExperiment::assay(se) <- x
-    for (cols in list(seq_along(ids), 2L)) {
+    for (cols in list(seq_along(ids), 2L, 4L)) {
         input_se <- se[, cols, drop = FALSE]
         mapped <- Mapping(input_se, include_ssp_ror = TRUE, verbose = FALSE)
         ror <- BS_sspbc(mapped$se_SSP_ROR, "ssp.ror")
@@ -150,18 +158,31 @@ test_that("partial and zero evidence preserve native cells, sample IDs, and sing
             tab <- ssp_read_export(path)
             expect_identical(tab, ssp_reference_tsv(expected))
             expect_identical(tab$PatientID, ids[cols])
-            note <- readLines(path, n = 4)[4]
-            expect_match(note, "^# Incomplete SSP.ROR rule coverage")
-            expect_match(output$ssp_ror_notice$html, "Incomplete SSP.ROR rule coverage", fixed = TRUE)
+            note <- grep("^# Incomplete SSP.ROR rule coverage", readLines(path), value = TRUE)
+            if (identical(cols, 4L)) {
+                expect_lt(as.integer(tab$SSP_Rules_Evaluable), as.integer(tab$SSP_Rules_Total))
+                expect_identical(tab$SSP_ROR_Rules_Evaluable, tab$SSP_ROR_Rules_Total)
+                expect_null(output$ssp_ror_notice)
+                expect_length(note, 0L)
+            } else {
+                expect_length(note, 1L)
+                expect_match(output$ssp_ror_notice$html, "Incomplete SSP.ROR rule coverage", fixed = TRUE)
+            }
             if (length(cols) > 1L) {
                 expect_identical(as.integer(tab$SSP_ROR_Rules_Evaluable[c(1, 3, 4)]), c(0L, 0L, 361L))
                 expect_true(as.integer(tab$SSP_ROR_Rules_Evaluable[2]) %in% 1:360)
                 expect_true(all(!is.na(ror$cl[c(1, 3), 1])))
                 expect_true(is.na(subtype$cl[3, 1]))
                 expect_match(note, "SSP_ROR_Rules_Evaluable = 0 (2)", fixed = TRUE)
-                expect_match(output$ssp_ror_notice$html, "no expression support", fixed = TRUE)
+                expect_match(output$ssp_ror_notice$html, "training-set category frequencies", fixed = TRUE)
+                expect_match(note, "no sample-specific expression support", fixed = TRUE)
+                models <- new.env()
+                data("sspbc.models", package = "BreastSubtypeR", envir = models)
+                prior <- models$sspbc.models[["ssp.ror"]]$one.vs.all.tsp[[21L]]$apriori
+                bin_cols <- paste0("SSP_ROR_Prob_", names(prior))
+                expect_equal(as.numeric(tab[1, bin_cols]), as.numeric(prior / sum(prior)), tolerance = 1e-14)
                 expect_match(note, "Check probe-to-Entrez annotation", fixed = TRUE)
-            } else expect_false(grepl("zero evaluable rules", note, fixed = TRUE))
+            } else expect_false(any(grepl("zero evaluable rules", note, fixed = TRUE)))
             session$setInputs(export_kind = "calls")
             expect_null(output$ssp_ror_notice)
             expect_false(any(grepl("SSP.ROR rule coverage", readLines(output$download), fixed = TRUE)))
@@ -222,6 +243,7 @@ test_that("optional mapping, prediction and alignment errors are cached and leav
             session$setInputs(export_kind = choice)
             error <- c("Entrez ID", "injected predictor error", "Cannot align ssp.ror")[i]
             expect_match(output$ssp_ror_notice$html, error, fixed = TRUE)
+            expect_match(output$ssp_ror_notice$html, "Run subtyping again to retry full metrics", fixed = TRUE)
             expect_null(output$download_control)
             expect_error(download_filename(), error, fixed = TRUE)
             path <- tempfile()
@@ -337,4 +359,26 @@ test_that("SSP positional metrics reject inconsistent axes and align verified ID
     bad <- native
     colnames(bad$rules.matrix) <- rev(ids)
     expect_error(project(bad), "Cannot align")
+})
+
+test_that("SSP TSV preserves ordinary bytes, unquoted headers and quoted patient identifiers", {
+    env <- shiny_app_env()
+    shiny::testServer(env$server, {
+        # Check writer bytes as well as the comment-aware reader. The upload
+        # round-trip above covers quotes, hash, spaces and a leading-zero ID.
+        header <- "PatientID\tCall_4class"
+        newline <- if (.Platform$OS.type == "windows") "\r\n" else "\n"
+        for (special in c(FALSE, TRUE)) {
+            ids <- if (special) c('P#"1', "P\t2", "P\n3", "P 4") else c("001", "P 4")
+            cells <- if (special) c('"P#""1"', '"P\t2"', '"P\n3"', '"P 4"') else ids
+            df <- data.frame(PatientID = ids, Call_4class = "LumA")
+            path <- tempfile()
+            .write_tsv_with_header(path, df, header_lines = "test metadata", quote_ids = special)
+            bytes <- paste(c("# test metadata", header, paste(cells, "LumA", sep = "\t"), ""),
+                           collapse = "\n")
+            if (newline != "\n") bytes <- gsub("\n", newline, bytes, fixed = TRUE)
+            expect_identical(readBin(path, "raw", n = file.size(path)), charToRaw(bytes))
+            expect_identical(ssp_read_export(path), df)
+        }
+    })
 })

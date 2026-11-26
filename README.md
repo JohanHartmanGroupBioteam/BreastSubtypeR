@@ -296,8 +296,10 @@ install.packages(c("shiny", "bslib"))
    and for SSPBC in either class setting. SSPBC starts with **Calls only**.
    Selecting full metrics adds native subtype posteriors, categorical SSP.ROR
    bins, bin-membership posteriors and evaluable rule counts per sample.
-   Check the coverage notice before interpreting incomplete results. A native
-   bin with zero evaluable rules has no expression support.
+   Incomplete SSP.ROR rule coverage is reported in the app and TSV. With zero
+   evaluable SSP.ROR rules, bin posteriors reflect training-set frequencies alone.
+   Both SSPBC exports quote the PatientID column when an ID contains a tab,
+   line break, double quote or hash. Read IDs as text to preserve their spelling.
 
 For expression uploads, use comma-delimited `.csv` or tab-delimited text with
 genes in rows and sample IDs in the header. Label the gene-ID column `probe`

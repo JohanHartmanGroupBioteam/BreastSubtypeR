@@ -11,8 +11,10 @@
 
 * SSPBC four- and five-class predictions now offer **Full metrics (incl. ROR)**.
   Selecting it adds native subtype and categorical SSP.ROR posteriors and
-  per-sample rule counts. Incomplete coverage is reported in the app and TSV,
-  including native bins with zero evaluable rules. Calls only remains the default.
+  per-sample rule counts. Incomplete SSP.ROR rule coverage is reported in the
+  app and TSV. Zero-rule posteriors reflect training-set category frequencies.
+  Calls only remains the default. Both SSPBC exports quote the PatientID column
+  when an ID contains a tab, line break, double quote or hash.
 
 # BreastSubtypeR 1.5.14
 

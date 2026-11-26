@@ -41,9 +41,11 @@ Download controls are shown only for a supported, current prediction.
 AUTO and AIMS provide calls only. Supported single NC methods and both
 SSPBC class settings offer full metrics. Each SSPBC run starts with calls
 only. Selecting full metrics prepares categorical SSP.ROR bins, subtype
-and bin posteriors, and rule counts for that prediction. Incomplete rule
-coverage is reported. Native bins with zero evaluable rules have no
-expression support. An SSP.ROR export error leaves subtype calls available.
+and bin posteriors, and rule counts for that prediction. Incomplete SSP.ROR rule coverage
+is reported. Zero-rule bin posteriors reflect training-set frequencies alone.
+Both SSPBC exports quote the PatientID column when an ID contains a tab,
+line break, double quote or hash. An SSP.ROR export error leaves subtype
+calls available. Run subtyping again to retry full metrics.
 Server-side guards reject stale or unavailable downloads.
 
 For cIHC.itr, the ratio is the ER-positive : ER-negative target, defaults

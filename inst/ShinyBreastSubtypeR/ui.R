@@ -212,7 +212,7 @@ ui <- bslib::page_fluid(
         tags$li(tags$b("AUTO: "), "selects methods according to implemented receptor-annotation and subgroup-size rules. It does not establish complete model-input adequacy or clinical validity."),
         tags$li(tags$b("NC-based: "), "PAM50 (parker.original, genefu.scale, genefu.robust), cIHC, cIHC.itr, PCAPAM50, ssBC and ssBC.v2."),
         tags$li(tags$b("SSP-based: "), "AIMS and SSPBC. AIMS supports five classes only."),
-        tags$li("Choose four classes to exclude Normal-like, or five classes to include it. Supported NC methods provide research ROR scores. SSPBC full exports include categorical SSP.ROR bins and their model probabilities.")
+        tags$li("Choose four classes to exclude Normal-like, or five classes to include it. Supported NC methods provide research ROR scores. SSPBC full exports include categorical SSP.ROR bins and their model probabilities. Incomplete SSP.ROR rule coverage is reported for the full export.")
       )
     ),
     
