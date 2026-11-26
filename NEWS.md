@@ -7,6 +7,13 @@
   Replacing the dataset or reloading an example clears its custom
   reference (#274).
 
+## Shiny exports
+
+* SSPBC four- and five-class predictions now offer **Full metrics (incl. ROR)**.
+  Selecting it adds native subtype and categorical SSP.ROR posteriors and
+  per-sample rule counts. Incomplete coverage is reported in the app and TSV,
+  including native bins with zero evaluable rules. Calls only remains the default.
+
 # BreastSubtypeR 1.5.14
 
 ## Performance

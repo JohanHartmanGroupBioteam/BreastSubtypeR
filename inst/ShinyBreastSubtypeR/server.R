@@ -146,6 +146,56 @@ bs_callout <- function(title, body, color = c("info","success","warning","danger
   list(calls = calls_tbl, full = full_tbl)
 }
 
+# Posterior rows and rule columns in the native result have positional sample
+# axes. Verify them against the actual model input before aligning to calls.
+.ssp_export_metrics <- function(result, model, input_ids, call_ids) {
+  is_ror <- identical(model, "ssp.ror")
+  k <- if (identical(model, "ssp.pam50")) "24" else "21"
+  labels <- if (is_ror) sprintf("c%03d", seq(5, 90, 5)) else c("Basal", "Her2", "LumA", "LumB")
+  if (identical(model, "ssp.pam50")) labels <- c(labels, "Normal")
+
+  ids <- rownames(result$cl)
+  post <- result$all.probs[[k]]
+  rules <- result$rules.matrix
+  if (!length(ids) || anyNA(ids) || any(!nzchar(ids)) || anyDuplicated(ids) ||
+      !identical(ids, input_ids) || length(call_ids) != length(ids) ||
+      anyDuplicated(call_ids) || !setequal(call_ids, ids) ||
+      !identical(colnames(result$data.used), ids) ||
+      !identical(colnames(result$cl), k) || !is.matrix(result$prob) ||
+      !identical(dimnames(result$prob), dimnames(result$cl)) ||
+      !is.matrix(post) || nrow(post) != length(ids) || !identical(colnames(post), labels) ||
+      (!is.null(rownames(post)) && !identical(rownames(post), ids)) ||
+      !is.matrix(rules) || !nrow(rules) || ncol(rules) != length(ids) ||
+      (!is.null(colnames(rules)) && !identical(colnames(rules), ids))) {
+    stop(sprintf("Cannot align %s metrics. Check sample IDs and native output dimensions.", model),
+         call. = FALSE)
+  }
+
+  prefix <- if (is_ror) "SSP_ROR_" else "SSP_"
+  metrics <- data.frame(row.names = ids)
+  if (is_ror) metrics$SSP_ROR_Bin <- result$cl[, k]
+  metrics[[if (is_ror) "SSP_ROR_Bin_Prob" else "SSP_Call_Prob"]] <- result$prob[, k]
+  metrics[paste0(prefix, "Prob_", labels)] <- as.data.frame(post)
+  metrics[[paste0(prefix, "Rules_Evaluable")]] <- as.integer(colSums(!is.na(rules)))
+  metrics[[paste0(prefix, "Rules_Total")]] <- nrow(rules)
+  metrics[match(call_ids, ids), , drop = FALSE]
+}
+
+.ssp_ror_coverage_note <- function(full) {
+  incomplete <- full$SSP_ROR_Rules_Evaluable < full$SSP_ROR_Rules_Total
+  if (!any(incomplete)) return(character())
+  note <- sprintf(paste("Incomplete SSP.ROR rule coverage in %d of %d samples.",
+                        "Inspect SSP_ROR_Rules_Evaluable out of %d rules per sample."),
+                  sum(incomplete), length(incomplete), full$SSP_ROR_Rules_Total[1L])
+  zero <- sum(full$SSP_ROR_Rules_Evaluable == 0L)
+  if (zero) {
+    note <- paste(note, sprintf("Rows with SSP_ROR_Rules_Evaluable = 0 (%d) have zero evaluable rules.", zero),
+                  "Their native bins and posteriors have no expression support.",
+                  "Check probe-to-Entrez annotation and missing expression for these samples.")
+  }
+  note
+}
+
 # Human-readable labels travel in comment metadata, never as renamed columns.
 .experimental_ror_pc_export_note <- function(df) {
   has_score <- getFromNamespace(".has_experimental_ror_pc", "BreastSubtypeR")
@@ -169,11 +219,12 @@ server <- function(input, output, session) {
   CITATION_NOTE <- sprintf("BreastSubtypeR v%s - NAR Genomics and Bioinformatics (2025) DOI: %s",
                            PKG_VER, CITATION_DOI)
   
-  .write_tsv_with_header <- function(path, df, header_lines = CITATION_NOTE) {
+  .write_tsv_with_header <- function(path, df, header_lines = CITATION_NOTE, quote_ids = FALSE) {
     con <- file(path, open = "wt", encoding = "UTF-8")
     on.exit(close(con), add = TRUE)
     if (length(header_lines)) writeLines(paste0("# ", header_lines), con)
-    utils::write.table(df, con, sep = "\t", quote = FALSE, row.names = FALSE)
+    utils::write.table(df, con, sep = "\t", quote = if (quote_ids) 1L else FALSE,
+                       qmethod = "double", row.names = FALSE)
   }
   
   .pam50_variant_from_internal <- function(internal) {
@@ -463,41 +514,101 @@ server <- function(input, output, session) {
     p
   })
 
+  # Use all aligned probes in both mappings, including for raw library sizes.
+  aligned_input <- function() {
+    samples <- intersect(colnames(reactive_files$GEX), reactive_files$clinic$PatientID)
+    validate(need(length(samples) > 0, "No overlapping sample IDs between GEX columns and clinical ‘PatientID’."))
+    probeID <- intersect(rownames(reactive_files$GEX), rownames(reactive_files$anno))
+    validate(need(length(probeID) > 0, "No overlapping probes between GEX and annotation."))
+
+    if (isTRUE(reactive_files$RawCounts)) {
+      validate(need("Length" %in% names(as.data.frame(reactive_files$anno)),
+                    "Raw counts selected but annotation lacks ‘Length’ (bp)."))
+    }
+
+    SummarizedExperiment::SummarizedExperiment(
+      assays  = list(counts = reactive_files$GEX[probeID, samples, drop = FALSE]),
+      rowData = S4Vectors::DataFrame(reactive_files$anno[probeID, , drop = FALSE]),
+      colData = S4Vectors::DataFrame(reactive_files$clinic[samples, , drop = FALSE])
+    )
+  }
+
+  # A previous run's full radio value can still be in flight when renderUI
+  # replaces the control. Only the current SSP run can opt in to its mapping.
+  export_kind <- reactive({
+    choice <- input$export_kind %||% "calls"
+    if (identical(choice, "calls")) return("calls")
+    full_choice <- current_prediction()$ssp$full_choice %||% "full"
+    if (identical(choice, full_choice)) "full" else NULL
+  })
+
+  # This reactive caches success or failure for the current prediction. Keep
+  # export_kind outside it so switching back to calls does not evict the cache.
+  ssp_full <- reactive({
+    p <- current_prediction()
+    req(p$ssp)
+    tryCatch({
+      subtype <- .ssp_export_metrics(p$ssp$native, p$ssp$model, p$ssp$input_ids, p$calls$PatientID)
+      mapped <- BreastSubtypeR::Mapping(se_obj = aligned_input(), RawCounts = reactive_files$RawCounts,
+                                        impute = FALSE, include_ssp_ror = TRUE, verbose = TRUE)
+      ror_input <- mapped$se_SSP_ROR
+      ror <- BreastSubtypeR::BS_sspbc(se_obj = ror_input, ssp.name = "ssp.ror")
+      metrics <- .ssp_export_metrics(ror, "ssp.ror", colnames(ror_input), p$calls$PatientID)
+      full <- cbind(p$calls, subtype, metrics)
+      list(full = full, note = .ssp_ror_coverage_note(full))
+    }, error = function(e) list(error = paste("SSP.ROR full export unavailable.", conditionMessage(e))))
+  })
+
+  selected_export <- reactive({
+    p <- current_prediction()
+    if (!is.null(p$ssp) && identical(export_kind(), "full")) {
+      result <- ssp_full()
+      p$full <- result$full
+      p$full_error <- result$error
+      p$full_note <- result$note
+      p$header <- sprintf("Method: %s | Classes: %d | ROR: categorical ssp.ror | Probabilities: fitted class/bin membership",
+                          p$ssp$model, if (p$want_4) 4L else 5L)
+    }
+    p
+  })
+
   supports_export <- function(p, kind) {
-    !is.null(p) && kind %in% c("calls", "full") &&
+    !is.null(p) && length(kind) == 1L && kind %in% c("calls", "full") &&
       !is.null(p[[kind]]) && nrow(p[[kind]]) > 0L
   }
 
   # Check validity inside the callback, including direct requests to old URLs.
   export_result <- function(kind) {
-    p <- current_prediction()
+    p <- selected_export()
     if (is.null(p)) stop("No current prediction. Preprocess if needed, then run subtyping.", call. = FALSE)
+    if (identical(kind, "full") && !is.null(p$full_error)) stop(p$full_error, call. = FALSE)
     if (!supports_export(p, kind))
       stop("The current prediction does not provide this export. Choose calls only.", call. = FALSE)
     p
   }
-  output$download <- downloadHandler(
-    filename = function() {
-      kind <- input$export_kind %||% "calls"
-      p <- export_result(kind)
-      sprintf("results-%s-%s-%s.txt", p$method,
-              if (p$want_4) "4class" else "5class", kind)
-    },
-    content = function(file) {
-      kind <- input$export_kind %||% "calls"
-      p <- export_result(kind)
-      hdr <- c(CITATION_NOTE, p$header)
-      if (!identical(p$method, "AUTO")) {
-        hdr <- c(hdr, sprintf("Export: %s | Date: %s | R: %s", kind,
-                             format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"), getRversion()))
-      }
-      if (identical(kind, "full")) {
-        note <- .experimental_ror_pc_export_note(p[[kind]])
-        if (length(note)) hdr[length(hdr)] <- paste(hdr[length(hdr)], note, sep = " | ")
-      }
-      .write_tsv_with_header(file, p[[kind]], header_lines = hdr)
+  download_filename <- function() {
+    kind <- export_kind()
+    p <- export_result(kind)
+    sprintf("results-%s-%s-%s.txt", p$method,
+            if (p$want_4) "4class" else "5class", kind)
+  }
+  write_download <- function(file) {
+    kind <- export_kind()
+    p <- export_result(kind)
+    hdr <- c(CITATION_NOTE, p$header)
+    if (!identical(p$method, "AUTO")) {
+      hdr <- c(hdr, sprintf("Export: %s | Date: %s | R: %s", kind,
+                           format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"), getRversion()))
     }
-  )
+    if (identical(kind, "full")) {
+      note <- .experimental_ror_pc_export_note(p[[kind]])
+      if (length(note)) hdr[length(hdr)] <- paste(hdr[length(hdr)], note, sep = " | ")
+    }
+    # Protect SSP sample IDs containing TSV delimiters, quotes or the comment marker.
+    quote_ids <- !is.null(p$ssp) && any(grepl('[\t\r\n"#]', p$calls$PatientID))
+    .write_tsv_with_header(file, p[[kind]], header_lines = c(hdr, p$full_note), quote_ids = quote_ids)
+  }
+  output$download <- downloadHandler(filename = download_filename, content = write_download)
 
   output$plotSection <- renderUI({
     p <- current_prediction()
@@ -667,9 +778,9 @@ server <- function(input, output, session) {
   output$export_selector <- renderUI({
     p <- current_prediction()
     if (is.null(p)) return(helpText("Run subtyping before downloading results."))
-    has_full <- supports_export(p, "full")
+    has_full <- !is.null(p$ssp) || supports_export(p, "full")
     choices <- list("Calls only" = "calls")
-    if (has_full) choices[["Full metrics (incl. ROR)"]] <- "full"
+    if (has_full) choices[["Full metrics (incl. ROR)"]] <- p$ssp$full_choice %||% "full"
     selected <- isolate(input$export_kind) %||% "calls"
     if (!selected %in% unlist(choices)) selected <- "calls"
     tagList(
@@ -693,10 +804,17 @@ server <- function(input, output, session) {
       tags$p("The original Parker ROR-PC fields retain their existing labels.")
     ), "warning")
   })
+  output$ssp_ror_notice <- renderUI({
+    p <- selected_export()
+    if (!is.null(p$full_error))
+      return(bs_callout("SSP.ROR export needs attention",
+                        paste(p$full_error, "Choose Calls only to download the subtype results."), "danger"))
+    if (length(p$full_note)) bs_callout("SSP.ROR rule coverage", p$full_note, "warning")
+  })
   output$download_control <- renderUI({
-    p <- current_prediction()
+    p <- selected_export()
     if (is.null(p)) return(NULL)
-    kind <- input$export_kind %||% "calls"
+    kind <- export_kind()
     if (!supports_export(p, kind))
       return(NULL)
     downloadButton(
@@ -876,22 +994,8 @@ server <- function(input, output, session) {
       }
       
       incProgress(0.5, detail = "Aligning...")
-      samples <- intersect(colnames(reactive_files$GEX), reactive_files$clinic$PatientID)
-      validate(need(length(samples) > 0, "No overlapping sample IDs between GEX columns and clinical ‘PatientID’."))
-      probeID <- intersect(rownames(reactive_files$GEX), rownames(reactive_files$anno))
-      validate(need(length(probeID) > 0, "No overlapping probes between GEX and annotation."))
-      
-      if (isTRUE(reactive_files$RawCounts)) {
-        validate(need("Length" %in% names(as.data.frame(reactive_files$anno)),
-                      "Raw counts selected but annotation lacks ‘Length’ (bp)."))
-      }
-      
-      se_obj <- SummarizedExperiment::SummarizedExperiment(
-        assays  = list(counts = reactive_files$GEX[probeID, samples, drop = FALSE]),
-        rowData = S4Vectors::DataFrame(reactive_files$anno[probeID, , drop = FALSE]),
-        colData = S4Vectors::DataFrame(reactive_files$clinic[samples, , drop = FALSE])
-      )
-      
+      se_obj <- aligned_input()
+
       incProgress(0.8, detail = "Mapping()...")
       tryCatch({
         output_text <- capture.output({
@@ -971,6 +1075,7 @@ server <- function(input, output, session) {
     
     withProgress(message = "Performing analysis...", value = 0.55, {
       res <- NULL
+      ssp <- NULL
       
       if (input$BSmethod == "PAM50") {
         params <- provenance$parameters
@@ -1056,6 +1161,8 @@ server <- function(input, output, session) {
         req(se_SSP)
         model <- if (isTRUE(want_4)) "ssp.subtype" else "ssp.pam50"
         res_sspbc <- BreastSubtypeR::BS_sspbc(se_obj = se_SSP, ssp.name = model)
+        ssp <- list(model = model, native = res_sspbc, input_ids = colnames(se_SSP),
+                    full_choice = paste0("full-", input$run))
         if (!is.null(res_sspbc$cl) && is.matrix(res_sspbc$cl) && ncol(res_sspbc$cl) >= 1) {
           res$BS.all <- data.frame(
           PatientID = rownames(res_sspbc$cl),
@@ -1098,7 +1205,7 @@ server <- function(input, output, session) {
           header = .method_header_line(provenance$parameters, want_4, use_clin),
           calls = ex$calls,
           full = if (input$BSmethod %in% c("AIMS", "sspbc")) NULL else ex$full,
-          plot = out, matrix = mat))
+          plot = out, matrix = mat), if (!is.null(ssp)) list(ssp = ssp))
       }
     })
   }, bsr_invalid_tsize_warning = function(w) {

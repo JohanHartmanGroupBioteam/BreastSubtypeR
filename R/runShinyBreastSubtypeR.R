@@ -22,9 +22,13 @@
 #' valid mapped inputs. A failed prediction cannot leave old results available.
 #'
 #' Download controls are shown only for a supported, current prediction.
-#' AUTO, AIMS and SSPBC provide calls only; supported single NC methods also
-#' provide full metrics. Server-side guards reject stale or unsupported
-#' downloads even when an earlier download URL is requested directly.
+#' AUTO and AIMS provide calls only. Supported single NC methods and both
+#' SSPBC class settings offer full metrics. Each SSPBC run starts with calls
+#' only. Selecting full metrics prepares categorical SSP.ROR bins, subtype
+#' and bin posteriors, and rule counts for that prediction. Incomplete rule
+#' coverage is reported. Native bins with zero evaluable rules have no
+#' expression support. An SSP.ROR export error leaves subtype calls available.
+#' Server-side guards reject stale or unavailable downloads.
 #'
 #' For cIHC.itr, the ratio is the ER-positive : ER-negative target, defaults
 #' to `54 / 64`, and must be finite and strictly positive. Values above one

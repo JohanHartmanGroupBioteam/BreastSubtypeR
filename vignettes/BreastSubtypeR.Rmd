@@ -878,7 +878,7 @@ separate deployment with different data-handling responsibilities.
 - Run single methods, or run multiple classifiers at once with `BS_Multi` and `AUTO` enabled for cohort-aware selection.\
 - Choose 5-class (incl. Normal-like) or 4-class (AIMS is 5-class only).\
 - Inspect per-sample concordance (entropy), heatmap and pie summaries.\
-- Export current Calls-only results, or Full metrics for supported single NC methods. AUTO, AIMS and sspbc provide Calls-only exports. NC Full metrics include ROR-S/ROR-P; enabling **Use clinical variables (ROR)** adds clinical ROR-C/ROR-PC outputs for patients with usable codes. Invalid size codes generate a warning and missing clinical scores and groups for affected patients. A missing clinical column or observation disables clinical output for the cohort. AUTO exports calls and entropy with clinical ROR disabled.
+- Export current Calls-only results, or Full metrics for supported single NC methods and either SSPBC subtype classifier. AUTO and AIMS provide Calls-only exports. NC Full metrics include ROR-S/ROR-P; enabling **Use clinical variables (ROR)** adds clinical ROR-C/ROR-PC outputs for patients with usable codes. Invalid size codes generate a warning and missing clinical scores and groups for affected patients. A missing clinical column or observation disables clinical output for the cohort. AUTO exports calls and entropy with clinical ROR disabled.
 
 ## Preprocessing, prediction and downloads
 
@@ -913,13 +913,24 @@ supported. AUTO reports separate method predictions and raw Shannon entropy,
 not consensus calls or calibrated confidence. Research ROR outputs are not
 clinical Prosigna results.
 
+SSPBC starts each prediction in **Calls only** mode. Selecting **Full metrics (incl. ROR)**
+prepares the separate SSP.ROR input from the original aligned expression and runs the
+categorical model once for that prediction. Each row retains its original subtype call
+and includes the assigned subtype probability, all subtype posteriors, the native
+SSP.ROR bin, its assigned probability, all 18 bin posteriors and both models' rule counts.
+The bin posteriors describe fitted bin membership. Tumor size and nodal status do not enter
+this calculation. Incomplete rule coverage appears in the app and in the TSV comments.
+Rows with `SSP_ROR_Rules_Evaluable = 0` retain the native result and have no expression
+support for the bin. Check the expression measurements and probe-to-Entrez annotation.
+If optional preparation fails, the subtype plots and **Calls only** download remain available.
+
 When current **Full metrics** contain both experimental 18-gene ROR-PC
 columns, the selected export has a persistent experimental notice and the
 score/group display labels. The TSV retains its existing column names,
 types, data and provenance-comment line count; those comments identify the
 experimental outputs and their interpretation. **Calls only**, AUTO and
 other results without these columns do not receive this score-specific
-notice. Changing the export selection does not recalculate scores.
+notice. Changing the export selection reuses any metrics already prepared for the current prediction.
 
 Replacing any expression, clinical or annotation file, reloading the example,
 or changing the data type clears the mapped inputs, predictions, plots and

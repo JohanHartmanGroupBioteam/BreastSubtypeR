@@ -292,7 +292,12 @@ install.packages(c("shiny", "bslib"))
 3. **Results and downloads:** inspect the current results and download
    tab-separated text (TSV), saved with a `.txt` extension. AUTO exports
    separate method calls and entropy;
-   **Full metrics (incl. ROR)** is available for supported single NC methods.
+   **Full metrics (incl. ROR)** is available for supported single NC methods
+   and for SSPBC in either class setting. SSPBC starts with **Calls only**.
+   Selecting full metrics adds native subtype posteriors, categorical SSP.ROR
+   bins, bin-membership posteriors and evaluable rule counts per sample.
+   Check the coverage notice before interpreting incomplete results. A native
+   bin with zero evaluable rules has no expression support.
 
 For expression uploads, use comma-delimited `.csv` or tab-delimited text with
 genes in rows and sample IDs in the header. Label the gene-ID column `probe`
