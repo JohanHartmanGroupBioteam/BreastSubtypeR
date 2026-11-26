@@ -607,7 +607,7 @@ test_that("prediction parameters invalidate results while retaining mapped input
             expect_length(experimental_warnings, as.integer(expected))
         }
         changes <- list(list(k_subtypes = "4"), list(hasClinical = TRUE),
-                        list(internal = "meanCtr"), list(calibration = "None"),
+                        list(`data1-internal` = "meanCtr"), list(`data1-calibration` = "None"),
                         list(BSmethod = "cIHC.itr"), list(ratio = 1.5),
                         list(iteration = 11), list(BSmethod = "ssBC"), list(s = "ER"))
         for (i in seq_along(changes)) {
@@ -622,12 +622,12 @@ test_that("prediction parameters invalidate results while retaining mapped input
             expect_true(mapping_current())
             expect_identical(current_input_coverage(), coverage)
         }
-        session$setInputs(BSmethod = "PAM50", calibration = "External", external = "nCounter")
+        session$setInputs(BSmethod = "PAM50", `data1-calibration` = "External", `data1-external` = "nCounter")
         run_checked(20)
         expect_false(is.null(current_prediction()))
-        session$setInputs(external = "Given.mdns")
+        session$setInputs(`data1-external` = "Given.mdns")
         expect_null(current_prediction())
-        session$setInputs(medians = data.frame(name = "medians.txt", datapath = tempfile()))
+        session$setInputs(`data1-medians` = data.frame(name = "medians.txt", datapath = tempfile()))
         expect_null(current_prediction())
         expect_identical(reactive_files$data_input, mapped)
     })
@@ -882,16 +882,16 @@ test_that("invalid iterations and predictor errors discard previous results", {
             expect_identical(reactive_files$data_input, mapped)
             expect_true(mapping_current())
         }
-        session$setInputs(BSmethod = "PAM50", calibration = "Internal", internal = "medianCtr")
+        session$setInputs(BSmethod = "PAM50", `data1-calibration` = "Internal", `data1-internal` = "medianCtr")
         session$setInputs(run = 50)
         expect_false(is.null(current_prediction()))
-        session$setInputs(internal = "invalid-calibration")
+        session$setInputs(`data1-internal` = "invalid-calibration")
         session$setInputs(run = 51)
         expect_match(reactive_files$error, "Invalid internal calibration")
         expect_null(current_prediction())
         expect_false(session$isClosed())
         expect_error(output$download, "No current prediction")
-        session$setInputs(internal = "medianCtr")
+        session$setInputs(`data1-internal` = "medianCtr")
         session$setInputs(run = 52)
         expect_false(is.null(current_prediction()))
         expect_match(output$download_control$html, 'id="download"', fixed = TRUE)
@@ -1056,12 +1056,12 @@ test_that("replacing custom medians invalidates predictions without remapping", 
         write.table(medians, path, sep = "\t", quote = FALSE, row.names = FALSE)
         upload <- data.frame(name = "medians.txt", size = file.info(path)$size,
                              type = "text/plain", datapath = path)
-        session$setInputs(calibration = "External", external = "Given.mdns", medians = upload)
+        session$setInputs(`data1-calibration` = "External", `data1-external` = "Given.mdns", `data1-medians` = upload)
         session$setInputs(run = 1)
         expect_false(is.null(current_prediction()))
         mapped <- reactive_files$data_input
         upload$name <- "replacement-medians.txt"
-        session$setInputs(medians = upload)
+        session$setInputs(`data1-medians` = upload)
         expect_null(current_prediction())
         expect_error(output$download, "No current prediction")
         expect_identical(reactive_files$data_input, mapped)

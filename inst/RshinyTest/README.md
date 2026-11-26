@@ -61,3 +61,4 @@ in a correction ledger. Maintainer verification from a full Git checkout is
 described in [the provenance instructions](../../data-raw/issue199/README.md#file-byte-provenance-and-issue-235).
 It does not verify arbitrary working-tree files, exported tables or tarballs.
 
+An uploaded custom PAM50 reference applies to the current dataset. Replacing a primary input, changing the upload expression mode, or confirming an example (including the same example) clears that reference. Active custom calibration returns to Internal / medianCtr. Upload a new reference to use custom calibration again. Canceling the example dialog preserves the current reference and results. Replacing the reference alone requires rerunning prediction with the existing mapping.

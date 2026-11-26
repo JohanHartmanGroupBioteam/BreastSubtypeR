@@ -184,16 +184,16 @@ server <- function(input, output, session) {
            "parker.original")
   }
   
-  .method_header_line <- function(input, want_4, use_clin) {
-    method_label <- input$BSmethod %||% "Unknown"
+  .method_header_line <- function(params, want_4, use_clin) {
+    method_label <- params$method %||% "Unknown"
     if (identical(method_label, "PAM50")) {
-      cal <- input$calibration %||% "None"
+      cal <- params$calibration %||% "None"
       if (identical(cal, "Internal")) {
-        internal <- input$internal %||% "medianCtr"
+        internal <- params$internal %||% "medianCtr"
         variant  <- .pam50_variant_from_internal(internal)
         method_label <- sprintf("PAM50 (variant: %s, calibration: Internal (%s))", variant, internal)
       } else if (identical(cal, "External")) {
-        ext <- input$external %||% "Unknown"
+        ext <- params$external %||% "Unknown"
         ext_label <- if (identical(ext, "Given.mdns")) "Custom (Given.mdns)" else ext
         method_label <- sprintf("PAM50 (variant: parker.original, calibration: External (%s))", ext_label)
       } else {
@@ -220,8 +220,9 @@ server <- function(input, output, session) {
   })
 
   # New file bindings on replacement also discard uploads still in flight.
+  upload_generation <- reactiveVal(0L)
   upload_id <- function(id) {
-    generation <- reactive_files$input_generation
+    generation <- upload_generation()
     if (generation == 0L) id else paste(id, generation, sep = "_")
   }
   upload_labels <- c(GEX = "Upload expression matrix", clinic = "Upload clinical table",
@@ -251,6 +252,50 @@ server <- function(input, output, session) {
          uploads = if (identical(reactive_files$source, "upload")) uploads())
   })
 
+  # Rebind calibration on each primary input change. Primary upload controls
+  # retain their own lifetime so the other two slots survive a manual edit.
+  default_calibration <- getFromNamespace(".shiny_pam50_defaults", "BreastSubtypeR")
+  pam50_controls <- getFromNamespace(".shiny_pam50_controls", "BreastSubtypeR")
+  calibration_defaults <- reactiveVal(default_calibration)
+  calibration_ns <- reactive({
+    generation <- reactive_files$input_generation
+    NS(if (generation > 0L) paste0("data", generation) else NULL)
+  })
+  output$pam50_calibration <- renderUI({
+    pam50_controls(calibration_ns(), calibration_defaults())
+  })
+  calibration_choice <- function(id) {
+    input[[calibration_ns()(id)]] %||% calibration_defaults()[[id]]
+  }
+  # Shiny assigns each completed file upload a fresh temporary path. Remember
+  # its owning generation even if the custom panel is subsequently hidden.
+  reference_owners <- new.env(parent = emptyenv())
+  retiring_reference <- reactiveVal(NULL)
+  reference_file <- reactive({
+    file <- input[[calibration_ns()("medians")]]
+    if (!is.data.frame(file) || nrow(file) != 1L ||
+        !is.character(file$datapath) || length(file$datapath) != 1L ||
+        is.na(file$datapath) || !nzchar(file$datapath)) return(NULL)
+    path <- normalizePath(file$datapath, winslash = "/", mustWork = FALSE)
+    if (identical(path, retiring_reference())) return(NULL)
+    generation <- reactive_files$input_generation
+    owner <- reference_owners[[path]]
+    if (!is.null(owner) && !identical(owner, generation)) return(NULL)
+    reference_owners[[path]] <- generation
+    file
+  })
+  observeEvent(input[[calibration_ns()("medians")]], reference_file(), priority = 115)
+  advance_dataset <- function() {
+    reference_file() # claim any outgoing file even if its panel is hidden
+    choices <- default_calibration
+    for (id in names(choices)) choices[[id]] <- calibration_choice(id)
+    if (identical(choices$calibration, "External") &&
+        identical(choices$external, "Given.mdns")) choices <- default_calibration
+    calibration_defaults(choices)
+    reactive_files$input_generation <- reactive_files$input_generation + 1L
+    retiring_reference(NULL)
+  }
+
   prediction_parameters <- reactive({
     method <- input$BSmethod
     params <- list(method = method,
@@ -258,11 +303,11 @@ server <- function(input, output, session) {
     if (!is.null(method) && method %in% c("PAM50", "cIHC", "cIHC.itr", "PCAPAM50", "ssBC"))
       params$clinical <- isTRUE(input$hasClinical)
     if (identical(method, "PAM50")) {
-      params$calibration <- input$calibration
-      if (identical(input$calibration, "Internal")) params$internal <- input$internal
-      if (identical(input$calibration, "External")) {
-        params$external <- input$external
-        if (identical(input$external, "Given.mdns")) params$medians <- input$medians
+      params$calibration <- calibration_choice("calibration")
+      if (identical(params$calibration, "Internal")) params$internal <- calibration_choice("internal")
+      if (identical(params$calibration, "External")) {
+        params$external <- calibration_choice("external")
+        if (identical(params$external, "Given.mdns")) params$medians <- reference_file()
       }
     }
     if (identical(method, "cIHC.itr")) {
@@ -313,6 +358,7 @@ server <- function(input, output, session) {
       sync_mode()
     } else if (length(input$is_raw_counts) == 1L && input$is_raw_counts %in% c("raw", "norm") &&
                !identical(input$is_raw_counts, manual_mode())) {
+      if (identical(reactive_files$source, "upload")) advance_dataset()
       manual_mode(input$is_raw_counts)
       reactive_files$RawCounts <- NULL
       invalidate_mapping()
@@ -320,12 +366,22 @@ server <- function(input, output, session) {
   }, priority = 110)
 
   activate_upload <- function() {
+    advance_dataset()
     from_example <- !is.null(reactive_files$example_id)
     clear_inputs()
     reactive_files$source <- "upload"
     if (from_example) sync_mode()
   }
   observeEvent(input$upload_started, {
+    if (identical(input$upload_started, calibration_ns()("medians"))) {
+      file <- reference_file()
+      if (!is.null(file)) {
+        path <- normalizePath(file$datapath, winslash = "/", mustWork = FALSE)
+        reference_owners[[path]] <- -1L
+        retiring_reference(path)
+      }
+      return()
+    }
     ids <- vapply(names(upload_labels), upload_id, character(1))
     slot <- names(ids)[ids == input$upload_started]
     if (length(slot) != 1L) return()
@@ -339,8 +395,12 @@ server <- function(input, output, session) {
       activate_upload()
   }, priority = 100)
 
-  observeEvent(prediction_parameters(), invalidate_prediction(),
-               ignoreInit = TRUE, priority = 100)
+  observeEvent(prediction_parameters(), {
+    # Rebinding the calibrated controls can echo their existing defaults.
+    p <- reactive_files$prediction
+    if (mapping_current() && (is.null(p) || !identical(p$parameters, prediction_parameters())))
+      invalidate_prediction()
+  }, ignoreInit = TRUE, priority = 100)
 
   mapping_current <- reactive({
     !is.null(reactive_files$data_input) &&
@@ -766,9 +826,10 @@ server <- function(input, output, session) {
   observeEvent(input$confirm_example, {
     id <- input$example_choice
     removeModal()
+    advance_dataset()
     clear_inputs()
     retired_files(list())
-    reactive_files$input_generation <- reactive_files$input_generation + 1L
+    upload_generation(upload_generation() + 1L)
     tryCatch({
       staged <- read_example(id)
       reactive_files$GEX <- staged$GEX
@@ -912,22 +973,23 @@ server <- function(input, output, session) {
       res <- NULL
       
       if (input$BSmethod == "PAM50") {
-        cal  <- input$calibration %||% "Internal"
+        params <- provenance$parameters
+        cal <- params$calibration
         args <- list(se_obj = se_NC, hasClinical = use_clin, Subtype = want_4)
         if (identical(cal, "Internal")) {
-          args$calibration <- "Internal"; args$internal <- input$internal
+          args$calibration <- "Internal"; args$internal <- params$internal
         } else if (identical(cal, "External")) {
           args$calibration <- "External"
-          if (identical(input$external, "Given.mdns")) {
-            if (is.null(input$medians)) stop("Upload custom medians before running PAM50 with Given.mdns.")
-            medians <- if (tolower(tools::file_ext(input$medians$name)) == "csv") {
-              read.csv(input$medians$datapath, header = TRUE, row.names = NULL, sep = ",", check.names = FALSE)
+          if (identical(params$external, "Given.mdns")) {
+            if (is.null(params$medians)) stop("Upload custom medians before running PAM50 with Given.mdns.")
+            medians <- if (tolower(tools::file_ext(params$medians$name)) == "csv") {
+              read.csv(params$medians$datapath, header = TRUE, row.names = NULL, sep = ",", check.names = FALSE)
             } else {
-              read.table(input$medians$datapath, header = TRUE, row.names = NULL, sep = "\t",
+              read.table(params$medians$datapath, header = TRUE, row.names = NULL, sep = "\t",
                          fill = TRUE, stringsAsFactors = FALSE, check.names = FALSE, quote = "", comment.char = "")
             }
             args$external <- "Given.mdns"; args$medians <- medians
-          } else args$external <- input$external
+          } else args$external <- params$external
         } else args$calibration <- "None"
         res <- do.call(BreastSubtypeR::BS_parker, args)
       }
@@ -1033,7 +1095,7 @@ server <- function(input, output, session) {
         }
         reactive_files$prediction <- c(provenance, list(
           method = input$BSmethod, want_4 = want_4,
-          header = .method_header_line(input, want_4, use_clin),
+          header = .method_header_line(provenance$parameters, want_4, use_clin),
           calls = ex$calls,
           full = if (input$BSmethod %in% c("AIMS", "sspbc")) NULL else ex$full,
           plot = out, matrix = mat))

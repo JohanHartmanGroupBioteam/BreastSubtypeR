@@ -3,6 +3,9 @@
 * The Shiny example selector loads OSLO2-EMIT0 or TCGA-BRCA with its
   packaged expression type. Confirming a selection clears previous results
   and uploads. Manual uploads retain an editable data type (#272).
+* Custom PAM50 reference uploads now belong to the current Shiny dataset.
+  Replacing the dataset or reloading an example clears its custom
+  reference (#274).
 
 # BreastSubtypeR 1.5.14
 

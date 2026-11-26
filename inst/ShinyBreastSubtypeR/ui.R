@@ -77,7 +77,7 @@ ui <- bslib::page_fluid(
         // entry points before the binding starts its asynchronous transfer.
         function startUpload(input, files) {
           if (input && files && files.length &&
-              input.closest('#upload_GEX, #upload_clinic, #upload_anno')) {
+              input.closest('#upload_GEX, #upload_clinic, #upload_anno, #pam50_calibration')) {
             Shiny.setInputValue('upload_started', input.id, {priority: 'event'});
           }
         }
@@ -223,84 +223,8 @@ ui <- bslib::page_fluid(
     
     conditionalPanel(
       condition = "input.BSmethod == 'PAM50'",
-      bslib::card(
-        style = "overflow: visible;",
-        bslib::layout_columns(
-          col_widths = c(4, 8),
-          
-          selectizeInput(
-            "calibration", "Calibration strategy",
-            choices = list("None" = "None", "External" = "External", "Internal" = "Internal"),
-            selected = "Internal", width = "100%",
-            options = list(openOnFocus = TRUE, dropdownParent = "body")
-          ),
-          
-          div(
-            style = "position: relative; overflow: visible;",
-            
-            conditionalPanel(
-              condition = "input.calibration == 'External'",
-              tagList(
-                selectizeInput(
-                  "external",
-                  "Reference medians",
-                  choices = c(
-                    stats::setNames("Given.mdns", "Custom (upload file…)"),
-                    "Built-in: nCounter"                                     = "nCounter",
-                    "Built-in: RNA-seq (Freeze 2012-09-07)"                  = "RNAseq.Freeze.20120907",
-                    "Built-in: totalRNA FFPE (2015-11-11)"                   = "totalRNA.FFPE.20151111",
-                    "Built-in: RNA-seq V2"                                   = "RNAseq.V2",
-                    "Built-in: RNA-seq V1"                                   = "RNAseq.V1",
-                    stats::setNames("GC.4x44Kcustom", "Built-in: Agilent custom 4×44K (GC)"),
-                    "Built-in: Agilent 244K"                                 = "Agilent_244K",
-                    stats::setNames("commercial_1x44k_postMeanCollapse_WashU", "Built-in: 1×44K (WashU, post-collapse)"),
-                    stats::setNames("commercial_4x44k_postMeanCollapse_WashU_v2", "Built-in: 4×44K (WashU v2, post-collapse)"),
-                    "Built-in: htp1.5 (WU update)"                           = "htp1.5_WU_update",
-                    "Built-in: arrayTrain (post-collapse)"                   = "arrayTrain_postMeanCollapse"
-                  ),
-                  selected = "Given.mdns",
-                  width = "100%",
-                  options = list(
-                    placeholder = "Choose a reference medians set…",
-                    openOnFocus = TRUE,
-                    dropdownParent = "body"
-                  )
-                ),
-                conditionalPanel(
-                  condition = "input.external == 'Given.mdns'",
-                  tagList(
-                    fileInput(
-                      "medians",
-                      "Upload custom medians (.csv / .txt)",
-                      accept = c("text/csv",
-                                 "text/comma-separated-values,text/plain",
-                                 ".csv", ".txt")
-                    ),
-                    helpText(HTML(
-                      "Expected format: two columns — ",
-                      "<code>X</code> (gene symbol) and <code>Given.mdns</code> (median)."
-                    ))
-                  )
-                )
-              )
-            ),
-            
-            conditionalPanel(
-              condition = "input.calibration == 'Internal'",
-              selectizeInput(
-                "internal", "Internal calibration method",
-                choices = list(
-                  "medianCtr (parker.original)" = "medianCtr",
-                  "meanCtr (genefu.scale)"      = "meanCtr",
-                  "qCtr (genefu.robust)"        = "qCtr"
-                ),
-                selected = "medianCtr", width = "100%",
-                options = list(openOnFocus = TRUE, dropdownParent = "body")
-              )
-            )
-          )
-        )
-      )
+      htmltools::tagAppendChild(uiOutput("pam50_calibration"),
+        getFromNamespace(".shiny_pam50_controls", "BreastSubtypeR")())
     ),
     
     uiOutput("calib_help"),
