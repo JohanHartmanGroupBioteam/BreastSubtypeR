@@ -280,8 +280,9 @@ dependencies if needed:
 install.packages(c("shiny", "bslib"))
 ```
 
-1. **Data and preprocessing:** choose **Load example data...** or upload your
-   expression, clinical and annotation tables, select the data type, then
+1. **Data and preprocessing:** choose OSLO2-EMIT0 or TCGA-BRCA in **Load example data...**.
+   The app sets the example's data type. For manual uploads, supply expression,
+   clinical and annotation tables and select the data type. Then
    click **Preprocess & map**. **Input coverage** describes the current
    successful mapping.
 2. **Analysis settings:** select a method and its settings, then click

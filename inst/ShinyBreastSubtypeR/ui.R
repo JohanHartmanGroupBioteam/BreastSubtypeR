@@ -63,14 +63,41 @@ ui <- bslib::page_fluid(
   tags$head(
     tags$script(HTML("
       (function () {
+        // Only presentation changes while locked. Sending an example selection
+        // through the input binding would queue it as a later manual edit.
+        Shiny.addCustomMessageHandler('bsrDataType', function(mode) {
+          var radios = document.querySelectorAll('input[name=is_raw_counts]');
+          radios.forEach(function(radio) {
+            radio.checked = radio.value === mode.value;
+            radio.disabled = mode.locked;
+          });
+          if (!mode.locked) Shiny.setInputValue('is_raw_counts', mode.value);
+        });
+        // Shiny handles drops with a synthetic change. Capture both native
+        // entry points before the binding starts its asynchronous transfer.
+        function startUpload(input, files) {
+          if (input && files && files.length &&
+              input.closest('#upload_GEX, #upload_clinic, #upload_anno')) {
+            Shiny.setInputValue('upload_started', input.id, {priority: 'event'});
+          }
+        }
+        document.addEventListener('change', function(event) {
+          startUpload(event.target, event.target.files);
+        }, true);
+        document.addEventListener('drop', function(event) {
+          var zone = event.target.closest('div.input-group');
+          if (zone) startUpload(zone.querySelector('input[type=file]'),
+                                event.dataTransfer && event.dataTransfer.files);
+        }, true);
         var lastY = 0, restoreOnIdle = false;
         function saveScroll(){ lastY = window.scrollY || window.pageYOffset || 0; }
         function restoreScroll(){ window.scrollTo(0, lastY || 0); }
         function scrollToMap(){ var el = document.getElementById('map'); if (el && el.scrollIntoView) el.scrollIntoView({ behavior:'smooth', block:'center' }); }
         ['GEX','clinic','anno'].forEach(function(id) {
-          $(document).on('mousedown click focusin', 'label[for=\"'+id+'\"], #'+id, function(){ saveScroll(); setTimeout(restoreScroll, 0); });
-          $(document).on('change', '#'+id, function(){ setTimeout(function(){ restoreScroll(); if (id==='anno') scrollToMap(); }, 50); });
-          $(document).on('focusout', '#'+id, function(){ setTimeout(restoreScroll, 0); });
+          var field = '#upload_' + id + ' input[type=file]';
+          $(document).on('mousedown click focusin', '#upload_' + id + ' label, ' + field, function(){ saveScroll(); setTimeout(restoreScroll, 0); });
+          $(document).on('change', field, function(){ setTimeout(function(){ restoreScroll(); if (id==='anno') scrollToMap(); }, 50); });
+          $(document).on('focusout', field, function(){ setTimeout(restoreScroll, 0); });
         });
         $(document).on('mousedown click', '#map', function(){ saveScroll(); restoreOnIdle = true; });
         $(document).on('shiny:idle', function(){ if (restoreOnIdle){ setTimeout(function(){ restoreScroll(); scrollToMap(); restoreOnIdle=false; }, 50); }});
@@ -87,6 +114,7 @@ ui <- bslib::page_fluid(
       div(class = "header-meta",
         span(class = "research-label", "For research use"),
         span("The application runs locally in your R session."),
+        actionLink("load_example", "Load example data..."),
         actionLink("about", "About & Citation")
       )
     )
@@ -102,14 +130,14 @@ ui <- bslib::page_fluid(
     h2(id = "step1", class = "section-heading", "1. Data and preprocessing"),
     actionButton("load_example_step1", "Load example data...", icon = icon("database"))
   ),
+  div(role = "status", textOutput("active_source")),
   bslib::layout_columns(
     col_widths = bslib::breakpoints(sm = c(12, 12, 12), lg = c(4, 4, 4)),
     
     # GEX
     bslib::card(
       bslib::card_header("1) Gene expression (GEX)"),
-      fileInput("GEX", "Upload expression matrix",
-                accept = c("text/csv", "text/comma-separated-values,text/plain", ".csv", ".txt")),
+      uiOutput("upload_GEX"),
       radioButtons("is_raw_counts", "Data type",
                    choices  = list("normalized (log2)" = "norm", "Raw counts (RNA-seq only)" = "raw"),
                    selected = "norm", inline = TRUE),
@@ -121,8 +149,7 @@ ui <- bslib::page_fluid(
     # Clinical
     bslib::card(
       bslib::card_header("2) Clinical metadata"),
-      fileInput("clinic", "Upload clinical table",
-                accept = c("text/csv", "text/comma-separated-values,text/plain", ".csv", ".txt")),
+      uiOutput("upload_clinic"),
       p(class = "input-essential", "Required: PatientID. AUTO requires ER and HER2, coded ER+/ER- and HER2+/HER2-. Other requirements depend on the method."),
       tags$details(class = "help-details",
         tags$summary("Clinical fields and research ROR"), uiOutput("clin_help"))
@@ -131,8 +158,7 @@ ui <- bslib::page_fluid(
     # Annotation
     bslib::card(
       bslib::card_header("3) Feature annotation"),
-      fileInput("anno", "Upload annotation table",
-                accept = c("text/csv", "text/comma-separated-values,text/plain", ".csv", ".txt")),
+      uiOutput("upload_anno"),
       p(class = "input-essential", "Required: probe and ENTREZID. For raw counts, also supply gene Length in base pairs."),
       tags$details(class = "help-details",
         tags$summary("Annotation format"), uiOutput("anno_help"))

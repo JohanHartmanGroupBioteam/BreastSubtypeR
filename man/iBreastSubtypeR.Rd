@@ -30,7 +30,7 @@ The launcher checks and loads dependency namespaces; \code{shiny::runApp()}
 starts the local application.
 }
 \details{
-Load the bundled example or upload expression, clinical and annotation
+Choose OSLO2-EMIT0 or TCGA-BRCA, or upload expression, clinical and annotation
 tables, then select \strong{Preprocess & map} before running subtyping.
 Replacing an input, reloading the example or changing the input data type
 clears dependent mapping, predictions, plots and exports. Relevant

@@ -1,3 +1,9 @@
+# BreastSubtypeR 1.7.0
+
+* The Shiny example selector loads OSLO2-EMIT0 or TCGA-BRCA with its
+  packaged expression type. Confirming a selection clears previous results
+  and uploads. Manual uploads retain an editable data type (#272).
+
 # BreastSubtypeR 1.5.14
 
 ## Performance

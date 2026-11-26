@@ -160,7 +160,6 @@ bs_callout <- function(title, body, color = c("info","success","warning","danger
 server <- function(input, output, session) {
   
   # --- small reactives ---
-  raw_mode     <- reactive({ identical(input$is_raw_counts, "raw") })
   has_clinical <- reactive({ isTRUE((input$hasClinical %||% FALSE)) })
   k_is_4class  <- reactive({ identical(input$k_subtypes, "4") })
   
@@ -208,14 +207,48 @@ server <- function(input, output, session) {
   # Raw inputs, mapping and predictions belong to this session only.
   reactive_files <- shiny::reactiveValues(
     GEX = NULL, clinic = NULL, anno = NULL, source = NULL,
-    RawCounts = NULL, input_generation = 0L,
+    RawCounts = NULL, example_id = NULL, input_generation = 0L,
     data_input = NULL, mapped_key = NULL, prediction = NULL, error = NULL
   )
 
+  examples <- getFromNamespace(".shiny_examples", "BreastSubtypeR")
+  read_example <- getFromNamespace(".read_shiny_example", "BreastSubtypeR")
+  manual_mode <- reactiveVal("norm")
+  raw_mode <- reactive({
+    id <- reactive_files$example_id
+    if (is.null(id)) identical(manual_mode(), "raw") else examples[[id]]$raw
+  })
+
+  # New file bindings on replacement also discard uploads still in flight.
+  upload_id <- function(id) {
+    generation <- reactive_files$input_generation
+    if (generation == 0L) id else paste(id, generation, sep = "_")
+  }
+  upload_labels <- c(GEX = "Upload expression matrix", clinic = "Upload clinical table",
+                     anno = "Upload annotation table")
+  for (key in names(upload_labels)) local({
+    id <- key
+    output[[paste0("upload_", id)]] <- renderUI({
+      fileInput(upload_id(id), upload_labels[[id]],
+                accept = c("text/csv", "text/comma-separated-values,text/plain", ".csv", ".txt"))
+    })
+  })
+  # Retire the previous file immediately when its replacement starts uploading.
+  # Shiny supplies a new temporary path only after the transfer succeeds.
+  retired_files <- reactiveVal(list())
+  uploads <- reactive({
+    files <- stats::setNames(vector("list", length(upload_labels)), names(upload_labels))
+    retired <- retired_files()
+    for (id in names(files)) {
+      file <- input[[upload_id(id)]]
+      if (!identical(file, retired[[id]])) files[id] <- list(file)
+    }
+    files
+  })
   input_key <- reactive({
-    list(generation = reactive_files$input_generation,
-         uploads = list(input$GEX, input$clinic, input$anno),
-         data_type = input$is_raw_counts)
+    list(generation = reactive_files$input_generation, source = reactive_files$source,
+         example = reactive_files$example_id, raw = raw_mode(),
+         uploads = if (identical(reactive_files$source, "upload")) uploads())
   })
 
   prediction_parameters <- reactive({
@@ -264,13 +297,48 @@ server <- function(input, output, session) {
     bs_callout("Analysis needs attention", reactive_files$error, "danger")
   })
 
-  observeEvent(list(input$GEX, input$clinic, input$anno), {
-    reactive_files$source <- "upload"
-    reactive_files$GEX <- reactive_files$clinic <- reactive_files$anno <- NULL
+  clear_inputs <- function() {
     invalidate_mapping()
-  }, ignoreInit = TRUE, priority = 100)
-  observeEvent(input$is_raw_counts, invalidate_mapping(),
-               ignoreInit = TRUE, priority = 100)
+    reactive_files$example_id <- reactive_files$source <- NULL
+    reactive_files$GEX <- reactive_files$clinic <- reactive_files$anno <- NULL
+    reactive_files$RawCounts <- NULL
+  }
+  sync_mode <- function() {
+    session$sendCustomMessage("bsrDataType", list(
+      locked = !is.null(reactive_files$example_id),
+      value = if (raw_mode()) "raw" else "norm"))
+  }
+  observeEvent(input$is_raw_counts, {
+    if (!is.null(reactive_files$example_id)) {
+      sync_mode()
+    } else if (length(input$is_raw_counts) == 1L && input$is_raw_counts %in% c("raw", "norm") &&
+               !identical(input$is_raw_counts, manual_mode())) {
+      manual_mode(input$is_raw_counts)
+      reactive_files$RawCounts <- NULL
+      invalidate_mapping()
+    }
+  }, priority = 110)
+
+  activate_upload <- function() {
+    from_example <- !is.null(reactive_files$example_id)
+    clear_inputs()
+    reactive_files$source <- "upload"
+    if (from_example) sync_mode()
+  }
+  observeEvent(input$upload_started, {
+    ids <- vapply(names(upload_labels), upload_id, character(1))
+    slot <- names(ids)[ids == input$upload_started]
+    if (length(slot) != 1L) return()
+    retired <- retired_files()
+    retired[slot] <- list(input[[ids[[slot]]]])
+    retired_files(retired)
+    activate_upload()
+  }, priority = 105)
+  observeEvent(uploads(), {
+    if (any(lengths(uploads()) > 0L) || identical(reactive_files$source, "upload"))
+      activate_upload()
+  }, priority = 100)
+
   observeEvent(prediction_parameters(), invalidate_prediction(),
                ignoreInit = TRUE, priority = 100)
 
@@ -659,75 +727,86 @@ server <- function(input, output, session) {
     ))
   })
   
-  # --- Load example data (hero & step1 buttons share the same handler) ---
-  example_loader <- function() {
-    invalidate_mapping()
-    reactive_files$input_generation <- reactive_files$input_generation + 1L
-    reactive_files$source <- "example"
-    reactive_files$GEX <- reactive_files$clinic <- reactive_files$anno <- NULL
-    
-    example_dir <- system.file("RshinyTest", package = "BreastSubtypeR")
-    if (example_dir == "") example_dir <- file.path("inst", "RshinyTest")
-    
-    gex_path  <- file.path(example_dir, "OSLO2EMIT0_GEX_log2.FPKM.txt")
-    clin_path <- file.path(example_dir, "OSLO2EMIT0_clinical.txt")
-    anno_path <- file.path(example_dir, "OSLO2EMIT0_anno.txt")
-    
-    if (!all(file.exists(c(gex_path, clin_path, anno_path)))) {
-      showNotification("Example files not found in the package installation.", type = "error", duration = 10)
-      return(invisible(NULL))
-    }
-  
-    tryCatch(withProgress(message = "Loading example data...", value = 0, {
-      incProgress(0.25, detail = "Clinical...")
-      clinic_df <- utils::read.table(clin_path, header = TRUE, sep = "\t",
-                                     stringsAsFactors = FALSE, check.names = FALSE)
-      stopifnot("PatientID" %in% names(clinic_df))
-      rownames(clinic_df) <- clinic_df$PatientID
-      
-      incProgress(0.5, detail = "Annotation...")
-      anno_df <- utils::read.table(anno_path, header = TRUE, sep = "\t",
-                                   stringsAsFactors = FALSE, check.names = FALSE)
-      stopifnot(all(c("probe","ENTREZID") %in% names(anno_df)))
-      rownames(anno_df) <- anno_df$probe
-      
-      incProgress(0.75, detail = "Expression...")
-      reactive_files$GEX <- .read_expression(gex_path, "\t", clinic_df$PatientID,
-                                             anno_df$probe, raw_counts = FALSE)
-      reactive_files$clinic <- clinic_df
-      reactive_files$anno <- anno_df
-      reactive_files$RawCounts <- FALSE
-      
-      incProgress(1, detail = "Done")
-      showNotification("Example files loaded. Click “Preprocess & map”.", type = "message", duration = 6)
-    }), error = report_error)
+  mode_label <- function(raw) if (raw) "Raw counts" else "Normalized (log2)"
+  dimensions_label <- function(spec) {
+    sprintf("%s %s and %d tumors", format(spec$dimensions[1L], big.mark = ","),
+            if (spec$raw) "expression features" else "genes", spec$dimensions[2L])
   }
-  observeEvent(input$load_example,        example_loader())
-  observeEvent(input$load_example_step1,  example_loader())
-  
+  output$active_source <- renderText({
+    id <- reactive_files$example_id
+    if (!is.null(id)) {
+      spec <- examples[[id]]
+      return(paste(spec$name, dimensions_label(spec), mode_label(spec$raw), sep = " | "))
+    }
+    if (identical(reactive_files$source, "upload"))
+      return(sprintf("Manual upload | %s | %d of 3 files supplied",
+                     mode_label(raw_mode()), sum(lengths(uploads()) > 0L)))
+    "No active dataset"
+  })
+  open_examples <- function() {
+    choices <- lapply(examples, function(spec) {
+      tags$span(tags$strong(spec$name), tags$br(),
+        dimensions_label(spec), tags$br(),
+        if (spec$raw) "RNA-seq coverage sums" else "Log2-normalized RNA-seq expression",
+        tags$br(), spec$units, tags$br(),
+        paste("Data type:", mode_label(spec$raw)), tags$br(),
+        if (spec$raw) "Gene length annotation: Included" else "Gene length annotation: Not required")
+    })
+    showModal(modalDialog(
+      title = "Load example data",
+      p("Select a packaged breast cancer expression dataset to explore the BreastSubtypeR workflow."),
+      radioButtons("example_choice", "Dataset", choiceNames = unname(choices),
+                   choiceValues = names(examples), width = "100%", selected = reactive_files$example_id %||% "oslo"),
+      p("TCGA-BRCA uses the raw-count workflow with base-pair coverage sums. Conventional sequencing read counts measure reads rather than covered bases."),
+      footer = tagList(modalButton("Cancel"), actionButton("confirm_example", "Load selected dataset",
+                                                          class = "btn-primary"))))
+  }
+  observeEvent(input$load_example, open_examples())
+  observeEvent(input$load_example_step1, open_examples())
+  observeEvent(input$confirm_example, {
+    id <- input$example_choice
+    removeModal()
+    clear_inputs()
+    retired_files(list())
+    reactive_files$input_generation <- reactive_files$input_generation + 1L
+    tryCatch({
+      staged <- read_example(id)
+      reactive_files$GEX <- staged$GEX
+      reactive_files$anno <- staged$anno
+      reactive_files$clinic <- staged$clinic
+      reactive_files$example_id <- id
+      reactive_files$RawCounts <- examples[[id]]$raw
+      reactive_files$source <- "example"
+      showNotification("Example loaded. Click Preprocess & map.", type = "message")
+    }, error = report_error)
+    sync_mode()
+  }, priority = 120)
+
   # --- Preprocess & map: works for uploads OR example ---
   observeEvent(input$map, tryCatch({
     invalidate_mapping()
+    files <- uploads()
     have_uploads <- identical(reactive_files$source, "upload") &&
-      !is.null(input$GEX) && !is.null(input$clinic) && !is.null(input$anno)
+      all(lengths(files) > 0L)
     have_example <- identical(reactive_files$source, "example") &&
       !is.null(reactive_files$GEX) && !is.null(reactive_files$clinic) && !is.null(reactive_files$anno)
     if (!have_uploads && !have_example)
       stop("Load the example or upload expression, clinical and annotation files before preprocessing.")
     
+    if (have_example) sync_mode()
     withProgress(message = "Running Mapping...", value = 0, {
       incProgress(0.15, detail = "Reading inputs...")
       
       if (have_uploads) {
         reactive_files$GEX <- reactive_files$clinic <- reactive_files$anno <- NULL
-        clinic_df <- .read_table(input$clinic, "PatientID")
+        clinic_df <- .read_table(files$clinic, "PatientID")
         stopifnot("PatientID" %in% names(clinic_df))
         rownames(clinic_df) <- clinic_df$PatientID
-        anno_df <- .read_table(input$anno, "probe")
+        anno_df <- .read_table(files$anno, "probe")
         stopifnot(all(c("probe","ENTREZID") %in% names(anno_df)))
         rownames(anno_df) <- anno_df$probe
-        reactive_files$GEX <- .read_expression(input$GEX$datapath,
-            .upload_separator(input$GEX$name), clinic_df$PatientID, anno_df$probe, raw_mode())
+        reactive_files$GEX <- .read_expression(files$GEX$datapath,
+            .upload_separator(files$GEX$name), clinic_df$PatientID, anno_df$probe, raw_mode())
         reactive_files$clinic <- clinic_df
         reactive_files$anno <- anno_df
         reactive_files$RawCounts <- raw_mode()
@@ -756,7 +835,7 @@ server <- function(input, output, session) {
       tryCatch({
         output_text <- capture.output({
           message("Mapping() -> RawCounts = ", reactive_files$RawCounts)
-          data_input <- BreastSubtypeR::Mapping(se_obj = se_obj, RawCounts = reactive_files$RawCounts,
+          data_input <- BreastSubtypeR::Mapping(se_obj = se_obj, RawCounts = raw_mode(),
                                 impute = FALSE, verbose = TRUE)
           cat("Step 1 is complete.\nYou may now proceed to Step 2.\n")
         })

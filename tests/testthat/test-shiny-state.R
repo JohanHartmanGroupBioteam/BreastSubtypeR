@@ -15,7 +15,7 @@ shiny_defaults <- function(session, method = "PAM50") {
                      export_kind = "calls", calibration = "Internal",
                      internal = "medianCtr", external = "Given.mdns",
                      s = "ER.v2", ratio = 54 / 64, iteration = 10)
-    session$setInputs(load_example_step1 = 1)
+    session$setInputs(example_choice = "oslo", confirm_example = 1)
     session$setInputs(map = 1)
 }
 shiny_upload <- function(name) {
@@ -165,8 +165,8 @@ test_that("an invalid measurement clears mapped results and exports until correc
         session$setInputs(run = 1)
         calls <- current_prediction()$calls
         expect_true(file.exists(output$download))
-        session$setInputs(GEX = bad, clinic = shiny_upload("OSLO2EMIT0_clinical.txt"),
-                          anno = shiny_upload("OSLO2EMIT0_anno.txt"))
+        session$setInputs(GEX_1 = bad, clinic_1 = shiny_upload("OSLO2EMIT0_clinical.txt"),
+                          anno_1 = shiny_upload("OSLO2EMIT0_anno.txt"))
         session$setInputs(map = 2)
         expect_identical(count, 1L)
         expect_match(output$analysis_error$html, "invalid measurement", fixed = TRUE)
@@ -178,7 +178,7 @@ test_that("an invalid measurement clears mapped results and exports until correc
         expect_error(output$download, "No current prediction")
         session$setInputs(export_kind = "full")
         expect_error(output$download, "No current prediction")
-        session$setInputs(GEX = good)
+        session$setInputs(GEX_1 = good)
         session$setInputs(map = 3)
         expect_identical(count, 2L)
         expect_null(reactive_files$error)
@@ -189,9 +189,9 @@ test_that("an invalid measurement clears mapped results and exports until correc
         session$setInputs(export_kind = "calls")
         expect_true(file.exists(output$download))
 
-        session$setInputs(GEX = csv("expr.csv", c("S1,S2", "10,100", "20,200", "30,1,25")),
-            clinic = csv("clin.csv", c("PatientID", "S1", "S2")),
-            anno = csv("anno.csv", c("probe,ENTREZID", "10,101", "g2,102", "g3,103")))
+        session$setInputs(GEX_1 = csv("expr.csv", c("S1,S2", "10,100", "20,200", "30,1,25")),
+            clinic_1 = csv("clin.csv", c("PatientID", "S1", "S2")),
+            anno_1 = csv("anno.csv", c("probe,ENTREZID", "10,101", "g2,102", "g3,103")))
         session$setInputs(map = 4)
         expect_identical(count, 2L)
         expect_match(reactive_files$error, "line 4 has 3 fields, expected 2")
@@ -202,8 +202,8 @@ test_that("an invalid measurement clears mapped results and exports until correc
         expect_error(output$download, "No current prediction")
         session$setInputs(export_kind = "full")
         expect_error(output$download, "No current prediction")
-        session$setInputs(GEX = good, clinic = shiny_upload("OSLO2EMIT0_clinical.txt"),
-                          anno = shiny_upload("OSLO2EMIT0_anno.txt"))
+        session$setInputs(GEX_1 = good, clinic_1 = shiny_upload("OSLO2EMIT0_clinical.txt"),
+                          anno_1 = shiny_upload("OSLO2EMIT0_anno.txt"))
         session$setInputs(map = 5)
         expect_true(mapping_current())
         expect_identical(count, 3L)
@@ -485,7 +485,7 @@ test_that("coverage provenance rejects retained mapping from an older generation
         mapped <- reactive_files$data_input
         key <- reactive_files$mapped_key
         expect_false(is.null(current_input_coverage()))
-        session$setInputs(load_example_step1 = 2)
+        session$setInputs(example_choice = "oslo", confirm_example = 2)
         reactive_files$data_input <- mapped
         reactive_files$mapped_key <- key
         session$flushReact()
@@ -527,7 +527,7 @@ for (changed in c("GEX", "clinic", "anno")) {
                 files <- list(GEX = "OSLO2EMIT0_GEX_log2.FPKM.txt",
                               clinic = "OSLO2EMIT0_clinical.txt",
                               anno = "OSLO2EMIT0_anno.txt")
-                do.call(session$setInputs, setNames(list(shiny_upload(files[[id]])), id))
+                do.call(session$setInputs, setNames(list(shiny_upload(files[[id]])), paste0(id, "_1")))
                 expect_null(reactive_files$data_input)
                 expect_null(current_input_coverage())
                 expect_null(output$input_coverage)
@@ -570,7 +570,7 @@ test_that("example reload invalidates AUTO exports and fresh prediction restores
         session$setInputs(export_kind = "full")
         expect_null(output$download_control)
         expect_error(output$download, "does not provide this export")
-        session$setInputs(export_kind = "calls", load_example_step1 = 2)
+        session$setInputs(export_kind = "calls", example_choice = "oslo", confirm_example = 2)
         expect_false(mapping_current())
         expect_null(output$input_coverage)
         expect_null(output$plotSection)
@@ -786,6 +786,10 @@ test_that("data type changes and explicit remapping revoke predictions", {
     env <- shiny_app_env()
     shiny::testServer(env$server, {
         shiny_defaults(session)
+        session$setInputs(GEX_1 = shiny_upload("OSLO2EMIT0_GEX_log2.FPKM.txt"),
+                          clinic_1 = shiny_upload("OSLO2EMIT0_clinical.txt"),
+                          anno_1 = shiny_upload("OSLO2EMIT0_anno.txt"))
+        session$setInputs(map = 1)
         session$setInputs(run = 1)
         session$setInputs(map = 2)
         expect_true(mapping_current())
@@ -816,7 +820,7 @@ test_that("provenance rejects retained records even if invalidation is bypassed"
         expect_error(export_result("calls"), "No current prediction")
         expect_error(export_result("full"), "No current prediction")
         expect_error(output$download, "No current prediction")
-        session$setInputs(k_subtypes = "5", load_example_step1 = 2, map = 2)
+        session$setInputs(k_subtypes = "5", example_choice = "oslo", confirm_example = 2, map = 2)
         reactive_files$prediction <- old
         expect_null(current_prediction())
         expect_error(output$download, "No current prediction")
@@ -933,9 +937,9 @@ test_that("actual upload tables map and replace the example without sharing sess
     env <- shiny_app_env()
     shiny::testServer(env$server, {
         shiny_defaults(session)
-        session$setInputs(GEX = shiny_upload("OSLO2EMIT0_GEX_log2.FPKM.txt"),
-                         clinic = shiny_upload("OSLO2EMIT0_clinical.txt"),
-                         anno = shiny_upload("OSLO2EMIT0_anno.txt"))
+        session$setInputs(GEX_1 = shiny_upload("OSLO2EMIT0_GEX_log2.FPKM.txt"),
+                         clinic_1 = shiny_upload("OSLO2EMIT0_clinical.txt"),
+                         anno_1 = shiny_upload("OSLO2EMIT0_anno.txt"))
         session$setInputs(map = 2)
         expect_true(mapping_current())
         expect_identical(current_input_coverage()$data,
@@ -943,7 +947,7 @@ test_that("actual upload tables map and replace the example without sharing sess
         expect_identical(reactive_files$source, "upload")
         session$setInputs(run = 1)
         expect_equal(nrow(current_prediction()$calls), 102L)
-        session$setInputs(load_example_step1 = 2)
+        session$setInputs(example_choice = "oslo", confirm_example = 2)
         expect_identical(reactive_files$source, "example")
         expect_null(output$input_coverage)
         expect_null(current_prediction())
@@ -1021,8 +1025,8 @@ test_that("mapping errors stay connected and cannot fall back to previous data",
         writeLines(c("wrong_column", "sample"), bad_file)
         bad_upload <- data.frame(name = "bad-clinical.txt", size = file.info(bad_file)$size,
                                  type = "text/plain", datapath = bad_file)
-        session$setInputs(GEX = shiny_upload("OSLO2EMIT0_GEX_log2.FPKM.txt"),
-                         clinic = bad_upload, anno = shiny_upload("OSLO2EMIT0_anno.txt"))
+        session$setInputs(GEX_1 = shiny_upload("OSLO2EMIT0_GEX_log2.FPKM.txt"),
+                         clinic_1 = bad_upload, anno_1 = shiny_upload("OSLO2EMIT0_anno.txt"))
         session$setInputs(map = 2)
         expect_false(mapping_current())
         expect_null(current_input_coverage())
@@ -1030,7 +1034,7 @@ test_that("mapping errors stay connected and cannot fall back to previous data",
         expect_match(output$analysis_error$html, "PatientID")
         expect_false(session$isClosed())
         expect_error(output$download, "No current prediction")
-        session$setInputs(clinic = shiny_upload("OSLO2EMIT0_clinical.txt"))
+        session$setInputs(clinic_1 = shiny_upload("OSLO2EMIT0_clinical.txt"))
         session$setInputs(map = 3)
         session$setInputs(run = 2)
         expect_true(mapping_current())
@@ -1095,14 +1099,14 @@ test_that("a second live session cannot clear or inherit the first prediction", 
         expect_error(download_for(second), "No current prediction")
         expect_null(download_control_for(second))
         expect_match(download_control_for(first)$html, 'id="download"', fixed = TRUE)
-        second$setInputs(load_example_step1 = 1)
+        second$setInputs(example_choice = "oslo", confirm_example = 1)
         expect_error(download_for(second), "No current prediction")
         expect_null(coverage_for(second))
         expect_identical(coverage_for(first), original_coverage)
         second$setInputs(is_raw_counts = "norm", map = 1)
         expect_match(coverage_for(second)$html, "Input coverage", fixed = TRUE)
         expect_identical(coverage_for(first), original_coverage)
-        second$setInputs(is_raw_counts = "raw")
+        second$setInputs(example_choice = "tcga", confirm_example = 2)
         expect_null(coverage_for(second))
         expect_identical(coverage_for(first), original_coverage)
         current <- readLines(download_for(first))
@@ -1122,7 +1126,13 @@ test_that("the presentation preserves controls, defaults and conditional setting
     eval(parse(file = file.path(app_dir, "ui.R"), encoding = "UTF-8",
                keep.source = FALSE), envir = env)
     html <- as.character(env$ui)
-    for (id in c("load_example_step1", "about", "GEX", "is_raw_counts", "clinic",
+    rendered <- new.env()
+    shiny::testServer(env$server, {
+        session$flushReact()
+        rendered$html <- paste(html, output$upload_GEX$html, output$upload_anno$html, output$upload_clinic$html)
+    })
+    html <- rendered$html
+    for (id in c("load_example", "load_example_step1", "about", "GEX", "is_raw_counts", "clinic",
                  "anno", "map", "BSmethod", "k_subtypes", "hasClinical", "calibration",
                  "external", "medians", "internal", "iteration", "ratio", "s", "run",
                  "auto_chip", "gex_help", "clin_help", "anno_help", "input_coverage",
@@ -1250,14 +1260,14 @@ test_that("AUTO awaits current preprocessing without a false preflight error", {
         expect_match(output$auto_preflight$html, "HER2-: 94", fixed = TRUE)
         expect_null(output$method_help)
 
-        session$setInputs(clinic = shiny_upload("OSLO2EMIT0_clinical.txt"))
+        session$setInputs(clinic_1 = shiny_upload("OSLO2EMIT0_clinical.txt"))
         expect_false(mapping_current())
         expect_match(output$auto_chip$html, "AUTO: awaiting preprocessing", fixed = TRUE)
         expect_false(grepl("ER\\+|HER2|auto ready", output$auto_chip$html))
         expect_null(output$auto_preflight)
         expect_null(current_input_coverage())
         expect_null(current_prediction())
-        session$setInputs(load_example_step1 = 2)
+        session$setInputs(example_choice = "oslo", confirm_example = 2)
         session$setInputs(map = 2)
         expect_true(mapping_current())
         expect_match(output$auto_preflight$html, "AUTO preflight: ready", fixed = TRUE)
@@ -1278,8 +1288,8 @@ test_that("mapped AUTO annotation failures retain blocking and recover after rep
     incomplete$size <- file.info(path)$size
     shiny::testServer(env$server, {
         shiny_defaults(session, "AUTO Mode")
-        session$setInputs(GEX = shiny_upload("OSLO2EMIT0_GEX_log2.FPKM.txt"),
-                          clinic = incomplete, anno = shiny_upload("OSLO2EMIT0_anno.txt"))
+        session$setInputs(GEX_1 = shiny_upload("OSLO2EMIT0_GEX_log2.FPKM.txt"),
+                          clinic_1 = incomplete, anno_1 = shiny_upload("OSLO2EMIT0_anno.txt"))
         expect_match(output$auto_chip$html, "AUTO: awaiting preprocessing", fixed = TRUE)
         expect_null(output$auto_preflight)
         session$setInputs(map = 2)
@@ -1293,7 +1303,7 @@ test_that("mapped AUTO annotation failures retain blocking and recover after rep
         expect_match(reactive_files$error, "AUTO needs ER and HER2", fixed = TRUE)
         expect_null(current_prediction())
 
-        session$setInputs(clinic = clinical)
+        session$setInputs(clinic_1 = clinical)
         expect_false(mapping_current())
         expect_match(output$auto_chip$html, "AUTO: awaiting preprocessing", fixed = TRUE)
         expect_null(output$auto_preflight)
@@ -1309,9 +1319,9 @@ test_that("pending AUTO presentation preserves mapping errors and recovery", {
     env <- shiny_app_env()
     shiny::testServer(env$server, {
         shiny_defaults(session, "AUTO Mode")
-        session$setInputs(GEX = shiny_upload("OSLO2EMIT0_GEX_log2.FPKM.txt"),
-                          clinic = shiny_upload("OSLO2EMIT0_clinical.txt"),
-                          anno = shiny_upload("OSLO2EMIT0_anno.txt"))
+        session$setInputs(GEX_1 = shiny_upload("OSLO2EMIT0_GEX_log2.FPKM.txt"),
+                          clinic_1 = shiny_upload("OSLO2EMIT0_clinical.txt"),
+                          anno_1 = shiny_upload("OSLO2EMIT0_anno.txt"))
         session$setInputs(is_raw_counts = "raw")
         expect_null(output$auto_preflight)
         session$setInputs(map = 2)

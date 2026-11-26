@@ -890,7 +890,7 @@ sample IDs as column names, clinical metadata with `PatientID`, and annotation
 with `probe` and `ENTREZID`. The application aligns overlapping sample and
 feature identifiers. Choose normalized **log2** expression or raw RNA-seq
 counts; raw-count annotation must also contain gene lengths in `Length` (bp).
-Alternatively, use **Load example data...** to load the bundled example below.
+Alternatively, use **Load example data...** to select one of the two bundled datasets below.
 Click **Preprocess & map**. The **Input coverage** table appears after
 successful mapping and describes
 the current processed inputs, including possible imputation. It reports all
@@ -947,8 +947,10 @@ default settings.
 
 ## Example data (for Shiny & scripts)
 
-The Shiny UI provides a **Load example data...** button that preloads a small
-demo cohort (expression, clinical, annotation). After loading, click
+In **Load example data...**, choose OSLO2-EMIT0 or TCGA-BRCA and confirm with
+**Load selected dataset**. The app loads all three tables and locks the data
+type for that example. Manual uploads restore the editable data type.
+Confirming a replacement clears previous results. After loading, click
 **Preprocess & map** in **Data and preprocessing** (Step 1), select settings in
 **Analysis settings** (Step 2), then click **Run subtyping**. Current plots and
 supported TSV exports appear under **Results and downloads**.
