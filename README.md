@@ -280,18 +280,29 @@ dependencies if needed:
 install.packages(c("shiny", "bslib"))
 ```
 
-1. **Data and preprocessing:** choose **Load example data...** or upload your
-   expression, clinical and annotation tables, select the data type, then
+1. **Data and preprocessing:** choose OSLO2-EMIT0 or TCGA-BRCA in **Load example data...**.
+   The app sets the example's data type. For manual uploads, supply expression,
+   clinical and annotation tables and select the data type. Then
    click **Preprocess & map**. **Input coverage** describes the current
    successful mapping.
 2. **Analysis settings:** select a method and its settings, then click
    **Run subtyping**. Before successful preprocessing, AUTO displays
    **AUTO: awaiting preprocessing**. After mapping, it shows readiness
    counts or guidance for genuinely blocked annotations.
+   A custom PAM50 reference applies to one dataset. Confirming an example or
+   replacing a primary upload retires it. Canceling the dialog or remapping
+   the same inputs keeps it.
 3. **Results and downloads:** inspect the current results and download
    tab-separated text (TSV), saved with a `.txt` extension. AUTO exports
    separate method calls and entropy;
-   **Full metrics (incl. ROR)** is available for supported single NC methods.
+   **Full metrics (incl. ROR)** is available for supported single NC methods
+   and for SSPBC in either class setting. SSPBC starts with **Calls only**.
+   Selecting full metrics adds native subtype posteriors, categorical SSP.ROR
+   bins, bin-membership posteriors and evaluable rule counts per sample.
+   Incomplete SSP.ROR rule coverage is reported in the app and TSV. With zero
+   evaluable SSP.ROR rules, bin posteriors reflect training-set frequencies alone.
+   Both SSPBC exports quote the PatientID column when an ID contains a tab,
+   line break, double quote or hash. Read IDs as text to preserve their spelling.
 
 For expression uploads, use comma-delimited `.csv` or tab-delimited text with
 genes in rows and sample IDs in the header. Label the gene-ID column `probe`

@@ -30,17 +30,28 @@ The launcher checks and loads dependency namespaces; \code{shiny::runApp()}
 starts the local application.
 }
 \details{
-Load the bundled example or upload expression, clinical and annotation
+Choose OSLO2-EMIT0 or TCGA-BRCA, or upload expression, clinical and annotation
 tables, then select \strong{Preprocess & map} before running subtyping.
 Replacing an input, reloading the example or changing the input data type
 clears dependent mapping, predictions, plots and exports. Relevant
 prediction-setting changes clear predictions and plots while preserving
 valid mapped inputs. A failed prediction cannot leave old results available.
 
+A custom PAM50 reference belongs to the current dataset. Replacing a primary
+input, changing the manual data type or confirming an example retires the
+reference and resets active custom calibration to Internal (medianCtr).
+Canceling the example dialog or remapping the same inputs keeps the reference.
+
 Download controls are shown only for a supported, current prediction.
-AUTO, AIMS and SSPBC provide calls only; supported single NC methods also
-provide full metrics. Server-side guards reject stale or unsupported
-downloads even when an earlier download URL is requested directly.
+AUTO and AIMS provide calls only. Supported single NC methods and both
+SSPBC class settings offer full metrics. Each SSPBC run starts with calls
+only. Selecting full metrics prepares categorical SSP.ROR bins, subtype
+and bin posteriors, and rule counts for that prediction. Incomplete SSP.ROR rule coverage
+is reported. Zero-rule bin posteriors reflect training-set frequencies alone.
+Both SSPBC exports quote the PatientID column when an ID contains a tab,
+line break, double quote or hash. An SSP.ROR export error leaves subtype
+calls available. Run subtyping again to retry full metrics.
+Server-side guards reject stale or unavailable downloads.
 
 For cIHC.itr, the ratio is the ER-positive : ER-negative target, defaults
 to \code{54 / 64}, and must be finite and strictly positive. Values above one

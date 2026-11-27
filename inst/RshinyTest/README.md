@@ -1,8 +1,16 @@
 # Shiny example tables
 
 These six tab-delimited files are synchronized with the expanded packaged
-objects staged under issue #199. The app's **Load example data** button loads
-OSLO; the TCGA files can be uploaded together after selecting **Raw counts**.
+objects staged under issue #199. In **Load example data**, choose OSLO2-EMIT0 or TCGA-BRCA
+and confirm with **Load selected dataset** (#272). The app selects and locks
+the corresponding normalized or raw-count mode. TCGA uses coverage sums
+in the raw-count workflow. Select **Preprocess & map** before subtyping.
+
+Opening or canceling the dialog preserves the current analysis. Confirming
+a selection clears mappings, predictions, plots, exports and previous upload
+fields. If the example cannot be loaded, the app shows the error and leaves
+no active data. Choose another example or supply all three upload files.
+Starting a new upload after an example restores the editable manual data type.
 
 | Files | Expression | Features x samples | Annotation columns | Clinical columns |
 |---|---|---|---|---|
@@ -53,3 +61,4 @@ in a correction ledger. Maintainer verification from a full Git checkout is
 described in [the provenance instructions](../../data-raw/issue199/README.md#file-byte-provenance-and-issue-235).
 It does not verify arbitrary working-tree files, exported tables or tarballs.
 
+An uploaded custom PAM50 reference applies to the current dataset. Replacing a primary input, changing the upload expression mode, or confirming an example (including the same example) clears that reference. Active custom calibration returns to Internal / medianCtr. Upload a new reference to use custom calibration again. Canceling the example dialog preserves the current reference and results. Replacing the reference alone requires rerunning prediction with the existing mapping.

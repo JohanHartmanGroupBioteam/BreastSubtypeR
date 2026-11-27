@@ -146,6 +146,57 @@ bs_callout <- function(title, body, color = c("info","success","warning","danger
   list(calls = calls_tbl, full = full_tbl)
 }
 
+# Check IDs on named axes and dimensions on unnamed axes. Native posterior
+# rows and rule columns follow input order when their sample axes are unnamed.
+.ssp_export_metrics <- function(result, model, input_ids, call_ids) {
+  is_ror <- identical(model, "ssp.ror")
+  k <- if (identical(model, "ssp.pam50")) "24" else "21"
+  labels <- if (is_ror) sprintf("c%03d", seq(5, 90, 5)) else c("Basal", "Her2", "LumA", "LumB")
+  if (identical(model, "ssp.pam50")) labels <- c(labels, "Normal")
+
+  ids <- rownames(result$cl)
+  post <- result$all.probs[[k]]
+  rules <- result$rules.matrix
+  if (!length(ids) || anyNA(ids) || any(!nzchar(ids)) || anyDuplicated(ids) ||
+      !identical(ids, input_ids) || length(call_ids) != length(ids) ||
+      anyDuplicated(call_ids) || !setequal(call_ids, ids) ||
+      !identical(colnames(result$data.used), ids) ||
+      !identical(colnames(result$cl), k) || !is.matrix(result$prob) ||
+      !identical(dimnames(result$prob), dimnames(result$cl)) ||
+      !is.matrix(post) || nrow(post) != length(ids) || !identical(colnames(post), labels) ||
+      (!is.null(rownames(post)) && !identical(rownames(post), ids)) ||
+      !is.matrix(rules) || !nrow(rules) || ncol(rules) != length(ids) ||
+      (!is.null(colnames(rules)) && !identical(colnames(rules), ids))) {
+    stop(sprintf("Cannot align %s metrics. Check sample IDs and native output dimensions.", model),
+         call. = FALSE)
+  }
+
+  prefix <- if (is_ror) "SSP_ROR_" else "SSP_"
+  metrics <- data.frame(row.names = ids)
+  if (is_ror) metrics$SSP_ROR_Bin <- result$cl[, k]
+  metrics[[if (is_ror) "SSP_ROR_Bin_Prob" else "SSP_Call_Prob"]] <- result$prob[, k]
+  metrics[paste0(prefix, "Prob_", labels)] <- as.data.frame(post)
+  metrics[[paste0(prefix, "Rules_Evaluable")]] <- as.integer(colSums(!is.na(rules)))
+  metrics[[paste0(prefix, "Rules_Total")]] <- nrow(rules)
+  metrics[match(call_ids, ids), , drop = FALSE]
+}
+
+.ssp_ror_coverage_note <- function(full) {
+  incomplete <- full$SSP_ROR_Rules_Evaluable < full$SSP_ROR_Rules_Total
+  if (!any(incomplete)) return(character())
+  note <- sprintf(paste("Incomplete SSP.ROR rule coverage in %d of %d samples.",
+                        "Inspect SSP_ROR_Rules_Evaluable out of %d rules per sample."),
+                  sum(incomplete), length(incomplete), full$SSP_ROR_Rules_Total[1L])
+  zero <- sum(full$SSP_ROR_Rules_Evaluable == 0L)
+  if (zero) {
+    note <- paste(note, sprintf("Rows with SSP_ROR_Rules_Evaluable = 0 (%d) have zero evaluable rules.", zero),
+                  "Their posteriors reflect only the model's training-set category frequencies.",
+                  "Their assigned bins have no sample-specific expression support.",
+                  "Check probe-to-Entrez annotation and missing expression for these samples.")
+  }
+  note
+}
+
 # Human-readable labels travel in comment metadata, never as renamed columns.
 .experimental_ror_pc_export_note <- function(df) {
   has_score <- getFromNamespace(".has_experimental_ror_pc", "BreastSubtypeR")
@@ -158,9 +209,27 @@ bs_callout <- function(title, body, color = c("info","success","warning","danger
 }
 
 server <- function(input, output, session) {
+  hosted <- getFromNamespace(".shiny_hosted_profile", "BreastSubtypeR")()
+  iteration_limit <- if (hosted) getFromNamespace(".shiny_iteration_limit", "BreastSubtypeR")()
+  safe_detail <- function(condition) {
+    if (!hosted) return(conditionMessage(condition))
+    guidance <- c("Select a packaged example.",
+                  "Run Step 1 (Preprocess & map) before subtyping.",
+                  "AUTO needs ER and HER2 (ER+/ER-, HER2+/HER2-).")
+    msg <- conditionMessage(condition)
+    if (msg %in% guidance) return(guidance[match(msg, guidance)])
+    "Review the settings or use the local BreastSubtypeR application."
+  }
   
+  allowed_method <- getFromNamespace(".shiny_allowed_method", "BreastSubtypeR")
+  allowed_iterations <- getFromNamespace(".shiny_allowed_iterations", "BreastSubtypeR")
+  selected_method <- reactive({
+    value <- input$BSmethod
+    if (hosted && !allowed_method(value)) return(NULL)
+    value
+  })
+
   # --- small reactives ---
-  raw_mode     <- reactive({ identical(input$is_raw_counts, "raw") })
   has_clinical <- reactive({ isTRUE((input$hasClinical %||% FALSE)) })
   k_is_4class  <- reactive({ identical(input$k_subtypes, "4") })
   
@@ -170,11 +239,13 @@ server <- function(input, output, session) {
   CITATION_NOTE <- sprintf("BreastSubtypeR v%s - NAR Genomics and Bioinformatics (2025) DOI: %s",
                            PKG_VER, CITATION_DOI)
   
-  .write_tsv_with_header <- function(path, df, header_lines = CITATION_NOTE) {
+  .write_tsv_with_header <- function(path, df, header_lines = CITATION_NOTE, quote_ids = FALSE) {
     con <- file(path, open = "wt", encoding = "UTF-8")
     on.exit(close(con), add = TRUE)
     if (length(header_lines)) writeLines(paste0("# ", header_lines), con)
-    utils::write.table(df, con, sep = "\t", quote = FALSE, row.names = FALSE)
+    if (quote_ids) writeLines(paste(names(df), collapse = "\t"), con)
+    utils::write.table(df, con, col.names = !quote_ids, sep = "\t", quote = if (quote_ids) 1L else FALSE,
+                       qmethod = "double", row.names = FALSE)
   }
   
   .pam50_variant_from_internal <- function(internal) {
@@ -185,16 +256,16 @@ server <- function(input, output, session) {
            "parker.original")
   }
   
-  .method_header_line <- function(input, want_4, use_clin) {
-    method_label <- input$BSmethod %||% "Unknown"
+  .method_header_line <- function(params, want_4, use_clin) {
+    method_label <- params$method %||% "Unknown"
     if (identical(method_label, "PAM50")) {
-      cal <- input$calibration %||% "None"
+      cal <- params$calibration %||% "None"
       if (identical(cal, "Internal")) {
-        internal <- input$internal %||% "medianCtr"
+        internal <- params$internal %||% "medianCtr"
         variant  <- .pam50_variant_from_internal(internal)
         method_label <- sprintf("PAM50 (variant: %s, calibration: Internal (%s))", variant, internal)
       } else if (identical(cal, "External")) {
-        ext <- input$external %||% "Unknown"
+        ext <- params$external %||% "Unknown"
         ext_label <- if (identical(ext, "Given.mdns")) "Custom (Given.mdns)" else ext
         method_label <- sprintf("PAM50 (variant: parker.original, calibration: External (%s))", ext_label)
       } else {
@@ -208,28 +279,110 @@ server <- function(input, output, session) {
   # Raw inputs, mapping and predictions belong to this session only.
   reactive_files <- shiny::reactiveValues(
     GEX = NULL, clinic = NULL, anno = NULL, source = NULL,
-    RawCounts = NULL, input_generation = 0L,
+    RawCounts = NULL, example_id = NULL, input_generation = 0L,
     data_input = NULL, mapped_key = NULL, prediction = NULL, error = NULL
   )
 
-  input_key <- reactive({
-    list(generation = reactive_files$input_generation,
-         uploads = list(input$GEX, input$clinic, input$anno),
-         data_type = input$is_raw_counts)
+  examples <- getFromNamespace(".shiny_examples", "BreastSubtypeR")
+  read_example <- getFromNamespace(".read_shiny_example", "BreastSubtypeR")
+  manual_mode <- reactiveVal("norm")
+  raw_mode <- reactive({
+    id <- reactive_files$example_id
+    if (is.null(id)) identical(manual_mode(), "raw") else examples[[id]]$raw
   })
 
+  # New file bindings on replacement also discard uploads still in flight.
+  upload_generation <- reactiveVal(0L)
+  upload_id <- function(id) {
+    generation <- upload_generation()
+    if (generation == 0L) id else paste(id, generation, sep = "_")
+  }
+  upload_labels <- c(GEX = "Upload expression matrix", clinic = "Upload clinical table",
+                     anno = "Upload annotation table")
+  for (key in names(upload_labels)) local({
+    id <- key
+    output[[paste0("upload_", id)]] <- renderUI({
+      if (hosted) return(NULL)
+      fileInput(upload_id(id), upload_labels[[id]],
+                accept = c("text/csv", "text/comma-separated-values,text/plain", ".csv", ".txt"))
+    })
+  })
+  # Retire the previous file immediately when its replacement starts uploading.
+  # Shiny supplies a new temporary path only after the transfer succeeds.
+  retired_files <- reactiveVal(list())
+  uploads <- reactive({
+    files <- stats::setNames(vector("list", length(upload_labels)), names(upload_labels))
+    if (hosted) return(files)
+    retired <- retired_files()
+    for (id in names(files)) {
+      file <- input[[upload_id(id)]]
+      if (!identical(file, retired[[id]])) files[id] <- list(file)
+    }
+    files
+  })
+  input_key <- reactive({
+    list(generation = reactive_files$input_generation, source = reactive_files$source,
+         example = reactive_files$example_id, raw = raw_mode(),
+         uploads = if (identical(reactive_files$source, "upload")) uploads())
+  })
+
+  # Rebind calibration on each primary input change. Primary upload controls
+  # retain their own lifetime so the other two slots survive a manual edit.
+  default_calibration <- getFromNamespace(".shiny_pam50_defaults", "BreastSubtypeR")
+  pam50_controls <- getFromNamespace(".shiny_pam50_controls", "BreastSubtypeR")
+  calibration_defaults <- reactiveVal(default_calibration)
+  calibration_ns <- reactive({
+    generation <- reactive_files$input_generation
+    NS(if (generation > 0L) paste0("data", generation) else NULL)
+  })
+  output$pam50_calibration <- renderUI({
+    pam50_controls(calibration_ns(), calibration_defaults(), allow_custom = !hosted)
+  })
+  calibration_choice <- function(id) {
+    input[[calibration_ns()(id)]] %||% calibration_defaults()[[id]]
+  }
+  # Shiny assigns each completed file upload a fresh temporary path. Remember
+  # its owning generation even if the custom panel is subsequently hidden.
+  reference_owners <- new.env(parent = emptyenv())
+  retiring_reference <- reactiveVal(NULL)
+  reference_file <- reactive({
+    if (hosted) return(NULL)
+    file <- input[[calibration_ns()("medians")]]
+    if (!is.data.frame(file) || nrow(file) != 1L ||
+        !is.character(file$datapath) || length(file$datapath) != 1L ||
+        is.na(file$datapath) || !nzchar(file$datapath)) return(NULL)
+    path <- normalizePath(file$datapath, winslash = "/", mustWork = FALSE)
+    if (identical(path, retiring_reference())) return(NULL)
+    generation <- reactive_files$input_generation
+    owner <- reference_owners[[path]]
+    if (!is.null(owner) && !identical(owner, generation)) return(NULL)
+    reference_owners[[path]] <- generation
+    file
+  })
+  observeEvent(input[[calibration_ns()("medians")]], reference_file(), priority = 115)
+  advance_dataset <- function() {
+    reference_file() # claim any outgoing file even if its panel is hidden
+    choices <- default_calibration
+    for (id in names(choices)) choices[[id]] <- calibration_choice(id)
+    if (identical(choices$calibration, "External") &&
+        identical(choices$external, "Given.mdns")) choices <- default_calibration
+    calibration_defaults(choices)
+    reactive_files$input_generation <- reactive_files$input_generation + 1L
+    retiring_reference(NULL)
+  }
+
   prediction_parameters <- reactive({
-    method <- input$BSmethod
+    method <- selected_method()
     params <- list(method = method,
                    classes = if (identical(method, "AIMS")) "5" else input$k_subtypes)
     if (!is.null(method) && method %in% c("PAM50", "cIHC", "cIHC.itr", "PCAPAM50", "ssBC"))
       params$clinical <- isTRUE(input$hasClinical)
     if (identical(method, "PAM50")) {
-      params$calibration <- input$calibration
-      if (identical(input$calibration, "Internal")) params$internal <- input$internal
-      if (identical(input$calibration, "External")) {
-        params$external <- input$external
-        if (identical(input$external, "Given.mdns")) params$medians <- input$medians
+      params$calibration <- calibration_choice("calibration")
+      if (identical(params$calibration, "Internal")) params$internal <- calibration_choice("internal")
+      if (identical(params$calibration, "External")) {
+        params$external <- calibration_choice("external")
+        if (identical(params$external, "Given.mdns")) params$medians <- reference_file()
       }
     }
     if (identical(method, "cIHC.itr")) {
@@ -255,7 +408,7 @@ server <- function(input, output, session) {
     # req() and need(..., FALSE) abort silently; named validation stays visible.
     if (inherits(e, "shiny.silent.error") && !nzchar(conditionMessage(e)))
       return(invisible(NULL))
-    reactive_files$error <- conditionMessage(e)
+    reactive_files$error <- safe_detail(e)
     showNotification(reactive_files$error, type = "error", duration = NULL,
                      id = "analysis-error")
   }
@@ -264,15 +417,66 @@ server <- function(input, output, session) {
     bs_callout("Analysis needs attention", reactive_files$error, "danger")
   })
 
-  observeEvent(list(input$GEX, input$clinic, input$anno), {
-    reactive_files$source <- "upload"
-    reactive_files$GEX <- reactive_files$clinic <- reactive_files$anno <- NULL
+  clear_inputs <- function() {
     invalidate_mapping()
+    reactive_files$example_id <- reactive_files$source <- NULL
+    reactive_files$GEX <- reactive_files$clinic <- reactive_files$anno <- NULL
+    reactive_files$RawCounts <- NULL
+  }
+  sync_mode <- function() {
+    session$sendCustomMessage("bsrDataType", list(
+      locked = !is.null(reactive_files$example_id),
+      value = if (raw_mode()) "raw" else "norm"))
+  }
+  observeEvent(input$is_raw_counts, {
+    if (!is.null(reactive_files$example_id)) {
+      sync_mode()
+    } else if (length(input$is_raw_counts) == 1L && input$is_raw_counts %in% c("raw", "norm") &&
+               !identical(input$is_raw_counts, manual_mode())) {
+      if (identical(reactive_files$source, "upload")) advance_dataset()
+      manual_mode(input$is_raw_counts)
+      reactive_files$RawCounts <- NULL
+      invalidate_mapping()
+    }
+  }, priority = 110)
+
+  activate_upload <- function() {
+    advance_dataset()
+    from_example <- !is.null(reactive_files$example_id)
+    clear_inputs()
+    reactive_files$source <- "upload"
+    if (from_example) sync_mode()
+  }
+  observeEvent(input$upload_started, {
+    if (hosted) return()
+    if (identical(input$upload_started, calibration_ns()("medians"))) {
+      file <- reference_file()
+      if (!is.null(file)) {
+        path <- normalizePath(file$datapath, winslash = "/", mustWork = FALSE)
+        reference_owners[[path]] <- -1L
+        retiring_reference(path)
+      }
+      return()
+    }
+    ids <- vapply(names(upload_labels), upload_id, character(1))
+    slot <- names(ids)[ids == input$upload_started]
+    if (length(slot) != 1L) return()
+    retired <- retired_files()
+    retired[slot] <- list(input[[ids[[slot]]]])
+    retired_files(retired)
+    activate_upload()
+  }, priority = 105)
+  observeEvent(uploads(), {
+    if (any(lengths(uploads()) > 0L) || identical(reactive_files$source, "upload"))
+      activate_upload()
+  }, priority = 100)
+
+  observeEvent(prediction_parameters(), {
+    # Rebinding the calibrated controls can echo their existing defaults.
+    p <- reactive_files$prediction
+    if (mapping_current() && (is.null(p) || !identical(p$parameters, prediction_parameters())))
+      invalidate_prediction()
   }, ignoreInit = TRUE, priority = 100)
-  observeEvent(input$is_raw_counts, invalidate_mapping(),
-               ignoreInit = TRUE, priority = 100)
-  observeEvent(prediction_parameters(), invalidate_prediction(),
-               ignoreInit = TRUE, priority = 100)
 
   mapping_current <- reactive({
     !is.null(reactive_files$data_input) &&
@@ -283,7 +487,7 @@ server <- function(input, output, session) {
     tryCatch(
       list(data = BreastSubtypeR::InputCoverage(reactive_files$data_input),
            error = NULL),
-      error = function(e) list(data = NULL, error = conditionMessage(e))
+      error = function(e) list(data = NULL, error = safe_detail(e))
     )
   })
   output$input_coverage <- renderUI({
@@ -335,41 +539,106 @@ server <- function(input, output, session) {
     p
   })
 
+  # Use all aligned probes in both mappings, including for raw library sizes.
+  aligned_input <- function() {
+    samples <- intersect(colnames(reactive_files$GEX), reactive_files$clinic$PatientID)
+    validate(need(length(samples) > 0, "No overlapping sample IDs between GEX columns and clinical ‘PatientID’."))
+    probeID <- intersect(rownames(reactive_files$GEX), rownames(reactive_files$anno))
+    validate(need(length(probeID) > 0, "No overlapping probes between GEX and annotation."))
+
+    if (isTRUE(reactive_files$RawCounts)) {
+      validate(need("Length" %in% names(as.data.frame(reactive_files$anno)),
+                    "Raw counts selected but annotation lacks ‘Length’ (bp)."))
+    }
+
+    SummarizedExperiment::SummarizedExperiment(
+      assays  = list(counts = reactive_files$GEX[probeID, samples, drop = FALSE]),
+      rowData = S4Vectors::DataFrame(reactive_files$anno[probeID, , drop = FALSE]),
+      colData = S4Vectors::DataFrame(reactive_files$clinic[samples, , drop = FALSE])
+    )
+  }
+
+  # A previous run's full radio value can still be in flight when renderUI
+  # replaces the control. Only the current SSP run can opt in to its mapping.
+  export_kind <- reactive({
+    choice <- input$export_kind %||% "calls"
+    if (identical(choice, "calls")) return("calls")
+    full_choice <- current_prediction()$ssp$full_choice %||% "full"
+    if (identical(choice, full_choice)) "full" else NULL
+  })
+
+  # This reactive caches success or failure for the current prediction. Keep
+  # export_kind outside it so switching back to calls does not evict the cache.
+  ssp_full <- reactive({
+    p <- current_prediction()
+    req(p$ssp)
+    tryCatch(withProgress(message = "Preparing SSP.ROR full metrics...", value = 0.1, {
+      subtype <- .ssp_export_metrics(p$ssp$native, p$ssp$model, p$ssp$input_ids, p$calls$PatientID)
+      mapped <- BreastSubtypeR::Mapping(se_obj = aligned_input(), RawCounts = reactive_files$RawCounts,
+                                        impute = FALSE, include_ssp_ror = TRUE, verbose = !hosted)
+      incProgress(0.6, detail = "Predicting categorical SSP.ROR bins...")
+      ror_input <- mapped$se_SSP_ROR
+      ror <- BreastSubtypeR::BS_sspbc(se_obj = ror_input, ssp.name = "ssp.ror")
+      metrics <- .ssp_export_metrics(ror, "ssp.ror", colnames(ror_input), p$calls$PatientID)
+      full <- cbind(p$calls, subtype, metrics)
+      list(full = full, note = .ssp_ror_coverage_note(full))
+    }), error = function(e) list(error = paste("SSP.ROR full export unavailable.", safe_detail(e))))
+  })
+
+  selected_export <- reactive({
+    p <- current_prediction()
+    if (!is.null(p$ssp) && identical(export_kind(), "full")) {
+      result <- ssp_full()
+      p$full <- result$full
+      p$full_error <- result$error
+      p$full_note <- result$note
+      p$header <- sprintf("Method: sspbc | Subtype model: %s | Classes: %d | ROR: categorical ssp.ror",
+                          p$ssp$model, if (p$want_4) 4L else 5L)
+    }
+    p
+  })
+
   supports_export <- function(p, kind) {
-    !is.null(p) && kind %in% c("calls", "full") &&
+    !is.null(p) && length(kind) == 1L && kind %in% c("calls", "full") &&
       !is.null(p[[kind]]) && nrow(p[[kind]]) > 0L
   }
 
   # Check validity inside the callback, including direct requests to old URLs.
   export_result <- function(kind) {
-    p <- current_prediction()
+    p <- selected_export()
     if (is.null(p)) stop("No current prediction. Preprocess if needed, then run subtyping.", call. = FALSE)
+    if (identical(kind, "full") && !is.null(p$full_error)) stop(p$full_error, call. = FALSE)
     if (!supports_export(p, kind))
       stop("The current prediction does not provide this export. Choose calls only.", call. = FALSE)
     p
   }
-  output$download <- downloadHandler(
-    filename = function() {
-      kind <- input$export_kind %||% "calls"
-      p <- export_result(kind)
-      sprintf("results-%s-%s-%s.txt", p$method,
-              if (p$want_4) "4class" else "5class", kind)
-    },
-    content = function(file) {
-      kind <- input$export_kind %||% "calls"
-      p <- export_result(kind)
-      hdr <- c(CITATION_NOTE, p$header)
-      if (!identical(p$method, "AUTO")) {
-        hdr <- c(hdr, sprintf("Export: %s | Date: %s | R: %s", kind,
-                             format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"), getRversion()))
-      }
-      if (identical(kind, "full")) {
-        note <- .experimental_ror_pc_export_note(p[[kind]])
-        if (length(note)) hdr[length(hdr)] <- paste(hdr[length(hdr)], note, sep = " | ")
-      }
-      .write_tsv_with_header(file, p[[kind]], header_lines = hdr)
+  download_filename <- function() {
+    kind <- export_kind()
+    p <- export_result(kind)
+    sprintf("results-%s-%s-%s.txt", p$method,
+            if (p$want_4) "4class" else "5class", kind)
+  }
+  write_download <- function(file) {
+    kind <- export_kind()
+    p <- export_result(kind)
+    hdr <- c(CITATION_NOTE, p$header)
+    if (!identical(p$method, "AUTO")) {
+      hdr <- c(hdr, sprintf("Export: %s | Date: %s | R: %s", kind,
+                           format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"), getRversion()))
     }
-  )
+    if (identical(kind, "full")) {
+      if (!is.null(p$ssp)) {
+        hdr <- c(hdr, paste("SSP.ROR predicts categorical bins. Posteriors describe fitted bin membership.",
+                            "This model provides neither continuous clinical Prosigna ROR scores nor individual recurrence probabilities."))
+      }
+      note <- .experimental_ror_pc_export_note(p[[kind]])
+      if (length(note)) hdr[length(hdr)] <- paste(hdr[length(hdr)], note, sep = " | ")
+    }
+    # Protect SSP sample IDs containing TSV delimiters, quotes or the comment marker.
+    quote_ids <- !is.null(p$ssp) && any(grepl('[\t\r\n"#]', p$calls$PatientID))
+    .write_tsv_with_header(file, p[[kind]], header_lines = c(hdr, p$full_note), quote_ids = quote_ids)
+  }
+  output$download <- downloadHandler(filename = download_filename, content = write_download)
 
   output$plotSection <- renderUI({
     p <- current_prediction()
@@ -479,7 +748,7 @@ server <- function(input, output, session) {
   
   # Method help + AUTO chip + lock AIMS to 5-class unchanged (shortened)
   output$method_help <- renderUI({
-    m <- input$BSmethod
+    m <- selected_method()
     if (is.null(m) || length(m) < 1) return(NULL)
     m <- as.character(m)[1]  # ensure length-1 scalar
     
@@ -539,9 +808,9 @@ server <- function(input, output, session) {
   output$export_selector <- renderUI({
     p <- current_prediction()
     if (is.null(p)) return(helpText("Run subtyping before downloading results."))
-    has_full <- supports_export(p, "full")
+    has_full <- !is.null(p$ssp) || supports_export(p, "full")
     choices <- list("Calls only" = "calls")
-    if (has_full) choices[["Full metrics (incl. ROR)"]] <- "full"
+    if (has_full) choices[["Full metrics (incl. ROR)"]] <- p$ssp$full_choice %||% "full"
     selected <- isolate(input$export_kind) %||% "calls"
     if (!selected %in% unlist(choices)) selected <- "calls"
     tagList(
@@ -565,10 +834,18 @@ server <- function(input, output, session) {
       tags$p("The original Parker ROR-PC fields retain their existing labels.")
     ), "warning")
   })
+  output$ssp_ror_notice <- renderUI({
+    p <- selected_export()
+    if (!is.null(p$full_error))
+      return(bs_callout("SSP.ROR export needs attention",
+                        paste(p$full_error, "Choose Calls only to download the subtype results.",
+                              "Run subtyping again to retry full metrics."), "danger"))
+    if (length(p$full_note)) bs_callout("SSP.ROR rule coverage", p$full_note, "warning")
+  })
   output$download_control <- renderUI({
-    p <- current_prediction()
+    p <- selected_export()
     if (is.null(p)) return(NULL)
-    kind <- input$export_kind %||% "calls"
+    kind <- export_kind()
     if (!supports_export(p, kind))
       return(NULL)
     downloadButton(
@@ -659,75 +936,89 @@ server <- function(input, output, session) {
     ))
   })
   
-  # --- Load example data (hero & step1 buttons share the same handler) ---
-  example_loader <- function() {
-    invalidate_mapping()
-    reactive_files$input_generation <- reactive_files$input_generation + 1L
-    reactive_files$source <- "example"
-    reactive_files$GEX <- reactive_files$clinic <- reactive_files$anno <- NULL
-    
-    example_dir <- system.file("RshinyTest", package = "BreastSubtypeR")
-    if (example_dir == "") example_dir <- file.path("inst", "RshinyTest")
-    
-    gex_path  <- file.path(example_dir, "OSLO2EMIT0_GEX_log2.FPKM.txt")
-    clin_path <- file.path(example_dir, "OSLO2EMIT0_clinical.txt")
-    anno_path <- file.path(example_dir, "OSLO2EMIT0_anno.txt")
-    
-    if (!all(file.exists(c(gex_path, clin_path, anno_path)))) {
-      showNotification("Example files not found in the package installation.", type = "error", duration = 10)
-      return(invisible(NULL))
-    }
-  
-    tryCatch(withProgress(message = "Loading example data...", value = 0, {
-      incProgress(0.25, detail = "Clinical...")
-      clinic_df <- utils::read.table(clin_path, header = TRUE, sep = "\t",
-                                     stringsAsFactors = FALSE, check.names = FALSE)
-      stopifnot("PatientID" %in% names(clinic_df))
-      rownames(clinic_df) <- clinic_df$PatientID
-      
-      incProgress(0.5, detail = "Annotation...")
-      anno_df <- utils::read.table(anno_path, header = TRUE, sep = "\t",
-                                   stringsAsFactors = FALSE, check.names = FALSE)
-      stopifnot(all(c("probe","ENTREZID") %in% names(anno_df)))
-      rownames(anno_df) <- anno_df$probe
-      
-      incProgress(0.75, detail = "Expression...")
-      reactive_files$GEX <- .read_expression(gex_path, "\t", clinic_df$PatientID,
-                                             anno_df$probe, raw_counts = FALSE)
-      reactive_files$clinic <- clinic_df
-      reactive_files$anno <- anno_df
-      reactive_files$RawCounts <- FALSE
-      
-      incProgress(1, detail = "Done")
-      showNotification("Example files loaded. Click “Preprocess & map”.", type = "message", duration = 6)
-    }), error = report_error)
+  mode_label <- function(raw) if (raw) "Raw counts" else "Normalized (log2)"
+  dimensions_label <- function(spec) {
+    sprintf("%s %s and %d tumors", format(spec$dimensions[1L], big.mark = ","),
+            if (spec$raw) "expression features" else "genes", spec$dimensions[2L])
   }
-  observeEvent(input$load_example,        example_loader())
-  observeEvent(input$load_example_step1,  example_loader())
-  
+  output$active_source <- renderText({
+    id <- reactive_files$example_id
+    if (!is.null(id)) {
+      spec <- examples[[id]]
+      return(paste(spec$name, dimensions_label(spec), mode_label(spec$raw), sep = " | "))
+    }
+    if (identical(reactive_files$source, "upload"))
+      return(sprintf("Manual upload | %s | %d of 3 files supplied",
+                     mode_label(raw_mode()), sum(lengths(uploads()) > 0L)))
+    "No active dataset"
+  })
+  open_examples <- function() {
+    choices <- lapply(examples, function(spec) {
+      tags$span(tags$strong(spec$name), tags$br(),
+        dimensions_label(spec), tags$br(),
+        if (spec$raw) "RNA-seq coverage sums" else "Log2-normalized RNA-seq expression",
+        tags$br(), spec$units, tags$br(),
+        paste("Data type:", mode_label(spec$raw)), tags$br(),
+        if (spec$raw) "Gene length annotation: Included" else "Gene length annotation: Not required")
+    })
+    showModal(modalDialog(
+      title = "Load example data",
+      p("Select a packaged breast cancer expression dataset to explore the BreastSubtypeR workflow."),
+      radioButtons("example_choice", "Dataset", choiceNames = unname(choices),
+                   choiceValues = names(examples), width = "100%", selected = reactive_files$example_id %||% "oslo"),
+      p("TCGA-BRCA uses the raw-count workflow with base-pair coverage sums. Conventional sequencing read counts measure reads rather than covered bases."),
+      footer = tagList(modalButton("Cancel"), actionButton("confirm_example", "Load selected dataset",
+                                                          class = "btn-primary"))))
+  }
+  observeEvent(input$load_example, open_examples())
+  observeEvent(input$load_example_step1, open_examples())
+  observeEvent(input$confirm_example, {
+    id <- input$example_choice
+    removeModal()
+    advance_dataset()
+    clear_inputs()
+    retired_files(list())
+    upload_generation(upload_generation() + 1L)
+    tryCatch({
+      staged <- read_example(id)
+      reactive_files$GEX <- staged$GEX
+      reactive_files$anno <- staged$anno
+      reactive_files$clinic <- staged$clinic
+      reactive_files$example_id <- id
+      reactive_files$RawCounts <- examples[[id]]$raw
+      reactive_files$source <- "example"
+      showNotification("Example loaded. Click Preprocess & map.", type = "message")
+    }, error = report_error)
+    sync_mode()
+  }, priority = 120)
+
   # --- Preprocess & map: works for uploads OR example ---
   observeEvent(input$map, tryCatch({
     invalidate_mapping()
-    have_uploads <- identical(reactive_files$source, "upload") &&
-      !is.null(input$GEX) && !is.null(input$clinic) && !is.null(input$anno)
+    files <- uploads()
+    have_uploads <- !hosted && identical(reactive_files$source, "upload") &&
+      all(lengths(files) > 0L)
     have_example <- identical(reactive_files$source, "example") &&
       !is.null(reactive_files$GEX) && !is.null(reactive_files$clinic) && !is.null(reactive_files$anno)
+    if (hosted && (!have_example || !isTRUE(reactive_files$example_id %in% names(examples))))
+      stop("Select a packaged example.")
     if (!have_uploads && !have_example)
       stop("Load the example or upload expression, clinical and annotation files before preprocessing.")
     
+    if (have_example) sync_mode()
     withProgress(message = "Running Mapping...", value = 0, {
       incProgress(0.15, detail = "Reading inputs...")
       
       if (have_uploads) {
         reactive_files$GEX <- reactive_files$clinic <- reactive_files$anno <- NULL
-        clinic_df <- .read_table(input$clinic, "PatientID")
+        clinic_df <- .read_table(files$clinic, "PatientID")
         stopifnot("PatientID" %in% names(clinic_df))
         rownames(clinic_df) <- clinic_df$PatientID
-        anno_df <- .read_table(input$anno, "probe")
+        anno_df <- .read_table(files$anno, "probe")
         stopifnot(all(c("probe","ENTREZID") %in% names(anno_df)))
         rownames(anno_df) <- anno_df$probe
-        reactive_files$GEX <- .read_expression(input$GEX$datapath,
-            .upload_separator(input$GEX$name), clinic_df$PatientID, anno_df$probe, raw_mode())
+        reactive_files$GEX <- .read_expression(files$GEX$datapath,
+            .upload_separator(files$GEX$name), clinic_df$PatientID, anno_df$probe, raw_mode())
         reactive_files$clinic <- clinic_df
         reactive_files$anno <- anno_df
         reactive_files$RawCounts <- raw_mode()
@@ -736,33 +1027,19 @@ server <- function(input, output, session) {
       }
       
       incProgress(0.5, detail = "Aligning...")
-      samples <- intersect(colnames(reactive_files$GEX), reactive_files$clinic$PatientID)
-      validate(need(length(samples) > 0, "No overlapping sample IDs between GEX columns and clinical ‘PatientID’."))
-      probeID <- intersect(rownames(reactive_files$GEX), rownames(reactive_files$anno))
-      validate(need(length(probeID) > 0, "No overlapping probes between GEX and annotation."))
-      
-      if (isTRUE(reactive_files$RawCounts)) {
-        validate(need("Length" %in% names(as.data.frame(reactive_files$anno)),
-                      "Raw counts selected but annotation lacks ‘Length’ (bp)."))
-      }
-      
-      se_obj <- SummarizedExperiment::SummarizedExperiment(
-        assays  = list(counts = reactive_files$GEX[probeID, samples, drop = FALSE]),
-        rowData = S4Vectors::DataFrame(reactive_files$anno[probeID, , drop = FALSE]),
-        colData = S4Vectors::DataFrame(reactive_files$clinic[samples, , drop = FALSE])
-      )
-      
+      se_obj <- aligned_input()
+
       incProgress(0.8, detail = "Mapping()...")
       tryCatch({
         output_text <- capture.output({
           message("Mapping() -> RawCounts = ", reactive_files$RawCounts)
-          data_input <- BreastSubtypeR::Mapping(se_obj = se_obj, RawCounts = reactive_files$RawCounts,
-                                impute = FALSE, verbose = TRUE)
+          data_input <- BreastSubtypeR::Mapping(se_obj = se_obj, RawCounts = raw_mode(),
+                                impute = FALSE, verbose = !hosted)
           cat("Step 1 is complete.\nYou may now proceed to Step 2.\n")
         })
         reactive_files$data_input <- data_input
         reactive_files$mapped_key <- input_key()
-        showNotification(HTML(paste(output_text, collapse = "<br>")),
+        showNotification(if (hosted) "Mapping complete." else HTML(paste(output_text, collapse = "<br>")),
                          type = "message", duration = 4)
       }, error = report_error)
       
@@ -789,15 +1066,31 @@ server <- function(input, output, session) {
   
   observeEvent(input$run, tryCatch(withCallingHandlers({
     invalidate_prediction()
+    method <- selected_method()
+    if (hosted) {
+      if (!identical(reactive_files$source, "example") ||
+          !isTRUE(reactive_files$example_id %in% names(examples))) {
+        reactive_files$error <- "Select a packaged example."
+        return()
+      }
+      if (is.null(method)) {
+        reactive_files$error <- "Select one supported subtyping method."
+        return()
+      }
+      if (identical(method, "cIHC.itr") && !allowed_iterations(input$iteration, iteration_limit)) {
+        reactive_files$error <- "Choose a whole number from 10 up to 100 iterations."
+        return()
+      }
+    }
     if (!mapping_current()) stop("Run Step 1 (Preprocess & map) before subtyping.")
     provenance <- list(inputs = input_key(), parameters = prediction_parameters())
     se_NC  <- reactive_files$data_input$x_NC  %||% reactive_files$data_input$se_NC
     se_SSP <- reactive_files$data_input$x_SSP %||% reactive_files$data_input$se_SSP
     want_4 <- k_is_4class()
-    if (identical(input$BSmethod, "AIMS")) want_4 <- FALSE
+    if (identical(method, "AIMS")) want_4 <- FALSE
     
     # ---------- AUTO ----------
-    if (identical(input$BSmethod, "AUTO Mode")) {
+    if (identical(method, "AUTO Mode")) {
       chk <- auto_requirements()
       if (!isTRUE(chk$ready)) {
         stop("AUTO needs ER and HER2 (ER+/ER-, HER2+/HER2-).")
@@ -820,7 +1113,7 @@ server <- function(input, output, session) {
     }
     
     # ---------- Single methods ----------
-    is_nc_method <- input$BSmethod %in% c("PAM50","cIHC","cIHC.itr","PCAPAM50","ssBC")
+    is_nc_method <- method %in% c("PAM50","cIHC","cIHC.itr","PCAPAM50","ssBC")
     want_clin <- isTRUE(input$hasClinical)
     chkclin <- .validate_has_clinical(if (is_nc_method) se_NC else NULL, want_clin)
     se_NC    <- chkclin$se
@@ -831,32 +1124,38 @@ server <- function(input, output, session) {
     
     withProgress(message = "Performing analysis...", value = 0.55, {
       res <- NULL
+      ssp <- NULL
       
-      if (input$BSmethod == "PAM50") {
-        cal  <- input$calibration %||% "Internal"
+      if (method == "PAM50") {
+        params <- provenance$parameters
+        cal <- params$calibration
         args <- list(se_obj = se_NC, hasClinical = use_clin, Subtype = want_4)
         if (identical(cal, "Internal")) {
-          args$calibration <- "Internal"; args$internal <- input$internal
+          args$calibration <- "Internal"; args$internal <- params$internal
         } else if (identical(cal, "External")) {
+          if (hosted && (identical(params$external, "Given.mdns") || !isTRUE(nzchar(params$external)))) {
+            reactive_files$error <- "Choose a built-in PAM50 reference before running this calibration."
+            return()
+          }
           args$calibration <- "External"
-          if (identical(input$external, "Given.mdns")) {
-            if (is.null(input$medians)) stop("Upload custom medians before running PAM50 with Given.mdns.")
-            medians <- if (tolower(tools::file_ext(input$medians$name)) == "csv") {
-              read.csv(input$medians$datapath, header = TRUE, row.names = NULL, sep = ",", check.names = FALSE)
+          if (identical(params$external, "Given.mdns")) {
+            if (is.null(params$medians)) stop("Upload custom medians before running PAM50 with Given.mdns.")
+            medians <- if (tolower(tools::file_ext(params$medians$name)) == "csv") {
+              read.csv(params$medians$datapath, header = TRUE, row.names = NULL, sep = ",", check.names = FALSE)
             } else {
-              read.table(input$medians$datapath, header = TRUE, row.names = NULL, sep = "\t",
+              read.table(params$medians$datapath, header = TRUE, row.names = NULL, sep = "\t",
                          fill = TRUE, stringsAsFactors = FALSE, check.names = FALSE, quote = "", comment.char = "")
             }
             args$external <- "Given.mdns"; args$medians <- medians
-          } else args$external <- input$external
+          } else args$external <- params$external
         } else args$calibration <- "None"
         res <- do.call(BreastSubtypeR::BS_parker, args)
       }
       
-      if (input$BSmethod == "cIHC") {
+      if (method == "cIHC") {
         res <- BreastSubtypeR::BS_cIHC(se_obj = se_NC, Subtype = want_4, hasClinical = use_clin)
       }
-      if (input$BSmethod == "cIHC.itr") {
+      if (method == "cIHC.itr") {
         if (!is.numeric(input$ratio) || length(input$ratio) != 1L ||
             !is.finite(input$ratio) || input$ratio <= 0)
           stop("ER+ : ER- target ratio must be a single finite positive number (default 54 / 64).")
@@ -864,13 +1163,18 @@ server <- function(input, output, session) {
             !is.finite(input$iteration) || input$iteration < 10 ||
             input$iteration != floor(input$iteration) || input$iteration > .Machine$integer.max)
           stop("Iterations must be a whole number from 10 to 2147483647.")
-        res <- BreastSubtypeR::BS_cIHC.itr(se_obj = se_NC, iteration = input$iteration, ratio = input$ratio,
+        effective_iteration <- input$iteration
+        if (hosted && !allowed_iterations(effective_iteration, iteration_limit)) {
+          reactive_files$error <- "Choose a whole number from 10 up to 100 iterations."
+          return()
+        }
+        res <- BreastSubtypeR::BS_cIHC.itr(se_obj = se_NC, iteration = effective_iteration, ratio = input$ratio,
                                            Subtype = want_4, hasClinical = use_clin)
       }
-      if (input$BSmethod == "PCAPAM50") {
+      if (method == "PCAPAM50") {
         res <- BreastSubtypeR::BS_PCAPAM50(se_obj = se_NC, Subtype = want_4, hasClinical = use_clin)
       }
-      if (input$BSmethod == "ssBC") {
+      if (method == "ssBC") {
         req(se_NC)
         cd <- as.data.frame(SummarizedExperiment::colData(se_NC))
         opt <- as.character(input$s %||% "")[1]
@@ -893,12 +1197,12 @@ server <- function(input, output, session) {
           # The experimental warning is shown persistently with its full
           # export; keep unrelated warnings visible as before.
           if (!inherits(w, "bsr_experimental_ror_pc_warning"))
-            showNotification(conditionMessage(w), type = "warning", duration = 15)
+            showNotification(safe_detail(w), type = "warning", duration = 15)
           invokeRestart("muffleWarning")
         })
       }
       
-      if (input$BSmethod == "AIMS") {
+      if (method == "AIMS") {
         req(se_SSP)
         res_AIMS <- BreastSubtypeR::BS_AIMS(se_obj = se_SSP)
         if (!is.null(res_AIMS$cl) && is.matrix(res_AIMS$cl) && ncol(res_AIMS$cl) >= 1) {
@@ -911,10 +1215,12 @@ server <- function(input, output, session) {
         }
       }
       
-      if (input$BSmethod == "sspbc") {
+      if (method == "sspbc") {
         req(se_SSP)
         model <- if (isTRUE(want_4)) "ssp.subtype" else "ssp.pam50"
         res_sspbc <- BreastSubtypeR::BS_sspbc(se_obj = se_SSP, ssp.name = model)
+        ssp <- list(model = model, native = res_sspbc, input_ids = colnames(se_SSP),
+                    full_choice = paste0("full-", input$run))
         if (!is.null(res_sspbc$cl) && is.matrix(res_sspbc$cl) && ncol(res_sspbc$cl) >= 1) {
           res$BS.all <- data.frame(
           PatientID = rownames(res_sspbc$cl),
@@ -947,21 +1253,21 @@ server <- function(input, output, session) {
       if (is.null(out) || nrow(out) == 0) {
         stop("No per-sample subtype table returned. Check the selected method and inputs.")
       } else {
-        mat <- if (input$BSmethod %in% c("sspbc", "AIMS")) {
+        mat <- if (method %in% c("sspbc", "AIMS")) {
           req(se_SSP); log2(SummarizedExperiment::assay(se_SSP) + 1)
         } else {
           req(se_NC);  SummarizedExperiment::assay(se_NC)
         }
         reactive_files$prediction <- c(provenance, list(
-          method = input$BSmethod, want_4 = want_4,
-          header = .method_header_line(input, want_4, use_clin),
+          method = method, want_4 = want_4,
+          header = .method_header_line(provenance$parameters, want_4, use_clin),
           calls = ex$calls,
-          full = if (input$BSmethod %in% c("AIMS", "sspbc")) NULL else ex$full,
-          plot = out, matrix = mat))
+          full = if (method %in% c("AIMS", "sspbc")) NULL else ex$full,
+          plot = out, matrix = mat), if (!is.null(ssp)) list(ssp = ssp))
       }
     })
   }, bsr_invalid_tsize_warning = function(w) {
-    showNotification(conditionMessage(w), type = "warning", duration = 15)
+    showNotification(safe_detail(w), type = "warning", duration = 15)
     invokeRestart("muffleWarning")
   }), error = report_error))
 }

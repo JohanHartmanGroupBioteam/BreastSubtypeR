@@ -177,7 +177,7 @@ test_that("installed Shiny examples map, calculate AUTO and download candidate c
                     clinic = shiny199_upload("TCGABRCAsub_clinical.txt"),
                     anno = shiny199_upload("TCGABRCAsub_anno.txt"))
             } else {
-                session$setInputs(load_example_step1 = 1)
+                session$setInputs(example_choice = "oslo", confirm_example = 1)
                 expect_identical(dim(reactive_files$GEX), c(569L, 102L))
             }
             RNGkind("Mersenne-Twister", "Inversion", "Rejection")

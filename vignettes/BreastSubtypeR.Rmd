@@ -878,7 +878,7 @@ separate deployment with different data-handling responsibilities.
 - Run single methods, or run multiple classifiers at once with `BS_Multi` and `AUTO` enabled for cohort-aware selection.\
 - Choose 5-class (incl. Normal-like) or 4-class (AIMS is 5-class only).\
 - Inspect per-sample concordance (entropy), heatmap and pie summaries.\
-- Export current Calls-only results, or Full metrics for supported single NC methods. AUTO, AIMS and sspbc provide Calls-only exports. NC Full metrics include ROR-S/ROR-P; enabling **Use clinical variables (ROR)** adds clinical ROR-C/ROR-PC outputs for patients with usable codes. Invalid size codes generate a warning and missing clinical scores and groups for affected patients. A missing clinical column or observation disables clinical output for the cohort. AUTO exports calls and entropy with clinical ROR disabled.
+- Export current Calls-only results, or Full metrics for supported single NC methods and either SSPBC subtype classifier. AUTO and AIMS provide Calls-only exports. NC Full metrics include ROR-S/ROR-P; enabling **Use clinical variables (ROR)** adds clinical ROR-C/ROR-PC outputs for patients with usable codes. Invalid size codes generate a warning and missing clinical scores and groups for affected patients. A missing clinical column or observation disables clinical output for the cohort. AUTO exports calls and entropy with clinical ROR disabled.
 
 ## Preprocessing, prediction and downloads
 
@@ -890,7 +890,7 @@ sample IDs as column names, clinical metadata with `PatientID`, and annotation
 with `probe` and `ENTREZID`. The application aligns overlapping sample and
 feature identifiers. Choose normalized **log2** expression or raw RNA-seq
 counts; raw-count annotation must also contain gene lengths in `Length` (bp).
-Alternatively, use **Load example data...** to load the bundled example below.
+Alternatively, use **Load example data...** to select one of the two bundled datasets below.
 Click **Preprocess & map**. The **Input coverage** table appears after
 successful mapping and describes
 the current processed inputs, including possible imputation. It reports all
@@ -913,19 +913,40 @@ supported. AUTO reports separate method predictions and raw Shannon entropy,
 not consensus calls or calibrated confidence. Research ROR outputs are not
 clinical Prosigna results.
 
+SSPBC starts each prediction in **Calls only** mode. Selecting **Full metrics (incl. ROR)**
+prepares the separate SSP.ROR input from the original aligned expression and runs the
+categorical model once for that prediction. Each row retains its original subtype call
+and includes the assigned subtype probability, all subtype posteriors, the native
+SSP.ROR bin, its assigned probability, all 18 bin posteriors and both models' rule counts.
+The bin posteriors describe fitted bin membership. Tumor size and nodal status do not enter
+this calculation. Incomplete SSP.ROR rule coverage appears in the app and in the TSV comments.
+Rows with `SSP_ROR_Rules_Evaluable = 0` retain the native result and have no expression
+support for the bin. Their posteriors are the training-set category frequencies. Check the expression measurements and probe-to-Entrez annotation.
+If optional preparation fails, the subtype plots and **Calls only** download remain available.
+Run subtyping again to retry full metrics. Both SSPBC export modes keep the column
+header unquoted. If any ID contains a tab, line break, double quote or hash, the
+PatientID column is quoted and internal double quotes are doubled. For example,
+read the TSV with `read.delim(path, comment.char = "#", colClasses = c(PatientID = "character"), na.strings = character())`.
+
 When current **Full metrics** contain both experimental 18-gene ROR-PC
 columns, the selected export has a persistent experimental notice and the
 score/group display labels. The TSV retains its existing column names,
 types, data and provenance-comment line count; those comments identify the
 experimental outputs and their interpretation. **Calls only**, AUTO and
 other results without these columns do not receive this score-specific
-notice. Changing the export selection does not recalculate scores.
+notice. Changing the export selection reuses any metrics already prepared for the current prediction.
 
 Replacing any expression, clinical or annotation file, reloading the example,
 or changing the data type clears the mapped inputs, predictions, plots and
 downloads. Preprocess and run again. Changes to relevant prediction settings clear old
 predictions, plots and downloads but retain valid mapped inputs when no
 remapping is needed. A failed prediction also clears previous results.
+
+A custom PAM50 reference belongs to the current dataset. Replacing a primary
+input, changing the manual data type or confirming an example retires the
+reference and resets active custom calibration to Internal (medianCtr).
+Canceling the example dialog or remapping the same inputs keeps the reference.
+Replacing only the reference requires a new prediction and reuses the current mapping.
 
 Before a current successful prediction exists, the app asks you to run
 subtyping and offers no active download control. A successful run restores
@@ -947,8 +968,10 @@ default settings.
 
 ## Example data (for Shiny & scripts)
 
-The Shiny UI provides a **Load example data...** button that preloads a small
-demo cohort (expression, clinical, annotation). After loading, click
+In **Load example data...**, choose OSLO2-EMIT0 or TCGA-BRCA and confirm with
+**Load selected dataset**. The app loads all three tables and locks the data
+type for that example. Manual uploads restore the editable data type.
+Confirming a replacement clears previous results. After loading, click
 **Preprocess & map** in **Data and preprocessing** (Step 1), select settings in
 **Analysis settings** (Step 2), then click **Run subtyping**. Current plots and
 supported TSV exports appear under **Results and downloads**.
