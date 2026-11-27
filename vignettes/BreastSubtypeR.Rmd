@@ -942,6 +942,12 @@ downloads. Preprocess and run again. Changes to relevant prediction settings cle
 predictions, plots and downloads but retain valid mapped inputs when no
 remapping is needed. A failed prediction also clears previous results.
 
+A custom PAM50 reference belongs to the current dataset. Replacing a primary
+input, changing the manual data type or confirming an example retires the
+reference and resets active custom calibration to Internal (medianCtr).
+Canceling the example dialog or remapping the same inputs keeps the reference.
+Replacing only the reference requires a new prediction and reuses the current mapping.
+
 Before a current successful prediction exists, the app asks you to run
 subtyping and offers no active download control. A successful run restores
 its plots and supported export choices. Unsupported Full metrics exports are

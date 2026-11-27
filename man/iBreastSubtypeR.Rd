@@ -37,6 +37,11 @@ clears dependent mapping, predictions, plots and exports. Relevant
 prediction-setting changes clear predictions and plots while preserving
 valid mapped inputs. A failed prediction cannot leave old results available.
 
+A custom PAM50 reference belongs to the current dataset. Replacing a primary
+input, changing the manual data type or confirming an example retires the
+reference and resets active custom calibration to Internal (medianCtr).
+Canceling the example dialog or remapping the same inputs keeps the reference.
+
 Download controls are shown only for a supported, current prediction.
 AUTO and AIMS provide calls only. Supported single NC methods and both
 SSPBC class settings offer full metrics. Each SSPBC run starts with calls

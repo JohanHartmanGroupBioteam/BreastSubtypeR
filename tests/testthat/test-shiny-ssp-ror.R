@@ -383,3 +383,46 @@ test_that("SSP TSV preserves ordinary bytes, unquoted headers and quoted patient
         }
     })
 })
+
+test_that("a late PAM50 reference cannot change a replacement dataset's SSP.ROR export", {
+    app <- shiny_app_env()
+    predict <- BreastSubtypeR::BS_sspbc
+    ror_runs <- 0L
+    local_mocked_bindings(BS_sspbc = function(se_obj, ssp.name) {
+        if (ssp.name == "ssp.ror") ror_runs <<- ror_runs + 1L
+        predict(se_obj, ssp.name)
+    }, .package = "BreastSubtypeR")
+    shiny::testServer(app$server, {
+        shiny_defaults(session)
+        old_ref_id <- calibration_ns()("medians")
+        session$setInputs(upload_started = old_ref_id)
+        session$setInputs(BSmethod = "sspbc", run = 1)
+        expect_match(output$export_selector$html, 'value="calls" checked', fixed = TRUE)
+        expect_identical(ror_runs, 0L)
+        session$setInputs(export_kind = current_prediction()$ssp$full_choice)
+        previous <- ssp_read_export(output$download)
+        expect_identical(ror_runs, 1L)
+
+        session$setInputs(example_choice = "tcga", confirm_example = 2)
+        expect_error(download_filename(), "No current prediction")
+        expect_error(write_download(tempfile()), "No current prediction")
+        session$setInputs(map = 2)
+        session$setInputs(k_subtypes = "4", run = 2)
+        expect_match(output$export_selector$html, 'value="calls" checked', fixed = TRUE)
+        expect_identical(ror_runs, 1L)
+        session$setInputs(export_kind = current_prediction()$ssp$full_choice)
+        current <- ssp_read_export(output$download)
+        expect_identical(ror_runs, 2L)
+        expect_false(identical(previous$PatientID, current$PatientID))
+
+        # Complete the upload against the retired control after the new export is cached.
+        path <- tempfile(fileext = ".csv")
+        writeLines(c("X,Given.mdns", "ESR1,1"), path)
+        late <- data.frame(name = basename(path), datapath = path,
+                           size = file.size(path), type = "text/csv")
+        do.call(session$setInputs, setNames(list(late), old_ref_id))
+        expect_null(reference_file())
+        expect_identical(ssp_read_export(output$download), current)
+        expect_identical(ror_runs, 2L)
+    })
+})

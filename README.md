@@ -289,6 +289,9 @@ install.packages(c("shiny", "bslib"))
    **Run subtyping**. Before successful preprocessing, AUTO displays
    **AUTO: awaiting preprocessing**. After mapping, it shows readiness
    counts or guidance for genuinely blocked annotations.
+   A custom PAM50 reference applies to one dataset. Confirming an example or
+   replacing a primary upload retires it. Canceling the dialog or remapping
+   the same inputs keeps it.
 3. **Results and downloads:** inspect the current results and download
    tab-separated text (TSV), saved with a `.txt` extension. AUTO exports
    separate method calls and entropy;
