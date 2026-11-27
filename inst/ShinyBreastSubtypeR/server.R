@@ -212,10 +212,23 @@ server <- function(input, output, session) {
   hosted <- getFromNamespace(".shiny_hosted_profile", "BreastSubtypeR")()
   iteration_limit <- if (hosted) getFromNamespace(".shiny_iteration_limit", "BreastSubtypeR")()
   safe_detail <- function(condition) {
-    if (hosted) "Review the settings or use the local BreastSubtypeR application."
-    else conditionMessage(condition)
+    if (!hosted) return(conditionMessage(condition))
+    guidance <- c("Select a packaged example.",
+                  "Run Step 1 (Preprocess & map) before subtyping.",
+                  "AUTO needs ER and HER2 (ER+/ER-, HER2+/HER2-).")
+    msg <- conditionMessage(condition)
+    if (msg %in% guidance) return(guidance[match(msg, guidance)])
+    "Review the settings or use the local BreastSubtypeR application."
   }
   
+  allowed_method <- getFromNamespace(".shiny_allowed_method", "BreastSubtypeR")
+  allowed_iterations <- getFromNamespace(".shiny_allowed_iterations", "BreastSubtypeR")
+  selected_method <- reactive({
+    value <- input$BSmethod
+    if (hosted && !allowed_method(value)) return(NULL)
+    value
+  })
+
   # --- small reactives ---
   has_clinical <- reactive({ isTRUE((input$hasClinical %||% FALSE)) })
   k_is_4class  <- reactive({ identical(input$k_subtypes, "4") })
@@ -359,7 +372,7 @@ server <- function(input, output, session) {
   }
 
   prediction_parameters <- reactive({
-    method <- input$BSmethod
+    method <- selected_method()
     params <- list(method = method,
                    classes = if (identical(method, "AIMS")) "5" else input$k_subtypes)
     if (!is.null(method) && method %in% c("PAM50", "cIHC", "cIHC.itr", "PCAPAM50", "ssBC"))
@@ -735,7 +748,7 @@ server <- function(input, output, session) {
   
   # Method help + AUTO chip + lock AIMS to 5-class unchanged (shortened)
   output$method_help <- renderUI({
-    m <- input$BSmethod
+    m <- selected_method()
     if (is.null(m) || length(m) < 1) return(NULL)
     m <- as.character(m)[1]  # ensure length-1 scalar
     
@@ -1053,13 +1066,19 @@ server <- function(input, output, session) {
   
   observeEvent(input$run, tryCatch(withCallingHandlers({
     invalidate_prediction()
+    method <- selected_method()
     if (hosted) {
-      req(identical(reactive_files$source, "example"), reactive_files$example_id %in% names(examples))
-      req(input$BSmethod %in% c("PAM50", "cIHC", "cIHC.itr", "PCAPAM50", "ssBC", "AIMS", "sspbc", "AUTO Mode"))
-      if (identical(input$BSmethod, "cIHC.itr") &&
-          !isTRUE(is.numeric(input$iteration) && length(input$iteration) == 1L &&
-                  is.finite(input$iteration) && input$iteration <= iteration_limit)) {
-        reactive_files$error <- sprintf("Hosted limit: up to %d cIHC.itr iterations. Use local BreastSubtypeR for larger jobs.", iteration_limit)
+      if (!identical(reactive_files$source, "example") ||
+          !isTRUE(reactive_files$example_id %in% names(examples))) {
+        reactive_files$error <- "Select a packaged example."
+        return()
+      }
+      if (is.null(method)) {
+        reactive_files$error <- "Select one supported subtyping method."
+        return()
+      }
+      if (identical(method, "cIHC.itr") && !allowed_iterations(input$iteration, iteration_limit)) {
+        reactive_files$error <- "Choose a whole number from 10 up to 100 iterations."
         return()
       }
     }
@@ -1068,10 +1087,10 @@ server <- function(input, output, session) {
     se_NC  <- reactive_files$data_input$x_NC  %||% reactive_files$data_input$se_NC
     se_SSP <- reactive_files$data_input$x_SSP %||% reactive_files$data_input$se_SSP
     want_4 <- k_is_4class()
-    if (identical(input$BSmethod, "AIMS")) want_4 <- FALSE
+    if (identical(method, "AIMS")) want_4 <- FALSE
     
     # ---------- AUTO ----------
-    if (identical(input$BSmethod, "AUTO Mode")) {
+    if (identical(method, "AUTO Mode")) {
       chk <- auto_requirements()
       if (!isTRUE(chk$ready)) {
         stop("AUTO needs ER and HER2 (ER+/ER-, HER2+/HER2-).")
@@ -1094,7 +1113,7 @@ server <- function(input, output, session) {
     }
     
     # ---------- Single methods ----------
-    is_nc_method <- input$BSmethod %in% c("PAM50","cIHC","cIHC.itr","PCAPAM50","ssBC")
+    is_nc_method <- method %in% c("PAM50","cIHC","cIHC.itr","PCAPAM50","ssBC")
     want_clin <- isTRUE(input$hasClinical)
     chkclin <- .validate_has_clinical(if (is_nc_method) se_NC else NULL, want_clin)
     se_NC    <- chkclin$se
@@ -1107,7 +1126,7 @@ server <- function(input, output, session) {
       res <- NULL
       ssp <- NULL
       
-      if (input$BSmethod == "PAM50") {
+      if (method == "PAM50") {
         params <- provenance$parameters
         cal <- params$calibration
         args <- list(se_obj = se_NC, hasClinical = use_clin, Subtype = want_4)
@@ -1133,10 +1152,10 @@ server <- function(input, output, session) {
         res <- do.call(BreastSubtypeR::BS_parker, args)
       }
       
-      if (input$BSmethod == "cIHC") {
+      if (method == "cIHC") {
         res <- BreastSubtypeR::BS_cIHC(se_obj = se_NC, Subtype = want_4, hasClinical = use_clin)
       }
-      if (input$BSmethod == "cIHC.itr") {
+      if (method == "cIHC.itr") {
         if (!is.numeric(input$ratio) || length(input$ratio) != 1L ||
             !is.finite(input$ratio) || input$ratio <= 0)
           stop("ER+ : ER- target ratio must be a single finite positive number (default 54 / 64).")
@@ -1144,13 +1163,18 @@ server <- function(input, output, session) {
             !is.finite(input$iteration) || input$iteration < 10 ||
             input$iteration != floor(input$iteration) || input$iteration > .Machine$integer.max)
           stop("Iterations must be a whole number from 10 to 2147483647.")
-        res <- BreastSubtypeR::BS_cIHC.itr(se_obj = se_NC, iteration = input$iteration, ratio = input$ratio,
+        effective_iteration <- input$iteration
+        if (hosted && !allowed_iterations(effective_iteration, iteration_limit)) {
+          reactive_files$error <- "Choose a whole number from 10 up to 100 iterations."
+          return()
+        }
+        res <- BreastSubtypeR::BS_cIHC.itr(se_obj = se_NC, iteration = effective_iteration, ratio = input$ratio,
                                            Subtype = want_4, hasClinical = use_clin)
       }
-      if (input$BSmethod == "PCAPAM50") {
+      if (method == "PCAPAM50") {
         res <- BreastSubtypeR::BS_PCAPAM50(se_obj = se_NC, Subtype = want_4, hasClinical = use_clin)
       }
-      if (input$BSmethod == "ssBC") {
+      if (method == "ssBC") {
         req(se_NC)
         cd <- as.data.frame(SummarizedExperiment::colData(se_NC))
         opt <- as.character(input$s %||% "")[1]
@@ -1178,7 +1202,7 @@ server <- function(input, output, session) {
         })
       }
       
-      if (input$BSmethod == "AIMS") {
+      if (method == "AIMS") {
         req(se_SSP)
         res_AIMS <- BreastSubtypeR::BS_AIMS(se_obj = se_SSP)
         if (!is.null(res_AIMS$cl) && is.matrix(res_AIMS$cl) && ncol(res_AIMS$cl) >= 1) {
@@ -1191,7 +1215,7 @@ server <- function(input, output, session) {
         }
       }
       
-      if (input$BSmethod == "sspbc") {
+      if (method == "sspbc") {
         req(se_SSP)
         model <- if (isTRUE(want_4)) "ssp.subtype" else "ssp.pam50"
         res_sspbc <- BreastSubtypeR::BS_sspbc(se_obj = se_SSP, ssp.name = model)
@@ -1229,16 +1253,16 @@ server <- function(input, output, session) {
       if (is.null(out) || nrow(out) == 0) {
         stop("No per-sample subtype table returned. Check the selected method and inputs.")
       } else {
-        mat <- if (input$BSmethod %in% c("sspbc", "AIMS")) {
+        mat <- if (method %in% c("sspbc", "AIMS")) {
           req(se_SSP); log2(SummarizedExperiment::assay(se_SSP) + 1)
         } else {
           req(se_NC);  SummarizedExperiment::assay(se_NC)
         }
         reactive_files$prediction <- c(provenance, list(
-          method = input$BSmethod, want_4 = want_4,
+          method = method, want_4 = want_4,
           header = .method_header_line(provenance$parameters, want_4, use_clin),
           calls = ex$calls,
-          full = if (input$BSmethod %in% c("AIMS", "sspbc")) NULL else ex$full,
+          full = if (method %in% c("AIMS", "sspbc")) NULL else ex$full,
           plot = out, matrix = mat), if (!is.null(ssp)) list(ssp = ssp))
       }
     })

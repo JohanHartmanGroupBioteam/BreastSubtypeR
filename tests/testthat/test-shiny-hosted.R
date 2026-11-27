@@ -52,6 +52,6 @@ test_that("hosted sessions reject file records, retain trusted examples and cap 
         expect_true(raw_mode())
         expect_false(mapping_current())
         expect_null(current_prediction())
-        expect_error(output$download)
+        expect_error(write_download(tempfile()), "No current prediction", fixed = TRUE)
     })
 })

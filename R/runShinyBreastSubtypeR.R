@@ -58,6 +58,8 @@ iBreastSubtypeR <- function(
         attach = c("shiny", "bslib"),
         attach_tidyverse = FALSE,
         max_upload_mb = 1000) {
+    if (nzchar(system.file("HOSTED-ONLY", package = "BreastSubtypeR")))
+        stop("Start this image through its supervised gateway.", call. = FALSE)
     # Load Shiny/bslib (and optionally tidyverse) namespaces for this session.
     # ui.R/server.R use qualified calls and shiny::runApp() attaches shiny
     # itself, so loading the namespaces is sufficient.
