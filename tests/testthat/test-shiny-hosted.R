@@ -39,6 +39,12 @@ test_that("hosted sessions reject file records, retain trusted examples and cap 
         expect_null(reference_file())
         expect_identical(reactive_files$source, "example")
         expect_true(mapping_current())
+        session$setInputs(BSmethod = "PAM50")
+        do.call(session$setInputs, setNames(list("External", "Given.mdns"),
+            c(calibration_ns()("calibration"), calibration_ns()("external"))))
+        session$setInputs(run = 8)
+        expect_null(current_prediction())
+        expect_match(reactive_files$error, "Choose a built-in")
         session$setInputs(BSmethod = "cIHC.itr", iteration = 101, ratio = 54/64, run = 1)
         expect_null(current_prediction())
         expect_match(reactive_files$error, "up to 100")

@@ -27,7 +27,8 @@
               ns("external"),
               "Reference medians",
               choices = c(
-                if (allow_custom) stats::setNames("Given.mdns", "Custom (upload file\u2026)"),
+                if (allow_custom) stats::setNames("Given.mdns", "Custom (upload file\u2026)") else
+                    c("Choose a built-in reference" = ""),
                 "Built-in: nCounter"                                     = "nCounter",
                 "Built-in: RNA-seq (Freeze 2012-09-07)"                  = "RNAseq.Freeze.20120907",
                 "Built-in: totalRNA FFPE (2015-11-11)"                   = "totalRNA.FFPE.20151111",
@@ -41,7 +42,7 @@
                 "Built-in: arrayTrain (post-collapse)"                   = "arrayTrain_postMeanCollapse"
               ),
               selected = if (!allow_custom && identical(defaults$external, "Given.mdns"))
-                  "nCounter" else defaults$external,
+                  "" else defaults$external,
               width = "100%",
               options = list(
                 placeholder = "Choose a reference medians set\u2026",

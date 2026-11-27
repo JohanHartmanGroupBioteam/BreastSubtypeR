@@ -1114,9 +1114,12 @@ server <- function(input, output, session) {
         if (identical(cal, "Internal")) {
           args$calibration <- "Internal"; args$internal <- params$internal
         } else if (identical(cal, "External")) {
+          if (hosted && (identical(params$external, "Given.mdns") || !isTRUE(nzchar(params$external)))) {
+            reactive_files$error <- "Choose a built-in PAM50 reference before running this calibration."
+            return()
+          }
           args$calibration <- "External"
           if (identical(params$external, "Given.mdns")) {
-            if (hosted) stop("Custom references require the local application.")
             if (is.null(params$medians)) stop("Upload custom medians before running PAM50 with Given.mdns.")
             medians <- if (tolower(tools::file_ext(params$medians$name)) == "csv") {
               read.csv(params$medians$datapath, header = TRUE, row.names = NULL, sep = ",", check.names = FALSE)
