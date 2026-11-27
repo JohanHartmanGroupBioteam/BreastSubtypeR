@@ -63,14 +63,31 @@ ui <- bslib::page_fluid(
   tags$head(
     tags$script(HTML("
       (function () {
+        // Shiny handles drops with a synthetic change. Capture both native
+        // entry points before the binding starts its asynchronous transfer.
+        function startUpload(input, files) {
+          if (input && files && files.length &&
+              input.closest('#upload_GEX, #upload_clinic, #upload_anno, #pam50_calibration')) {
+            Shiny.setInputValue('upload_started', input.id, {priority: 'event'});
+          }
+        }
+        document.addEventListener('change', function(event) {
+          startUpload(event.target, event.target.files);
+        }, true);
+        document.addEventListener('drop', function(event) {
+          var zone = event.target.closest('div.input-group');
+          if (zone) startUpload(zone.querySelector('input[type=file]'),
+                                event.dataTransfer && event.dataTransfer.files);
+        }, true);
         var lastY = 0, restoreOnIdle = false;
         function saveScroll(){ lastY = window.scrollY || window.pageYOffset || 0; }
         function restoreScroll(){ window.scrollTo(0, lastY || 0); }
         function scrollToMap(){ var el = document.getElementById('map'); if (el && el.scrollIntoView) el.scrollIntoView({ behavior:'smooth', block:'center' }); }
         ['GEX','clinic','anno'].forEach(function(id) {
-          $(document).on('mousedown click focusin', 'label[for=\"'+id+'\"], #'+id, function(){ saveScroll(); setTimeout(restoreScroll, 0); });
-          $(document).on('change', '#'+id, function(){ setTimeout(function(){ restoreScroll(); if (id==='anno') scrollToMap(); }, 50); });
-          $(document).on('focusout', '#'+id, function(){ setTimeout(restoreScroll, 0); });
+          var field = '#upload_' + id + ' input[type=file]';
+          $(document).on('mousedown click focusin', '#upload_' + id + ' label, ' + field, function(){ saveScroll(); setTimeout(restoreScroll, 0); });
+          $(document).on('change', field, function(){ setTimeout(function(){ restoreScroll(); if (id==='anno') scrollToMap(); }, 50); });
+          $(document).on('focusout', field, function(){ setTimeout(restoreScroll, 0); });
         });
         $(document).on('mousedown click', '#map', function(){ saveScroll(); restoreOnIdle = true; });
         $(document).on('shiny:idle', function(){ if (restoreOnIdle){ setTimeout(function(){ restoreScroll(); scrollToMap(); restoreOnIdle=false; }, 50); }});
@@ -108,8 +125,7 @@ ui <- bslib::page_fluid(
     # GEX
     bslib::card(
       bslib::card_header("1) Gene expression (GEX)"),
-      fileInput("GEX", "Upload expression matrix",
-                accept = c("text/csv", "text/comma-separated-values,text/plain", ".csv", ".txt")),
+      uiOutput("upload_GEX"),
       radioButtons("is_raw_counts", "Data type",
                    choices  = list("normalized (log2)" = "norm", "Raw counts (RNA-seq only)" = "raw"),
                    selected = "norm", inline = TRUE),
@@ -121,8 +137,7 @@ ui <- bslib::page_fluid(
     # Clinical
     bslib::card(
       bslib::card_header("2) Clinical metadata"),
-      fileInput("clinic", "Upload clinical table",
-                accept = c("text/csv", "text/comma-separated-values,text/plain", ".csv", ".txt")),
+      uiOutput("upload_clinic"),
       p(class = "input-essential", "Required: PatientID. AUTO requires ER and HER2, coded ER+/ER- and HER2+/HER2-. Other requirements depend on the method."),
       tags$details(class = "help-details",
         tags$summary("Clinical fields and research ROR"), uiOutput("clin_help"))
@@ -131,8 +146,7 @@ ui <- bslib::page_fluid(
     # Annotation
     bslib::card(
       bslib::card_header("3) Feature annotation"),
-      fileInput("anno", "Upload annotation table",
-                accept = c("text/csv", "text/comma-separated-values,text/plain", ".csv", ".txt")),
+      uiOutput("upload_anno"),
       p(class = "input-essential", "Required: probe and ENTREZID. For raw counts, also supply gene Length in base pairs."),
       tags$details(class = "help-details",
         tags$summary("Annotation format"), uiOutput("anno_help"))
@@ -197,84 +211,8 @@ ui <- bslib::page_fluid(
     
     conditionalPanel(
       condition = "input.BSmethod == 'PAM50'",
-      bslib::card(
-        style = "overflow: visible;",
-        bslib::layout_columns(
-          col_widths = c(4, 8),
-          
-          selectizeInput(
-            "calibration", "Calibration strategy",
-            choices = list("None" = "None", "External" = "External", "Internal" = "Internal"),
-            selected = "Internal", width = "100%",
-            options = list(openOnFocus = TRUE, dropdownParent = "body")
-          ),
-          
-          div(
-            style = "position: relative; overflow: visible;",
-            
-            conditionalPanel(
-              condition = "input.calibration == 'External'",
-              tagList(
-                selectizeInput(
-                  "external",
-                  "Reference medians",
-                  choices = c(
-                    stats::setNames("Given.mdns", "Custom (upload file…)"),
-                    "Built-in: nCounter"                                     = "nCounter",
-                    "Built-in: RNA-seq (Freeze 2012-09-07)"                  = "RNAseq.Freeze.20120907",
-                    "Built-in: totalRNA FFPE (2015-11-11)"                   = "totalRNA.FFPE.20151111",
-                    "Built-in: RNA-seq V2"                                   = "RNAseq.V2",
-                    "Built-in: RNA-seq V1"                                   = "RNAseq.V1",
-                    stats::setNames("GC.4x44Kcustom", "Built-in: Agilent custom 4×44K (GC)"),
-                    "Built-in: Agilent 244K"                                 = "Agilent_244K",
-                    stats::setNames("commercial_1x44k_postMeanCollapse_WashU", "Built-in: 1×44K (WashU, post-collapse)"),
-                    stats::setNames("commercial_4x44k_postMeanCollapse_WashU_v2", "Built-in: 4×44K (WashU v2, post-collapse)"),
-                    "Built-in: htp1.5 (WU update)"                           = "htp1.5_WU_update",
-                    "Built-in: arrayTrain (post-collapse)"                   = "arrayTrain_postMeanCollapse"
-                  ),
-                  selected = "Given.mdns",
-                  width = "100%",
-                  options = list(
-                    placeholder = "Choose a reference medians set…",
-                    openOnFocus = TRUE,
-                    dropdownParent = "body"
-                  )
-                ),
-                conditionalPanel(
-                  condition = "input.external == 'Given.mdns'",
-                  tagList(
-                    fileInput(
-                      "medians",
-                      "Upload custom medians (.csv / .txt)",
-                      accept = c("text/csv",
-                                 "text/comma-separated-values,text/plain",
-                                 ".csv", ".txt")
-                    ),
-                    helpText(HTML(
-                      "Expected format: two columns — ",
-                      "<code>X</code> (gene symbol) and <code>Given.mdns</code> (median)."
-                    ))
-                  )
-                )
-              )
-            ),
-            
-            conditionalPanel(
-              condition = "input.calibration == 'Internal'",
-              selectizeInput(
-                "internal", "Internal calibration method",
-                choices = list(
-                  "medianCtr (parker.original)" = "medianCtr",
-                  "meanCtr (genefu.scale)"      = "meanCtr",
-                  "qCtr (genefu.robust)"        = "qCtr"
-                ),
-                selected = "medianCtr", width = "100%",
-                options = list(openOnFocus = TRUE, dropdownParent = "body")
-              )
-            )
-          )
-        )
-      )
+      htmltools::tagAppendChild(uiOutput("pam50_calibration"),
+        getFromNamespace(".shiny_pam50_controls", "BreastSubtypeR")())
     ),
     
     uiOutput("calib_help"),
