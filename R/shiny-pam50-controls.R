@@ -2,7 +2,8 @@
 .shiny_pam50_defaults <- list(calibration = "Internal", internal = "medianCtr",
                              external = "Given.mdns")
 
-.shiny_pam50_controls <- function(ns = shiny::NS(NULL), defaults = .shiny_pam50_defaults) {
+.shiny_pam50_controls <- function(ns = shiny::NS(NULL), defaults = .shiny_pam50_defaults,
+                                  allow_custom = TRUE) {
   bslib::card(
     style = "overflow: visible;",
     bslib::layout_columns(
@@ -26,7 +27,7 @@
               ns("external"),
               "Reference medians",
               choices = c(
-                stats::setNames("Given.mdns", "Custom (upload file\u2026)"),
+                if (allow_custom) stats::setNames("Given.mdns", "Custom (upload file\u2026)"),
                 "Built-in: nCounter"                                     = "nCounter",
                 "Built-in: RNA-seq (Freeze 2012-09-07)"                  = "RNAseq.Freeze.20120907",
                 "Built-in: totalRNA FFPE (2015-11-11)"                   = "totalRNA.FFPE.20151111",
@@ -39,7 +40,8 @@
                 "Built-in: htp1.5 (WU update)"                           = "htp1.5_WU_update",
                 "Built-in: arrayTrain (post-collapse)"                   = "arrayTrain_postMeanCollapse"
               ),
-              selected = defaults$external,
+              selected = if (!allow_custom && identical(defaults$external, "Given.mdns"))
+                  "nCounter" else defaults$external,
               width = "100%",
               options = list(
                 placeholder = "Choose a reference medians set\u2026",
@@ -47,7 +49,7 @@
                 dropdownParent = "body"
               )
             ),
-            shiny::conditionalPanel(
+            if (allow_custom) shiny::conditionalPanel(
               ns = ns,
               condition = "input.external == 'Given.mdns'",
               shiny::tagList(

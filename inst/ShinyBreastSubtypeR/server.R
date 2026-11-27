@@ -209,6 +209,12 @@ bs_callout <- function(title, body, color = c("info","success","warning","danger
 }
 
 server <- function(input, output, session) {
+  hosted <- getFromNamespace(".shiny_hosted_profile", "BreastSubtypeR")()
+  iteration_limit <- if (hosted) getFromNamespace(".shiny_iteration_limit", "BreastSubtypeR")()
+  safe_detail <- function(condition) {
+    if (hosted) "Review the settings or use the local BreastSubtypeR application."
+    else conditionMessage(condition)
+  }
   
   # --- small reactives ---
   has_clinical <- reactive({ isTRUE((input$hasClinical %||% FALSE)) })
@@ -283,6 +289,7 @@ server <- function(input, output, session) {
   for (key in names(upload_labels)) local({
     id <- key
     output[[paste0("upload_", id)]] <- renderUI({
+      if (hosted) return(NULL)
       fileInput(upload_id(id), upload_labels[[id]],
                 accept = c("text/csv", "text/comma-separated-values,text/plain", ".csv", ".txt"))
     })
@@ -292,6 +299,7 @@ server <- function(input, output, session) {
   retired_files <- reactiveVal(list())
   uploads <- reactive({
     files <- stats::setNames(vector("list", length(upload_labels)), names(upload_labels))
+    if (hosted) return(files)
     retired <- retired_files()
     for (id in names(files)) {
       file <- input[[upload_id(id)]]
@@ -315,7 +323,7 @@ server <- function(input, output, session) {
     NS(if (generation > 0L) paste0("data", generation) else NULL)
   })
   output$pam50_calibration <- renderUI({
-    pam50_controls(calibration_ns(), calibration_defaults())
+    pam50_controls(calibration_ns(), calibration_defaults(), allow_custom = !hosted)
   })
   calibration_choice <- function(id) {
     input[[calibration_ns()(id)]] %||% calibration_defaults()[[id]]
@@ -325,6 +333,7 @@ server <- function(input, output, session) {
   reference_owners <- new.env(parent = emptyenv())
   retiring_reference <- reactiveVal(NULL)
   reference_file <- reactive({
+    if (hosted) return(NULL)
     file <- input[[calibration_ns()("medians")]]
     if (!is.data.frame(file) || nrow(file) != 1L ||
         !is.character(file$datapath) || length(file$datapath) != 1L ||
@@ -386,7 +395,7 @@ server <- function(input, output, session) {
     # req() and need(..., FALSE) abort silently; named validation stays visible.
     if (inherits(e, "shiny.silent.error") && !nzchar(conditionMessage(e)))
       return(invisible(NULL))
-    reactive_files$error <- conditionMessage(e)
+    reactive_files$error <- safe_detail(e)
     showNotification(reactive_files$error, type = "error", duration = NULL,
                      id = "analysis-error")
   }
@@ -426,6 +435,7 @@ server <- function(input, output, session) {
     if (from_example) sync_mode()
   }
   observeEvent(input$upload_started, {
+    if (hosted) return()
     if (identical(input$upload_started, calibration_ns()("medians"))) {
       file <- reference_file()
       if (!is.null(file)) {
@@ -464,7 +474,7 @@ server <- function(input, output, session) {
     tryCatch(
       list(data = BreastSubtypeR::InputCoverage(reactive_files$data_input),
            error = NULL),
-      error = function(e) list(data = NULL, error = conditionMessage(e))
+      error = function(e) list(data = NULL, error = safe_detail(e))
     )
   })
   output$input_coverage <- renderUI({
@@ -552,14 +562,14 @@ server <- function(input, output, session) {
     tryCatch(withProgress(message = "Preparing SSP.ROR full metrics...", value = 0.1, {
       subtype <- .ssp_export_metrics(p$ssp$native, p$ssp$model, p$ssp$input_ids, p$calls$PatientID)
       mapped <- BreastSubtypeR::Mapping(se_obj = aligned_input(), RawCounts = reactive_files$RawCounts,
-                                        impute = FALSE, include_ssp_ror = TRUE, verbose = TRUE)
+                                        impute = FALSE, include_ssp_ror = TRUE, verbose = !hosted)
       incProgress(0.6, detail = "Predicting categorical SSP.ROR bins...")
       ror_input <- mapped$se_SSP_ROR
       ror <- BreastSubtypeR::BS_sspbc(se_obj = ror_input, ssp.name = "ssp.ror")
       metrics <- .ssp_export_metrics(ror, "ssp.ror", colnames(ror_input), p$calls$PatientID)
       full <- cbind(p$calls, subtype, metrics)
       list(full = full, note = .ssp_ror_coverage_note(full))
-    }), error = function(e) list(error = paste("SSP.ROR full export unavailable.", conditionMessage(e))))
+    }), error = function(e) list(error = paste("SSP.ROR full export unavailable.", safe_detail(e))))
   })
 
   selected_export <- reactive({
@@ -973,10 +983,12 @@ server <- function(input, output, session) {
   observeEvent(input$map, tryCatch({
     invalidate_mapping()
     files <- uploads()
-    have_uploads <- identical(reactive_files$source, "upload") &&
+    have_uploads <- !hosted && identical(reactive_files$source, "upload") &&
       all(lengths(files) > 0L)
     have_example <- identical(reactive_files$source, "example") &&
       !is.null(reactive_files$GEX) && !is.null(reactive_files$clinic) && !is.null(reactive_files$anno)
+    if (hosted && (!have_example || !isTRUE(reactive_files$example_id %in% names(examples))))
+      stop("Select a packaged example.")
     if (!have_uploads && !have_example)
       stop("Load the example or upload expression, clinical and annotation files before preprocessing.")
     
@@ -1009,12 +1021,12 @@ server <- function(input, output, session) {
         output_text <- capture.output({
           message("Mapping() -> RawCounts = ", reactive_files$RawCounts)
           data_input <- BreastSubtypeR::Mapping(se_obj = se_obj, RawCounts = raw_mode(),
-                                impute = FALSE, verbose = TRUE)
+                                impute = FALSE, verbose = !hosted)
           cat("Step 1 is complete.\nYou may now proceed to Step 2.\n")
         })
         reactive_files$data_input <- data_input
         reactive_files$mapped_key <- input_key()
-        showNotification(HTML(paste(output_text, collapse = "<br>")),
+        showNotification(if (hosted) "Mapping complete." else HTML(paste(output_text, collapse = "<br>")),
                          type = "message", duration = 4)
       }, error = report_error)
       
@@ -1041,6 +1053,16 @@ server <- function(input, output, session) {
   
   observeEvent(input$run, tryCatch(withCallingHandlers({
     invalidate_prediction()
+    if (hosted) {
+      req(identical(reactive_files$source, "example"), reactive_files$example_id %in% names(examples))
+      req(input$BSmethod %in% c("PAM50", "cIHC", "cIHC.itr", "PCAPAM50", "ssBC", "AIMS", "sspbc", "AUTO Mode"))
+      if (identical(input$BSmethod, "cIHC.itr") &&
+          !isTRUE(is.numeric(input$iteration) && length(input$iteration) == 1L &&
+                  is.finite(input$iteration) && input$iteration <= iteration_limit)) {
+        reactive_files$error <- sprintf("Hosted limit: up to %d cIHC.itr iterations. Use local BreastSubtypeR for larger jobs.", iteration_limit)
+        return()
+      }
+    }
     if (!mapping_current()) stop("Run Step 1 (Preprocess & map) before subtyping.")
     provenance <- list(inputs = input_key(), parameters = prediction_parameters())
     se_NC  <- reactive_files$data_input$x_NC  %||% reactive_files$data_input$se_NC
@@ -1094,6 +1116,7 @@ server <- function(input, output, session) {
         } else if (identical(cal, "External")) {
           args$calibration <- "External"
           if (identical(params$external, "Given.mdns")) {
+            if (hosted) stop("Custom references require the local application.")
             if (is.null(params$medians)) stop("Upload custom medians before running PAM50 with Given.mdns.")
             medians <- if (tolower(tools::file_ext(params$medians$name)) == "csv") {
               read.csv(params$medians$datapath, header = TRUE, row.names = NULL, sep = ",", check.names = FALSE)
@@ -1147,7 +1170,7 @@ server <- function(input, output, session) {
           # The experimental warning is shown persistently with its full
           # export; keep unrelated warnings visible as before.
           if (!inherits(w, "bsr_experimental_ror_pc_warning"))
-            showNotification(conditionMessage(w), type = "warning", duration = 15)
+            showNotification(safe_detail(w), type = "warning", duration = 15)
           invokeRestart("muffleWarning")
         })
       }
@@ -1217,7 +1240,7 @@ server <- function(input, output, session) {
       }
     })
   }, bsr_invalid_tsize_warning = function(w) {
-    showNotification(conditionMessage(w), type = "warning", duration = 15)
+    showNotification(safe_detail(w), type = "warning", duration = 15)
     invokeRestart("muffleWarning")
   }), error = report_error))
 }

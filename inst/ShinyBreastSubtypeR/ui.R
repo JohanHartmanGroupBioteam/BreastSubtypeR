@@ -1,4 +1,5 @@
 # Define UI for iBreastSubtypeR
+hosted <- getFromNamespace(".shiny_hosted_profile", "BreastSubtypeR")()
 app_theme <- bslib::bs_theme(
   version = 5,
   base_font = bslib::font_collection("system-ui", "Segoe UI", "sans-serif"),
@@ -113,7 +114,8 @@ ui <- bslib::page_fluid(
       p("Intrinsic molecular subtyping with published classifiers."),
       div(class = "header-meta",
         span(class = "research-label", "For research use"),
-        span("The application runs locally in your R session."),
+        if (hosted) span("Remote processing on the host. Choose a packaged example. All file uploads are disabled.")
+        else span("The application runs locally in your R session."),
         actionLink("load_example", "Load example data..."),
         actionLink("about", "About & Citation")
       )
@@ -224,7 +226,7 @@ ui <- bslib::page_fluid(
     conditionalPanel(
       condition = "input.BSmethod == 'PAM50'",
       htmltools::tagAppendChild(uiOutput("pam50_calibration"),
-        getFromNamespace(".shiny_pam50_controls", "BreastSubtypeR")())
+        getFromNamespace(".shiny_pam50_controls", "BreastSubtypeR")(allow_custom = !hosted))
     ),
     
     uiOutput("calib_help"),
@@ -233,7 +235,8 @@ ui <- bslib::page_fluid(
       condition = "input.BSmethod == 'cIHC.itr'",
       bslib::layout_columns(
         col_widths = c(6, 6),
-        numericInput("iteration", label = "Iterations", value = 100, min = 10, step = 10),
+        numericInput("iteration", label = "Iterations", value = 100, min = 10, step = 10,
+                     max = if (hosted) getFromNamespace(".shiny_iteration_limit", "BreastSubtypeR")() else NA),
         tagList(
           numericInput("ratio", label = "ER+ : ER- target ratio", value = 54/64,
                        min = 5e-324, step = "any"),
