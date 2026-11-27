@@ -1,3 +1,11 @@
+# BreastSubtypeR 1.6.1
+
+* In Shiny, replacing a dataset in the same session could reuse the previous
+  dataset's custom PAM50 reference. Replacement now clears the reference and
+  resets active custom calibration to Internal (medianCtr). Rerunning or
+  remapping the same dataset preserves its reference. The historical numerical
+  impact on subtype calls and risk scores remains unknown.
+
 # BreastSubtypeR 1.5.14
 
 ## Performance
